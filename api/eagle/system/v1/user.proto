@@ -1,0 +1,204 @@
+syntax = "proto3";
+
+package eagle.system.v1;
+
+import "buf/validate/validate.proto";
+import "eagle/annotations/v1/perm.proto";
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/eagle-go/eagle/api/eagle/system/v1;systemv1";
+
+// UserService 管理系统用户及其角色绑定。
+// 每个方法都通过 eagle.annotations.v1.perm 声明所需权限码，
+// 由 pkg/authz 中间件统一拦截，handler 内不再手写鉴权。
+service UserService {
+  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse) {
+    option (google.api.http) = {
+      post: "/v1/system/users"
+      body: "*"
+    };
+    option (eagle.annotations.v1.perm) = "system:user:add";
+  }
+
+  rpc GetUser(GetUserRequest) returns (GetUserResponse) {
+    option (google.api.http) = {get: "/v1/system/users/{id}"};
+    option (eagle.annotations.v1.perm) = "system:user:query";
+  }
+
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse) {
+    option (google.api.http) = {get: "/v1/system/users"};
+    option (eagle.annotations.v1.perm) = "system:user:list";
+  }
+
+  rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse) {
+    option (google.api.http) = {
+      put: "/v1/system/users/{id}"
+      body: "*"
+    };
+    option (eagle.annotations.v1.perm) = "system:user:edit";
+  }
+
+  rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse) {
+    option (google.api.http) = {delete: "/v1/system/users/{id}"};
+    option (eagle.annotations.v1.perm) = "system:user:remove";
+  }
+
+  rpc ResetPassword(ResetPasswordRequest) returns (ResetPasswordResponse) {
+    option (google.api.http) = {
+      post: "/v1/system/users/{id}/password:reset"
+      body: "*"
+    };
+    option (eagle.annotations.v1.perm) = "system:user:resetPwd";
+  }
+
+  rpc AssignRoles(AssignRolesRequest) returns (AssignRolesResponse) {
+    option (google.api.http) = {
+      put: "/v1/system/users/{id}/roles"
+      body: "*"
+    };
+    option (eagle.annotations.v1.perm) = "system:user:edit";
+  }
+
+  // 当前登录用户改自己的密码。只要登录即可，不需要额外权限码。
+  rpc ChangeMyPassword(ChangeMyPasswordRequest) returns (ChangeMyPasswordResponse) {
+    option (google.api.http) = {
+      post: "/v1/system/users/me/password:change"
+      body: "*"
+    };
+  }
+}
+
+// 用户。password_hash 永不出现在任何响应里。
+message User {
+  int64 id = 1;
+  string username = 2;
+  string nickname = 3;
+  string email = 4;
+  string phone = 5;
+  int64 dept_id = 6;
+  // 0=禁用 1=正常
+  int32 status = 7;
+  string remark = 8;
+  repeated int64 role_ids = 9;
+  repeated string role_codes = 10;
+  google.protobuf.Timestamp last_login_at = 11;
+  google.protobuf.Timestamp created_at = 12;
+  google.protobuf.Timestamp updated_at = 13;
+}
+
+message CreateUserRequest {
+  string username = 1 [(buf.validate.field).string = {
+    min_len: 3
+    max_len: 64
+    pattern: "^[a-zA-Z0-9_-]+$"
+  }];
+  string password = 2 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 128
+  }];
+  string nickname = 3 [(buf.validate.field).string.max_len = 64];
+  string email = 4 [
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE,
+    (buf.validate.field).string.email = true
+  ];
+  string phone = 5 [(buf.validate.field).string.max_len = 32];
+  int64 dept_id = 6;
+  int32 status = 7 [(buf.validate.field).int32 = {
+    in: [
+      0,
+      1
+    ]
+  }];
+  string remark = 8 [(buf.validate.field).string.max_len = 512];
+  repeated int64 role_ids = 9;
+}
+
+message CreateUserResponse {
+  User user = 1;
+}
+
+message GetUserRequest {
+  int64 id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message GetUserResponse {
+  User user = 1;
+}
+
+message ListUsersRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 0];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 200
+  }];
+  string keyword = 3 [(buf.validate.field).string.max_len = 64];
+  // 不传表示不按状态过滤；传 0/1 表示精确匹配
+  optional int32 status = 4 [(buf.validate.field).int32 = {
+    in: [
+      0,
+      1
+    ]
+  }];
+  optional int64 dept_id = 5;
+}
+
+message ListUsersResponse {
+  repeated User users = 1;
+  int64 total = 2;
+}
+
+message UpdateUserRequest {
+  int64 id = 1 [(buf.validate.field).int64.gt = 0];
+  string nickname = 2 [(buf.validate.field).string.max_len = 64];
+  string email = 3 [
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE,
+    (buf.validate.field).string.email = true
+  ];
+  string phone = 4 [(buf.validate.field).string.max_len = 32];
+  int64 dept_id = 5;
+  int32 status = 6 [(buf.validate.field).int32 = {
+    in: [
+      0,
+      1
+    ]
+  }];
+  string remark = 7 [(buf.validate.field).string.max_len = 512];
+}
+
+message UpdateUserResponse {
+  User user = 1;
+}
+
+message DeleteUserRequest {
+  int64 id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message DeleteUserResponse {}
+
+message ResetPasswordRequest {
+  int64 id = 1 [(buf.validate.field).int64.gt = 0];
+  string new_password = 2 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 128
+  }];
+}
+
+message ResetPasswordResponse {}
+
+message AssignRolesRequest {
+  int64 id = 1 [(buf.validate.field).int64.gt = 0];
+  repeated int64 role_ids = 2;
+}
+
+message AssignRolesResponse {}
+
+message ChangeMyPasswordRequest {
+  string old_password = 1 [(buf.validate.field).string.min_len = 1];
+  string new_password = 2 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 128
+  }];
+}
+
+message ChangeMyPasswordResponse {}

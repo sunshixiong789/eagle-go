@@ -1,0 +1,31 @@
+version: v2
+
+# 两个 module root：
+#   api  -> 对外契约（唯一事实来源），严格 lint + breaking 检查
+#   app  -> 各服务的内部配置 proto，只做基础 lint
+# 用单一 app 根而不是每个服务一个根，是为了让 conf/conf.proto 这类同名文件
+# 在 import 命名空间里保持唯一（app/auth/internal/conf/... vs app/system/internal/conf/...）。
+modules:
+  - path: api
+  - path: app
+    lint:
+      use:
+        - BASIC
+      except:
+        # 内部配置 proto 的包名不跟目录走（eagle.system.conf vs app/system/internal/conf），
+        # 官方 kratos-layout 同样如此。
+        - PACKAGE_DIRECTORY_MATCH
+
+deps:
+  - buf.build/googleapis/googleapis
+  # 字段级校验规则。与 contrib/middleware/validate/v3 配套，
+  # 校验声明写在契约里，跨语言客户端可复用同一套规则。
+  - buf.build/bufbuild/protovalidate
+
+lint:
+  use:
+    - STANDARD
+
+breaking:
+  use:
+    - FILE

@@ -1,0 +1,81 @@
+name: eagle
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: eagle-postgres
+    environment:
+      POSTGRES_USER: eagle
+      POSTGRES_PASSWORD: eagle
+      POSTGRES_DB: eagle
+      # 本地开发用，生产务必换成 scram-sha-256 + 真实密码
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eagle -d eagle"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: eagle-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # 可观测性栈：默认不启动，需要时 docker compose --profile obs up -d
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: eagle-otel
+    profiles: ["obs"]
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./otel-collector.yaml:/etc/otel/config.yaml:ro
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+
+  tempo:
+    image: grafana/tempo:latest
+    container_name: eagle-tempo
+    profiles: ["obs"]
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./tempo.yaml:/etc/tempo/tempo.yaml:ro
+    ports:
+      - "3200:3200"
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: eagle-prometheus
+    profiles: ["obs"]
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: eagle-grafana
+    profiles: ["obs"]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:
+  redisdata:

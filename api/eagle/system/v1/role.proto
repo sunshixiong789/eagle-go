@@ -1,0 +1,162 @@
+syntax = "proto3";
+
+package eagle.system.v1;
+
+import "buf/validate/validate.proto";
+import "eagle/annotations/v1/perm.proto";
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/eagle-go/eagle/api/eagle/system/v1;systemv1";
+
+service RoleService {
+  rpc CreateRole(CreateRoleRequest) returns (CreateRoleResponse) {
+    option (google.api.http) = {
+      post: "/v1/system/roles"
+      body: "*"
+    };
+    option (eagle.annotations.v1.perm) = "system:role:add";
+  }
+
+  rpc GetRole(GetRoleRequest) returns (GetRoleResponse) {
+    option (google.api.http) = {get: "/v1/system/roles/{id}"};
+    option (eagle.annotations.v1.perm) = "system:role:query";
+  }
+
+  rpc ListRoles(ListRolesRequest) returns (ListRolesResponse) {
+    option (google.api.http) = {get: "/v1/system/roles"};
+    option (eagle.annotations.v1.perm) = "system:role:list";
+  }
+
+  rpc UpdateRole(UpdateRoleRequest) returns (UpdateRoleResponse) {
+    option (google.api.http) = {
+      put: "/v1/system/roles/{id}"
+      body: "*"
+    };
+    option (eagle.annotations.v1.perm) = "system:role:edit";
+  }
+
+  rpc DeleteRole(DeleteRoleRequest) returns (DeleteRoleResponse) {
+    option (google.api.http) = {delete: "/v1/system/roles/{id}"};
+    option (eagle.annotations.v1.perm) = "system:role:remove";
+  }
+
+  // 全量覆盖角色的权限集合。变更后会主动失效受影响用户的权限缓存。
+  rpc AssignPermissions(AssignPermissionsRequest) returns (AssignPermissionsResponse) {
+    option (google.api.http) = {
+      put: "/v1/system/roles/{id}/permissions"
+      body: "*"
+    };
+    option (eagle.annotations.v1.perm) = "system:role:edit";
+  }
+}
+
+message Role {
+  int64 id = 1;
+  string name = 2;
+  string code = 3;
+  int32 sort = 4;
+  // 数据权限范围：1=全部 2=本部门及以下 3=本部门 4=仅本人
+  // 本期落库但不参与鉴权判定，等接入 Casbin 做数据权限时消费
+  int32 data_scope = 5;
+  int32 status = 6;
+  string remark = 7;
+  repeated int64 permission_ids = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+message CreateRoleRequest {
+  string name = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+  // 角色码一旦创建不可修改：它被写进 token 和权限缓存，改动会造成存量会话语义漂移
+  string code = 2 [(buf.validate.field).string = {
+    min_len: 2
+    max_len: 64
+    pattern: "^[a-z][a-z0-9_]*$"
+  }];
+  int32 sort = 3;
+  int32 data_scope = 4 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 4
+  }];
+  int32 status = 5 [(buf.validate.field).int32 = {
+    in: [
+      0,
+      1
+    ]
+  }];
+  string remark = 6 [(buf.validate.field).string.max_len = 512];
+  repeated int64 permission_ids = 7;
+}
+
+message CreateRoleResponse {
+  Role role = 1;
+}
+
+message GetRoleRequest {
+  int64 id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message GetRoleResponse {
+  Role role = 1;
+}
+
+message ListRolesRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 0];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 200
+  }];
+  string keyword = 3 [(buf.validate.field).string.max_len = 64];
+  optional int32 status = 4 [(buf.validate.field).int32 = {
+    in: [
+      0,
+      1
+    ]
+  }];
+}
+
+message ListRolesResponse {
+  repeated Role roles = 1;
+  int64 total = 2;
+}
+
+message UpdateRoleRequest {
+  int64 id = 1 [(buf.validate.field).int64.gt = 0];
+  string name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+  int32 sort = 3;
+  int32 data_scope = 4 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 4
+  }];
+  int32 status = 5 [(buf.validate.field).int32 = {
+    in: [
+      0,
+      1
+    ]
+  }];
+  string remark = 6 [(buf.validate.field).string.max_len = 512];
+}
+
+message UpdateRoleResponse {
+  Role role = 1;
+}
+
+message DeleteRoleRequest {
+  int64 id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message DeleteRoleResponse {}
+
+message AssignPermissionsRequest {
+  int64 id = 1 [(buf.validate.field).int64.gt = 0];
+  repeated int64 permission_ids = 2;
+}
+
+message AssignPermissionsResponse {}

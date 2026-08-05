@@ -1,0 +1,27 @@
+version: "2"
+sql:
+  - engine: postgresql
+    schema: migrations
+    queries: query
+    gen:
+      go:
+        package: sqlc
+        out: ../pkg/db/sqlc
+        sql_package: pgx/v5
+        emit_pointers_for_null_types: true
+        emit_prepared_queries: false
+        emit_interface: true
+        emit_empty_slices: true
+        emit_json_tags: false
+        # sqlc 默认把 numeric/timestamptz 映射成自有类型，这里统一收敛到
+        # 标准库 / pgx 原生类型，避免 biz 层被生成代码的类型污染。
+        overrides:
+          - db_type: "timestamptz"
+            go_type: "time.Time"
+          - db_type: "timestamptz"
+            nullable: true
+            go_type:
+              type: "time.Time"
+              pointer: true
+          - db_type: "uuid"
+            go_type: "github.com/google/uuid.UUID"
