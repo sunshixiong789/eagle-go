@@ -1,0 +1,96 @@
+syntax = "proto3";
+
+package eagle.auth.conf;
+
+import "google/protobuf/duration.proto";
+
+option go_package = "github.com/eagle-go/eagle/app/auth/internal/conf;conf";
+
+message Bootstrap {
+  Server server = 1;
+  Data data = 2;
+  Oidc oidc = 3;
+  Clients clients = 4;
+  Observability observability = 5;
+}
+
+message Server {
+  message HTTP {
+    string network = 1;
+    string addr = 2;
+    google.protobuf.Duration timeout = 3;
+  }
+  message GRPC {
+    string network = 1;
+    string addr = 2;
+    google.protobuf.Duration timeout = 3;
+  }
+  HTTP http = 1;
+  GRPC grpc = 2;
+}
+
+message Data {
+  message Database {
+    string dsn = 1;
+    int32 max_conns = 2;
+    int32 min_conns = 3;
+    google.protobuf.Duration max_conn_lifetime = 4;
+    google.protobuf.Duration max_conn_idle_time = 5;
+  }
+  message Redis {
+    string addr = 1;
+    string password = 2;
+    int32 db = 3;
+    google.protobuf.Duration dial_timeout = 4;
+    google.protobuf.Duration read_timeout = 5;
+    google.protobuf.Duration write_timeout = 6;
+  }
+  Database database = 1;
+  Redis redis = 2;
+}
+
+// OIDC 授权服务器配置
+message Oidc {
+  // 对外暴露的 issuer，必须与 discovery 文档中的一致，
+  // 且资源服务器侧配置的 issuer 要与此完全相同（含协议和是否带尾斜杠）
+  string issuer = 1;
+
+  // access token 有效期。短一些更安全——撤销依赖黑名单，
+  // 而黑名单只需保留到 token 自然过期为止
+  google.protobuf.Duration access_token_ttl = 2;
+  google.protobuf.Duration refresh_token_ttl = 3;
+  // 授权码有效期，OAuth 2.1 建议不超过 60s
+  google.protobuf.Duration auth_code_ttl = 4;
+
+  // 签名密钥轮转周期。轮转后旧公钥仍留在 JWKS 中直到存量 token 过期
+  google.protobuf.Duration key_rotation_interval = 5;
+  // 旧密钥在轮转后的保留时长，应大于 access_token_ttl
+  google.protobuf.Duration key_retention = 6;
+
+  // 后台直登接口签发的 token 有效期
+  google.protobuf.Duration admin_token_ttl = 7;
+
+  // 是否强制所有客户端使用 PKCE。公共客户端始终强制，
+  // 置 true 后机密客户端也一并要求
+  bool require_pkce_for_all = 8;
+}
+
+message Clients {
+  message GRPCClient {
+    // 目标服务地址。K8s 下用 discovery:///eagle-system 或直连 DNS
+    string endpoint = 1;
+    google.protobuf.Duration timeout = 2;
+  }
+  // auth 调 system 校验账密、取角色权限
+  GRPCClient system = 1;
+  // auth 访问 system 内部接口时使用的服务凭据（client_credentials）
+  string service_client_id = 2;
+  string service_client_secret = 3;
+}
+
+message Observability {
+  string otlp_endpoint = 1;
+  double trace_sample_ratio = 2;
+  string log_level = 3;
+  string metrics_addr = 4;
+}

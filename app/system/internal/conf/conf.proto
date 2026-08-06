@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+package eagle.system.conf;
+
+import "google/protobuf/duration.proto";
+
+option go_package = "github.com/eagle-go/eagle/app/system/internal/conf;conf";
+
+message Bootstrap {
+  Server server = 1;
+  Data data = 2;
+  Auth auth = 3;
+  Observability observability = 4;
+}
+
+message Server {
+  message HTTP {
+    string network = 1;
+    string addr = 2;
+    google.protobuf.Duration timeout = 3;
+  }
+  message GRPC {
+    string network = 1;
+    string addr = 2;
+    google.protobuf.Duration timeout = 3;
+  }
+  HTTP http = 1;
+  GRPC grpc = 2;
+}
+
+message Data {
+  message Database {
+    // pgx 连接串，如 postgres://user:pass@host:5432/db?sslmode=disable
+    string dsn = 1;
+    int32 max_conns = 2;
+    int32 min_conns = 3;
+    google.protobuf.Duration max_conn_lifetime = 4;
+    google.protobuf.Duration max_conn_idle_time = 5;
+  }
+  message Redis {
+    string addr = 1;
+    string password = 2;
+    int32 db = 3;
+    google.protobuf.Duration dial_timeout = 4;
+    google.protobuf.Duration read_timeout = 5;
+    google.protobuf.Duration write_timeout = 6;
+  }
+  Database database = 1;
+  Redis redis = 2;
+}
+
+// system 作为 OAuth2 资源服务器的配置
+message Auth {
+  // 认证中心的 issuer，用于拉取 JWKS 验签
+  string issuer = 1;
+  // JWKS 本地缓存刷新间隔。密钥轮转后旧 token 仍能验证，
+  // 因为 JWKS 同时返回未过期的历史公钥
+  google.protobuf.Duration jwks_refresh_interval = 2;
+  // 用户权限码缓存时长。权限变更时会主动失效，此 TTL 只是兜底
+  google.protobuf.Duration perm_cache_ttl = 3;
+  // 字典项缓存时长
+  google.protobuf.Duration dict_cache_ttl = 4;
+  // 拥有该角色码的用户跳过权限判定
+  string super_admin_role = 5;
+}
+
+message Observability {
+  // OTLP gRPC 端点，如 127.0.0.1:4317。留空则不上报链路
+  string otlp_endpoint = 1;
+  // 采样率 0.0~1.0。生产环境建议 0.01~0.1
+  double trace_sample_ratio = 2;
+  // debug / info / warn / error
+  string log_level = 3;
+  // Prometheus 指标暴露地址，如 0.0.0.0:9100
+  string metrics_addr = 4;
+}

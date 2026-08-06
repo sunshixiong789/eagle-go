@@ -13,6 +13,9 @@ sql:
         emit_interface: true
         emit_empty_slices: true
         emit_json_tags: false
+        # 注：sqlc 会把 sys_dict_data 单数化成 SysDictDatum。rename 配置只作用于
+        # 列名和枚举值，改不了表名派生的结构体名。该类型只在 data 层出现一次
+        # （随即转成 biz 领域结构体），不值得为它加 overrides，故保持原样。
         # sqlc 默认把 numeric/timestamptz 映射成自有类型，这里统一收敛到
         # 标准库 / pgx 原生类型，避免 biz 层被生成代码的类型污染。
         overrides:

@@ -1,0 +1,46 @@
+# eagle system 服务本地开发配置。
+#
+# 生产环境不要直接改这个文件：敏感项（DSN 口令、Redis 密码）应经由
+# 环境变量或 K8s Secret 注入，本文件只保留结构和安全的默认值。
+
+server:
+  http:
+    addr: 0.0.0.0:8000
+    timeout: 5s
+  grpc:
+    addr: 0.0.0.0:9000
+    timeout: 5s
+
+data:
+  database:
+    dsn: "postgres://eagle:eagle@127.0.0.1:5432/eagle?sslmode=disable"
+    max_conns: 20
+    min_conns: 2
+    max_conn_lifetime: 1h
+    max_conn_idle_time: 30m
+  redis:
+    addr: 127.0.0.1:6379
+    password: ""
+    db: 0
+    dial_timeout: 2s
+    read_timeout: 500ms
+    write_timeout: 500ms
+
+auth:
+  # 必须与 auth 服务 discovery 文档里的 issuer 完全一致（含协议、端口、尾斜杠）。
+  # 不一致时所有 token 都会因 iss 校验失败被拒，且报错不易定位。
+  issuer: "http://127.0.0.1:8001"
+  jwks_refresh_interval: 15m
+  # 权限缓存 TTL。权限变更时会主动失效，这个值只是兜底上限。
+  perm_cache_ttl: 10m
+  dict_cache_ttl: 30m
+  # 具备该角色码的用户跳过权限判定
+  super_admin_role: admin
+
+observability:
+  # 留空则不上报链路。本地需要看链路时启 obs profile 后填 127.0.0.1:4317
+  otlp_endpoint: ""
+  # 开发期全采样；生产建议降到 0.01~0.1
+  trace_sample_ratio: 1.0
+  log_level: info
+  metrics_addr: 0.0.0.0:9100

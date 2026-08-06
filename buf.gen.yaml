@@ -20,9 +20,10 @@ plugins:
     out: api
     opt: paths=source_relative
 
-  - local: ["go", "run", "github.com/go-kratos/kratos/cmd/protoc-gen-go-errors/v3@v3.0.0-20260626125723-668db92c2c00"]
-    out: api
-    opt: paths=source_relative
+  # 刻意不启用 protoc-gen-go-errors：它要求 proto 里 import kratos 的
+  # errors/errors.proto 并给枚举挂 (errors.code) 注解，多引一层依赖。
+  # 错误原因用普通 enum 声明，在 Go 侧配 errors.NotFound(reason.String(), msg)
+  # 构造即可——官方 kratos-layout 也是这个做法。
 
   - local: ["go", "run", "github.com/google/gnostic/cmd/protoc-gen-openapi@v0.7.1"]
     out: .

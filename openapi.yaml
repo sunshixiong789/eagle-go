@@ -1,0 +1,1199 @@
+# Generated with protoc-gen-openapi
+# https://github.com/google/gnostic/tree/master/cmd/protoc-gen-openapi
+
+openapi: 3.0.3
+info:
+    title: ""
+    version: 0.0.1
+paths:
+    /v1/system/dict/data:
+        get:
+            tags:
+                - DictService
+            operationId: DictService_ListDictData
+            parameters:
+                - name: page
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: pageSize
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: dictType
+                  in: query
+                  schema:
+                    type: string
+                - name: keyword
+                  in: query
+                  schema:
+                    type: string
+                - name: status
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.ListDictDataResponse'
+        post:
+            tags:
+                - DictService
+            operationId: DictService_CreateDictData
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.system.v1.CreateDictDataRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.CreateDictDataResponse'
+    /v1/system/dict/data/type/{dictType}:
+        get:
+            tags:
+                - DictService
+            description: |-
+                按类型取字典项，供前端渲染下拉框。任何登录用户都要用，
+                 所以不挂权限码，只校验登录态；结果走 Redis 缓存。
+            operationId: DictService_GetDictDataByType
+            parameters:
+                - name: dictType
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.GetDictDataByTypeResponse'
+    /v1/system/dict/data/{id}:
+        put:
+            tags:
+                - DictService
+            operationId: DictService_UpdateDictData
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.system.v1.UpdateDictDataRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.UpdateDictDataResponse'
+        delete:
+            tags:
+                - DictService
+            operationId: DictService_DeleteDictData
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.DeleteDictDataResponse'
+    /v1/system/dict/types:
+        get:
+            tags:
+                - DictService
+            operationId: DictService_ListDictTypes
+            parameters:
+                - name: page
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: pageSize
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: keyword
+                  in: query
+                  schema:
+                    type: string
+                - name: status
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.ListDictTypesResponse'
+        post:
+            tags:
+                - DictService
+            operationId: DictService_CreateDictType
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.system.v1.CreateDictTypeRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.CreateDictTypeResponse'
+    /v1/system/dict/types/{id}:
+        put:
+            tags:
+                - DictService
+            operationId: DictService_UpdateDictType
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.system.v1.UpdateDictTypeRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.UpdateDictTypeResponse'
+        delete:
+            tags:
+                - DictService
+            operationId: DictService_DeleteDictType
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.DeleteDictTypeResponse'
+    /v1/system/permissions:
+        get:
+            tags:
+                - PermissionService
+            description: 平铺返回全部权限，树结构由调用方按 parent_id 拼装
+            operationId: PermissionService_ListPermissions
+            parameters:
+                - name: status
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: type
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.ListPermissionsResponse'
+        post:
+            tags:
+                - PermissionService
+            operationId: PermissionService_CreatePermission
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.system.v1.CreatePermissionRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.CreatePermissionResponse'
+    /v1/system/permissions/me/menus:
+        get:
+            tags:
+                - PermissionService
+            description: |-
+                当前登录用户的菜单树与权限码，供前端渲染路由和按钮级控制。
+                 只需登录，无需额外权限码——查的就是自己的东西。
+            operationId: PermissionService_GetMyMenus
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.GetMyMenusResponse'
+    /v1/system/permissions/{id}:
+        get:
+            tags:
+                - PermissionService
+            operationId: PermissionService_GetPermission
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.GetPermissionResponse'
+        put:
+            tags:
+                - PermissionService
+            operationId: PermissionService_UpdatePermission
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.system.v1.UpdatePermissionRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.UpdatePermissionResponse'
+        delete:
+            tags:
+                - PermissionService
+            operationId: PermissionService_DeletePermission
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.DeletePermissionResponse'
+    /v1/system/roles:
+        get:
+            tags:
+                - RoleService
+            operationId: RoleService_ListRoles
+            parameters:
+                - name: page
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: pageSize
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: keyword
+                  in: query
+                  schema:
+                    type: string
+                - name: status
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.ListRolesResponse'
+        post:
+            tags:
+                - RoleService
+            operationId: RoleService_CreateRole
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.system.v1.CreateRoleRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.CreateRoleResponse'
+    /v1/system/roles/{id}:
+        get:
+            tags:
+                - RoleService
+            operationId: RoleService_GetRole
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.GetRoleResponse'
+        put:
+            tags:
+                - RoleService
+            operationId: RoleService_UpdateRole
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.system.v1.UpdateRoleRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.UpdateRoleResponse'
+        delete:
+            tags:
+                - RoleService
+            operationId: RoleService_DeleteRole
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.DeleteRoleResponse'
+    /v1/system/roles/{id}/permissions:
+        put:
+            tags:
+                - RoleService
+            description: 全量覆盖角色的权限集合。变更后会主动失效受影响用户的权限缓存。
+            operationId: RoleService_AssignPermissions
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.system.v1.AssignPermissionsRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.AssignPermissionsResponse'
+    /v1/system/users:
+        get:
+            tags:
+                - UserService
+            operationId: UserService_ListUsers
+            parameters:
+                - name: page
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: pageSize
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: keyword
+                  in: query
+                  schema:
+                    type: string
+                - name: status
+                  in: query
+                  description: 不传表示不按状态过滤；传 0/1 表示精确匹配
+                  schema:
+                    type: integer
+                    format: int32
+                - name: deptId
+                  in: query
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.ListUsersResponse'
+        post:
+            tags:
+                - UserService
+            operationId: UserService_CreateUser
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.system.v1.CreateUserRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.CreateUserResponse'
+    /v1/system/users/me/password:change:
+        post:
+            tags:
+                - UserService
+            description: 当前登录用户改自己的密码。只要登录即可，不需要额外权限码。
+            operationId: UserService_ChangeMyPassword
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.system.v1.ChangeMyPasswordRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.ChangeMyPasswordResponse'
+    /v1/system/users/{id}:
+        get:
+            tags:
+                - UserService
+            operationId: UserService_GetUser
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.GetUserResponse'
+        put:
+            tags:
+                - UserService
+            operationId: UserService_UpdateUser
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.system.v1.UpdateUserRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.UpdateUserResponse'
+        delete:
+            tags:
+                - UserService
+            operationId: UserService_DeleteUser
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.DeleteUserResponse'
+    /v1/system/users/{id}/password:reset:
+        post:
+            tags:
+                - UserService
+            operationId: UserService_ResetPassword
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.system.v1.ResetPasswordRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.ResetPasswordResponse'
+    /v1/system/users/{id}/roles:
+        put:
+            tags:
+                - UserService
+            operationId: UserService_AssignRoles
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.system.v1.AssignRolesRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.AssignRolesResponse'
+components:
+    schemas:
+        eagle.system.v1.AssignPermissionsRequest:
+            type: object
+            properties:
+                id:
+                    type: string
+                permissionIds:
+                    type: array
+                    items:
+                        type: string
+        eagle.system.v1.AssignPermissionsResponse:
+            type: object
+            properties: {}
+        eagle.system.v1.AssignRolesRequest:
+            type: object
+            properties:
+                id:
+                    type: string
+                roleIds:
+                    type: array
+                    items:
+                        type: string
+        eagle.system.v1.AssignRolesResponse:
+            type: object
+            properties: {}
+        eagle.system.v1.ChangeMyPasswordRequest:
+            type: object
+            properties:
+                oldPassword:
+                    type: string
+                newPassword:
+                    type: string
+        eagle.system.v1.ChangeMyPasswordResponse:
+            type: object
+            properties: {}
+        eagle.system.v1.CreateDictDataRequest:
+            type: object
+            properties:
+                dictType:
+                    type: string
+                label:
+                    type: string
+                value:
+                    type: string
+                sort:
+                    type: integer
+                    format: int32
+                cssClass:
+                    type: string
+                isDefault:
+                    type: boolean
+                status:
+                    type: integer
+                    format: int32
+                remark:
+                    type: string
+        eagle.system.v1.CreateDictDataResponse:
+            type: object
+            properties:
+                dictData:
+                    $ref: '#/components/schemas/eagle.system.v1.DictData'
+        eagle.system.v1.CreateDictTypeRequest:
+            type: object
+            properties:
+                name:
+                    type: string
+                type:
+                    type: string
+                status:
+                    type: integer
+                    format: int32
+                remark:
+                    type: string
+        eagle.system.v1.CreateDictTypeResponse:
+            type: object
+            properties:
+                dictType:
+                    $ref: '#/components/schemas/eagle.system.v1.DictType'
+        eagle.system.v1.CreatePermissionRequest:
+            type: object
+            properties:
+                parentId:
+                    type: string
+                name:
+                    type: string
+                code:
+                    type: string
+                type:
+                    type: integer
+                    format: int32
+                path:
+                    type: string
+                component:
+                    type: string
+                icon:
+                    type: string
+                sort:
+                    type: integer
+                    format: int32
+                visible:
+                    type: boolean
+                status:
+                    type: integer
+                    format: int32
+        eagle.system.v1.CreatePermissionResponse:
+            type: object
+            properties:
+                permission:
+                    $ref: '#/components/schemas/eagle.system.v1.Permission'
+        eagle.system.v1.CreateRoleRequest:
+            type: object
+            properties:
+                name:
+                    type: string
+                code:
+                    type: string
+                    description: 角色码一旦创建不可修改：它被写进 token 和权限缓存，改动会造成存量会话语义漂移
+                sort:
+                    type: integer
+                    format: int32
+                dataScope:
+                    type: integer
+                    format: int32
+                status:
+                    type: integer
+                    format: int32
+                remark:
+                    type: string
+                permissionIds:
+                    type: array
+                    items:
+                        type: string
+        eagle.system.v1.CreateRoleResponse:
+            type: object
+            properties:
+                role:
+                    $ref: '#/components/schemas/eagle.system.v1.Role'
+        eagle.system.v1.CreateUserRequest:
+            type: object
+            properties:
+                username:
+                    type: string
+                password:
+                    type: string
+                nickname:
+                    type: string
+                email:
+                    type: string
+                phone:
+                    type: string
+                deptId:
+                    type: string
+                status:
+                    type: integer
+                    format: int32
+                remark:
+                    type: string
+                roleIds:
+                    type: array
+                    items:
+                        type: string
+        eagle.system.v1.CreateUserResponse:
+            type: object
+            properties:
+                user:
+                    $ref: '#/components/schemas/eagle.system.v1.User'
+        eagle.system.v1.DeleteDictDataResponse:
+            type: object
+            properties: {}
+        eagle.system.v1.DeleteDictTypeResponse:
+            type: object
+            properties: {}
+        eagle.system.v1.DeletePermissionResponse:
+            type: object
+            properties: {}
+        eagle.system.v1.DeleteRoleResponse:
+            type: object
+            properties: {}
+        eagle.system.v1.DeleteUserResponse:
+            type: object
+            properties: {}
+        eagle.system.v1.DictData:
+            type: object
+            properties:
+                id:
+                    type: string
+                dictType:
+                    type: string
+                label:
+                    type: string
+                value:
+                    type: string
+                sort:
+                    type: integer
+                    format: int32
+                cssClass:
+                    type: string
+                isDefault:
+                    type: boolean
+                status:
+                    type: integer
+                    format: int32
+                remark:
+                    type: string
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+        eagle.system.v1.DictType:
+            type: object
+            properties:
+                id:
+                    type: string
+                name:
+                    type: string
+                type:
+                    type: string
+                status:
+                    type: integer
+                    format: int32
+                remark:
+                    type: string
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+        eagle.system.v1.GetDictDataByTypeResponse:
+            type: object
+            properties:
+                dictData:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/eagle.system.v1.DictData'
+        eagle.system.v1.GetMyMenusResponse:
+            type: object
+            properties:
+                menus:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/eagle.system.v1.Permission'
+                    description: 当前用户可见的目录与菜单（不含按钮），平铺返回
+                permissionCodes:
+                    type: array
+                    items:
+                        type: string
+                    description: 当前用户的全部权限码，前端用于按钮级显隐
+        eagle.system.v1.GetPermissionResponse:
+            type: object
+            properties:
+                permission:
+                    $ref: '#/components/schemas/eagle.system.v1.Permission'
+        eagle.system.v1.GetRoleResponse:
+            type: object
+            properties:
+                role:
+                    $ref: '#/components/schemas/eagle.system.v1.Role'
+        eagle.system.v1.GetUserResponse:
+            type: object
+            properties:
+                user:
+                    $ref: '#/components/schemas/eagle.system.v1.User'
+        eagle.system.v1.ListDictDataResponse:
+            type: object
+            properties:
+                dictData:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/eagle.system.v1.DictData'
+                total:
+                    type: string
+        eagle.system.v1.ListDictTypesResponse:
+            type: object
+            properties:
+                dictTypes:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/eagle.system.v1.DictType'
+                total:
+                    type: string
+        eagle.system.v1.ListPermissionsResponse:
+            type: object
+            properties:
+                permissions:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/eagle.system.v1.Permission'
+        eagle.system.v1.ListRolesResponse:
+            type: object
+            properties:
+                roles:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/eagle.system.v1.Role'
+                total:
+                    type: string
+        eagle.system.v1.ListUsersResponse:
+            type: object
+            properties:
+                users:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/eagle.system.v1.User'
+                total:
+                    type: string
+        eagle.system.v1.Permission:
+            type: object
+            properties:
+                id:
+                    type: string
+                parentId:
+                    type: string
+                name:
+                    type: string
+                code:
+                    type: string
+                    description: 权限码，如 system:user:add。目录/菜单可为空，按钮必填
+                type:
+                    type: integer
+                    description: 1=目录 2=菜单 3=按钮
+                    format: int32
+                path:
+                    type: string
+                component:
+                    type: string
+                icon:
+                    type: string
+                sort:
+                    type: integer
+                    format: int32
+                visible:
+                    type: boolean
+                status:
+                    type: integer
+                    format: int32
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+        eagle.system.v1.ResetPasswordRequest:
+            type: object
+            properties:
+                id:
+                    type: string
+                newPassword:
+                    type: string
+        eagle.system.v1.ResetPasswordResponse:
+            type: object
+            properties: {}
+        eagle.system.v1.Role:
+            type: object
+            properties:
+                id:
+                    type: string
+                name:
+                    type: string
+                code:
+                    type: string
+                sort:
+                    type: integer
+                    format: int32
+                dataScope:
+                    type: integer
+                    description: |-
+                        数据权限范围：1=全部 2=本部门及以下 3=本部门 4=仅本人
+                         本期落库但不参与鉴权判定，等接入 Casbin 做数据权限时消费
+                    format: int32
+                status:
+                    type: integer
+                    format: int32
+                remark:
+                    type: string
+                permissionIds:
+                    type: array
+                    items:
+                        type: string
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+        eagle.system.v1.UpdateDictDataRequest:
+            type: object
+            properties:
+                id:
+                    type: string
+                label:
+                    type: string
+                value:
+                    type: string
+                sort:
+                    type: integer
+                    format: int32
+                cssClass:
+                    type: string
+                isDefault:
+                    type: boolean
+                status:
+                    type: integer
+                    format: int32
+                remark:
+                    type: string
+        eagle.system.v1.UpdateDictDataResponse:
+            type: object
+            properties:
+                dictData:
+                    $ref: '#/components/schemas/eagle.system.v1.DictData'
+        eagle.system.v1.UpdateDictTypeRequest:
+            type: object
+            properties:
+                id:
+                    type: string
+                name:
+                    type: string
+                status:
+                    type: integer
+                    format: int32
+                remark:
+                    type: string
+        eagle.system.v1.UpdateDictTypeResponse:
+            type: object
+            properties:
+                dictType:
+                    $ref: '#/components/schemas/eagle.system.v1.DictType'
+        eagle.system.v1.UpdatePermissionRequest:
+            type: object
+            properties:
+                id:
+                    type: string
+                parentId:
+                    type: string
+                name:
+                    type: string
+                code:
+                    type: string
+                type:
+                    type: integer
+                    format: int32
+                path:
+                    type: string
+                component:
+                    type: string
+                icon:
+                    type: string
+                sort:
+                    type: integer
+                    format: int32
+                visible:
+                    type: boolean
+                status:
+                    type: integer
+                    format: int32
+        eagle.system.v1.UpdatePermissionResponse:
+            type: object
+            properties:
+                permission:
+                    $ref: '#/components/schemas/eagle.system.v1.Permission'
+        eagle.system.v1.UpdateRoleRequest:
+            type: object
+            properties:
+                id:
+                    type: string
+                name:
+                    type: string
+                sort:
+                    type: integer
+                    format: int32
+                dataScope:
+                    type: integer
+                    format: int32
+                status:
+                    type: integer
+                    format: int32
+                remark:
+                    type: string
+        eagle.system.v1.UpdateRoleResponse:
+            type: object
+            properties:
+                role:
+                    $ref: '#/components/schemas/eagle.system.v1.Role'
+        eagle.system.v1.UpdateUserRequest:
+            type: object
+            properties:
+                id:
+                    type: string
+                nickname:
+                    type: string
+                email:
+                    type: string
+                phone:
+                    type: string
+                deptId:
+                    type: string
+                status:
+                    type: integer
+                    format: int32
+                remark:
+                    type: string
+        eagle.system.v1.UpdateUserResponse:
+            type: object
+            properties:
+                user:
+                    $ref: '#/components/schemas/eagle.system.v1.User'
+        eagle.system.v1.User:
+            type: object
+            properties:
+                id:
+                    type: string
+                username:
+                    type: string
+                nickname:
+                    type: string
+                email:
+                    type: string
+                phone:
+                    type: string
+                deptId:
+                    type: string
+                status:
+                    type: integer
+                    description: 0=禁用 1=正常
+                    format: int32
+                remark:
+                    type: string
+                roleIds:
+                    type: array
+                    items:
+                        type: string
+                roleCodes:
+                    type: array
+                    items:
+                        type: string
+                lastLoginAt:
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+            description: 用户。password_hash 永不出现在任何响应里。
+tags:
+    - name: DictService
+      description: |-
+        DictService 管理数据字典。字典类型（sys_common_status）下挂若干字典项，
+         前端下拉框、状态标签统一从这里取，避免枚举值散落在各处代码里。
+    - name: PermissionService
+    - name: RoleService
+    - name: UserService
+      description: |-
+        UserService 管理系统用户及其角色绑定。
+         每个方法都通过 eagle.annotations.v1.perm 声明所需权限码，
+         由 pkg/authz 中间件统一拦截，handler 内不再手写鉴权。
