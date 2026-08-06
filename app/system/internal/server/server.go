@@ -6,6 +6,8 @@ import (
 	"log/slog"
 
 	protovalidatemw "github.com/go-kratos/kratos/contrib/middleware/validate/v3"
+	"github.com/go-kratos/kratos/contrib/otel/v3/metrics"
+	"github.com/go-kratos/kratos/contrib/otel/v3/tracing"
 	"github.com/go-kratos/kratos/v3/middleware"
 	"github.com/go-kratos/kratos/v3/middleware/logging"
 	"github.com/go-kratos/kratos/v3/middleware/ratelimit"
@@ -60,6 +62,10 @@ func NewMiddlewares(
 
 	return []middleware.Middleware{
 		recovery.Recovery(),
+		// tracing 紧贴 recovery：这样后续每一层——包括被拒绝的请求——
+		// 都落在同一个 span 里，排查 403 时能看到完整调用链
+		tracing.Server(),
+		metrics.Server(),
 		logging.Server(logger),
 		ratelimit.Server(),
 		authn.Server(verifier),

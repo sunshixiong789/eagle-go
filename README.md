@@ -134,11 +134,44 @@ go test ./...
 go test -short ./...
 ```
 
-### 执行迁移
+### 启动依赖与服务
+
+```bash
+docker compose -f deploy/docker-compose.yml up -d postgres redis keycloak
+```
+
+Keycloak 会自动导入 `deploy/keycloak/realm-eagle.json`（realm `eagle`，
+角色 `admin` / `user`，三个客户端）。控制台 http://localhost:8080 ，初始账号 `admin/admin`。
+
+**realm 里刻意不预置任何用户**——该文件会进版本库，内置已知口令的账号会一路带到生产。
+首个管理员请在控制台创建并授予 realm 角色 `admin`。
+
+执行迁移后启动：
 
 ```bash
 goose -dir db/migrations postgres "postgres://eagle:eagle@127.0.0.1:5432/eagle?sslmode=disable" up
 ```
+
+```bash
+go run ./app/system/cmd/server -conf app/system/configs
+```
+
+要看链路和指标，再启可观测性栈（Grafana 已预置 Prometheus + Tempo 数据源）：
+
+```bash
+docker compose -f deploy/docker-compose.yml --profile obs up -d
+```
+
+然后把 `configs/config.yaml` 的 `otlp_endpoint` 填成 `127.0.0.1:4317`。
+
+### 配置里的时长写法
+
+所有 duration 由 `google.protobuf.Duration` 承载，**只接受「秒数 + s」**：`3600s`、`0.5s`。
+Go 风格的 `1h` / `30m` / `500ms` 会解析失败并让服务在启动阶段直接崩溃。
+
+这个坑真实踩过——配置里写了 `30m`，服务起不来，而报错信息只说
+`invalid google.protobuf.Duration value`，不指向具体字段。
+`conf_test.go` 现在会真实加载配置文件，把这类错误挡在 CI。
 
 ---
 
@@ -233,8 +266,10 @@ eagle-go/
 | 数据库迁移与种子数据 | ✅ 真实 PG 上 up→down→up 往返验证 |
 | 权限树 · 字典 · 角色权限绑定 | ✅ 数据层已验证 |
 | Casbin 鉴权中间件 | ✅ 已验证（401/403/200、通配边界、角色继承、失败关闭） |
-| Keycloak 接入 | 🚧 验签链路已就绪，realm 配置与端到端联调待完成 |
-| 可观测性与交付 | 🚧 待完成 |
+| 可观测性（OTel 链路 + Prometheus 指标） | ✅ 已装配，配置解析有回归测试 |
+| 部署（Dockerfile · compose · Keycloak realm） | ✅ 已就绪 |
+| Keycloak 端到端联调 | 🚧 验签链路与 realm 配置已就绪，未对着真实 Keycloak 跑通 |
+| Helm chart · 生产部署 | 🚧 待完成 |
 
 ## 安全提示
 

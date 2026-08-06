@@ -2,10 +2,12 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/go-kratos/kratos/contrib/otel/v3/tracing"
 	"github.com/go-kratos/kratos/v3"
@@ -16,6 +18,7 @@ import (
 	"github.com/go-kratos/kratos/v3/transport/http"
 
 	"github.com/eagle-go/eagle/app/system/internal/conf"
+	"github.com/eagle-go/eagle/pkg/otelx"
 
 	// 按可用 CPU 配额设置 GOMAXPROCS。容器里 runtime 默认看到的是宿主机核数，
 	// 不修正会导致调度器开出远超 CPU limit 的 P，引发大量无谓的上下文切换。
@@ -56,6 +59,21 @@ func main() {
 	logger := newLogger(bc.GetObservability())
 	log.SetDefault(logger)
 
+	// 可观测性要在装配业务组件之前初始化：中间件在构造时就会
+	// 从全局 provider 取 Tracer/Meter，晚于它初始化会拿到 no-op 实例
+	shutdownOtel, err := setupObservability(bc.GetObservability())
+	if err != nil {
+		panic(err)
+	}
+	defer func() {
+		// 给缓冲区里的 span 一点时间上报，否则进程一退就全丢了
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := shutdownOtel(ctx); err != nil {
+			logger.Warn("关闭可观测性组件时出错", slog.Any("error", err))
+		}
+	}()
+
 	app, cleanup, err := wireApp(
 		bc.GetServer(),
 		bc.GetData(),
@@ -71,6 +89,23 @@ func main() {
 	if err := app.Run(); err != nil {
 		panic(err)
 	}
+}
+
+// setupObservability 初始化链路与指标。
+//
+// 未配置 OTLP 端点时不报错、只降级：本地开发通常没有 collector，
+// 为此让服务起不来是本末倒置。
+func setupObservability(o *conf.Observability) (func(context.Context) error, error) {
+	return otelx.Setup(context.Background(), otelx.Config{
+		ServiceName:    Name,
+		ServiceVersion: Version,
+		InstanceID:     id,
+		OTLPEndpoint:   o.GetOtlpEndpoint(),
+		// 集群内到 collector 通常是明文 gRPC；跨网络务必改为 TLS
+		OTLPInsecure: true,
+		SampleRatio:  o.GetTraceSampleRatio(),
+		MetricsAddr:  o.GetMetricsAddr(),
+	})
 }
 
 // newLogger 构造服务日志器。

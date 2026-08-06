@@ -1,0 +1,100 @@
+{
+  "realm": "eagle",
+  "enabled": true,
+  "displayName": "Eagle",
+
+  "_comment_ttl": "access token 保持短寿命：撤销依赖 Redis 黑名单，而黑名单只需保留到 token 自然过期为止。TTL 越长，黑名单占用越久、被撤销的凭证窗口期也越长。",
+  "accessTokenLifespan": 900,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+
+  "_comment_security": "生产环境务必把 sslRequired 改回 external 或 all。这里设成 none 仅因本地开发走 http。",
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "bruteForceProtected": true,
+  "failureFactor": 10,
+  "waitIncrementSeconds": 60,
+
+  "roles": {
+    "realm": [
+      {
+        "name": "admin",
+        "description": "超级管理员。鉴权中间件对该角色短路放行，同时 Casbin 里也配了 system:* 通配策略——去掉短路逻辑后行为不变。"
+      },
+      {
+        "name": "user",
+        "description": "普通用户。Casbin 里只授予了 :query 与 :list 类只读权限。"
+      }
+    ]
+  },
+
+  "clients": [
+    {
+      "clientId": "eagle-web",
+      "name": "Eagle 管理后台（前端）",
+      "enabled": true,
+      "_comment": "公共客户端：SPA 无法安全保存 secret，因此强制 PKCE 而不是发 secret。",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:5173/*",
+        "http://127.0.0.1:5173/*"
+      ],
+      "webOrigins": ["+"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:5173/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "audience-eagle-system",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "_comment": "Keycloak 默认把 aud 设成 account，对资源服务器没有意义。加这个 mapper 后 system 服务才能真正校验 aud。",
+          "config": {
+            "included.client.audience": "eagle-system",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "eagle-system",
+      "name": "Eagle System 服务（资源服务器）",
+      "enabled": true,
+      "_comment": "资源服务器本身。bearerOnly 表示它只验证 token、不发起登录流程。",
+      "bearerOnly": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": false
+    },
+    {
+      "clientId": "eagle-worker",
+      "name": "Eagle 后台任务（服务账号）",
+      "enabled": true,
+      "_comment": "服务间调用用的机密客户端。secret 必须在部署时经环境变量或 Secret 注入，绝不写进本文件——本文件会进版本库。",
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "attributes": {
+        "use.refresh.tokens": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "audience-eagle-system",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "eagle-system",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+
+  "_comment_users": "刻意不预置任何用户。本文件会进版本库，内置已知口令的账号会一路带到生产。首个管理员请用 Keycloak 控制台或 Admin API 创建，并授予 realm 角色 admin。"
+}

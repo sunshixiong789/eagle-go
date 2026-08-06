@@ -8,12 +8,13 @@ services:
       POSTGRES_USER: eagle
       POSTGRES_PASSWORD: eagle
       POSTGRES_DB: eagle
-      # 本地开发用，生产务必换成 scram-sha-256 + 真实密码
+      # 本地开发用，生产务必换成真实口令并经 Secret 注入
       POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./postgres/init-keycloak-db.sh:/docker-entrypoint-initdb.d/10-keycloak.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U eagle -d eagle"]
       interval: 5s
@@ -34,17 +35,47 @@ services:
       timeout: 3s
       retries: 10
 
-  # 可观测性栈：默认不启动，需要时 docker compose --profile obs up -d
+  # 认证中心：用户、口令、角色的唯一来源。
+  # 与业务库共用同一个 PostgreSQL 实例但使用独立的 database——
+  # 本地省一个容器，生产应各自独立部署。
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: eagle-keycloak
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: eagle
+      KC_DB_PASSWORD: eagle
+      KC_HTTP_PORT: 8080
+      # 关闭严格 hostname 校验，否则容器内外访问同一 issuer 会对不上，
+      # 导致资源服务器验签时 iss 不匹配
+      KC_HOSTNAME_STRICT: "false"
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./keycloak/realm-eagle.json:/opt/keycloak/data/import/realm-eagle.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # 可观测性栈：默认不启动，需要时
+  #   docker compose --profile obs up -d
   otel-collector:
     image: otel/opentelemetry-collector-contrib:latest
     container_name: eagle-otel
     profiles: ["obs"]
     command: ["--config=/etc/otel/config.yaml"]
     volumes:
-      - ./otel-collector.yaml:/etc/otel/config.yaml:ro
+      - ./observability/otel-collector.yaml:/etc/otel/config.yaml:ro
     ports:
       - "4317:4317"   # OTLP gRPC
       - "4318:4318"   # OTLP HTTP
+    depends_on:
+      - tempo
 
   tempo:
     image: grafana/tempo:latest
@@ -52,7 +83,7 @@ services:
     profiles: ["obs"]
     command: ["-config.file=/etc/tempo/tempo.yaml"]
     volumes:
-      - ./tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - ./observability/tempo.yaml:/etc/tempo/tempo.yaml:ro
     ports:
       - "3200:3200"
 
@@ -61,7 +92,7 @@ services:
     container_name: eagle-prometheus
     profiles: ["obs"]
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
       - "9090:9090"
 
@@ -73,8 +104,13 @@ services:
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
       GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./observability/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/ds.yaml:ro
     ports:
       - "3000:3000"
+    depends_on:
+      - prometheus
+      - tempo
 
 volumes:
   pgdata:

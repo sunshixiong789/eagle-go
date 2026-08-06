@@ -2,6 +2,12 @@
 #
 # 生产环境不要直接改这个文件：敏感项（DSN 口令、Redis 密码）应经由
 # 环境变量或 K8s Secret 注入，本文件只保留结构和安全的默认值。
+#
+# 【时长字段的写法】
+# 所有 duration 都由 google.protobuf.Duration 承载，它只接受
+# 「秒数 + s」这一种格式：3600s、0.5s。
+# Go 风格的 1h / 30m / 500ms 一律解析失败，且会让服务在启动阶段
+# 直接崩溃（见 conf_test.go 中的回归测试）。
 
 server:
   http:
@@ -16,31 +22,41 @@ data:
     dsn: "postgres://eagle:eagle@127.0.0.1:5432/eagle?sslmode=disable"
     max_conns: 20
     min_conns: 2
-    max_conn_lifetime: 1h
-    max_conn_idle_time: 30m
+    max_conn_lifetime: 3600s
+    max_conn_idle_time: 1800s
   redis:
     addr: 127.0.0.1:6379
     password: ""
     db: 0
     dial_timeout: 2s
-    read_timeout: 500ms
-    write_timeout: 500ms
+    read_timeout: 0.5s
+    write_timeout: 0.5s
 
 auth:
-  # 必须与 auth 服务 discovery 文档里的 issuer 完全一致（含协议、端口、尾斜杠）。
-  # 不一致时所有 token 都会因 iss 校验失败被拒，且报错不易定位。
-  issuer: "http://127.0.0.1:8001"
-  jwks_refresh_interval: 15m
-  # 权限缓存 TTL。权限变更时会主动失效，这个值只是兜底上限。
-  perm_cache_ttl: 10m
-  dict_cache_ttl: 30m
-  # 具备该角色码的用户跳过权限判定
+  # Keycloak realm 的 issuer，必须与 token 里的 iss 完全一致
+  # （含协议、端口、是否带尾斜杠）。不一致时所有 token 都会因
+  # iss 校验失败被拒，而报错信息不易定位到这里。
+  issuer: "http://127.0.0.1:8080/realms/eagle"
+
+  # 本服务在 Keycloak 中的 client id，
+  # 用于从 token 的 resource_access 取本服务的 client 角色
+  client_id: "eagle-system"
+
+  # 期望的 aud。Keycloak 默认把 aud 设成 "account"，需要在客户端上
+  # 配 audience mapper（见 deploy/keycloak/realm-eagle.json）才有意义。
+  # 留空则不校验 aud。
+  audience: "eagle-system"
+
+  dict_cache_ttl: 1800s
+  # 具备该角色的主体跳过 Casbin 判定
   super_admin_role: admin
 
 observability:
-  # 留空则不上报链路。本地需要看链路时启 obs profile 后填 127.0.0.1:4317
+  # 留空则不上报链路，服务照常运行。
+  # 本地要看链路：docker compose --profile obs up -d 后填 127.0.0.1:4317
   otlp_endpoint: ""
   # 开发期全采样；生产建议降到 0.01~0.1
   trace_sample_ratio: 1.0
   log_level: info
+  # 指标与健康检查端点，独立于业务端口且不经过鉴权
   metrics_addr: 0.0.0.0:9100
