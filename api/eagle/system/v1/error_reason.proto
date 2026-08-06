@@ -4,30 +4,15 @@ package eagle.system.v1;
 
 option go_package = "github.com/eagle-go/eagle/api/eagle/system/v1;systemv1";
 
-// 业务错误原因。与 HTTP/gRPC 状态码解耦：状态码表达"哪一类错误"，
-// reason 表达"具体是什么"，客户端按 reason 做分支处理。
+// 业务错误原因。与 HTTP/gRPC 状态码解耦：状态码表达「哪一类错误」，
+// reason 表达「具体是什么」，客户端按 reason 做分支处理。
 //
 // 用法（沿用官方 kratos-layout 的做法，不引 protoc-gen-go-errors）：
-//   errors.NotFound(v1.ErrorReason_ERROR_REASON_USER_NOT_FOUND.String(), "用户不存在")
+//   errors.NotFound(v1.ErrorReason_ERROR_REASON_PERMISSION_NOT_FOUND.String(), "权限不存在")
 enum ErrorReason {
   ERROR_REASON_UNSPECIFIED = 0;
 
-  // 用户
-  ERROR_REASON_USER_NOT_FOUND = 1;
-  ERROR_REASON_USER_ALREADY_EXISTS = 2;
-  ERROR_REASON_USER_DISABLED = 3;
-  ERROR_REASON_PASSWORD_INCORRECT = 4;
-  // 内置管理员不允许删除或停用，避免把自己锁在系统外
-  ERROR_REASON_USER_PROTECTED = 5;
-
-  // 角色
-  ERROR_REASON_ROLE_NOT_FOUND = 10;
-  ERROR_REASON_ROLE_CODE_DUPLICATED = 11;
-  // 角色下仍有用户时不允许删除
-  ERROR_REASON_ROLE_IN_USE = 12;
-  ERROR_REASON_ROLE_PROTECTED = 13;
-
-  // 权限
+  // 权限节点
   ERROR_REASON_PERMISSION_NOT_FOUND = 20;
   ERROR_REASON_PERMISSION_CODE_DUPLICATED = 21;
   // 存在子节点时不允许删除
@@ -40,4 +25,9 @@ enum ErrorReason {
   ERROR_REASON_DICT_TYPE_DUPLICATED = 31;
   ERROR_REASON_DICT_DATA_NOT_FOUND = 32;
   ERROR_REASON_DICT_DATA_DUPLICATED = 33;
+
+  // 角色权限绑定
+  ERROR_REASON_ROLE_NOT_BOUND = 40;
+  // 授予了权限树中不存在的权限码，多半是拼写错误
+  ERROR_REASON_UNKNOWN_PERMISSION_CODE = 41;
 }

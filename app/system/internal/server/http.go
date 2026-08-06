@@ -13,10 +13,9 @@ import (
 func NewHTTPServer(
 	c *conf.Server,
 	ms []middleware.Middleware,
-	user *service.UserService,
-	role *service.RoleService,
 	perm *service.PermissionService,
 	dict *service.DictService,
+	binding *service.RoleBindingService,
 ) *http.Server {
 	opts := []http.ServerOption{
 		http.Middleware(ms...),
@@ -33,10 +32,9 @@ func NewHTTPServer(
 
 	srv := http.NewServer(opts...)
 
-	v1.RegisterUserServiceHTTPServer(srv, user)
-	v1.RegisterRoleServiceHTTPServer(srv, role)
 	v1.RegisterPermissionServiceHTTPServer(srv, perm)
 	v1.RegisterDictServiceHTTPServer(srv, dict)
+	v1.RegisterRoleBindingServiceHTTPServer(srv, binding)
 
 	return srv
 }

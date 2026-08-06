@@ -8,8 +8,7 @@ import "github.com/google/wire"
 
 // ProviderSet 是 biz 层的 wire provider 集合。
 var ProviderSet = wire.NewSet(
-	NewUserUsecase,
-	NewRoleUsecase,
 	NewPermissionUsecase,
 	NewDictUsecase,
+	NewRoleBindingUsecase,
 )

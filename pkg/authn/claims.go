@@ -3,15 +3,20 @@ package authn
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 )
 
-// Claims 是 eagle 签发的 access token 载荷。
+// serviceAccountPrefix 是 Keycloak 为 client_credentials 服务账号
+// 生成的用户名前缀，形如 service-account-eagle-system。
+// 这是 Keycloak 的既定约定，也是区分「服务令牌」与「用户令牌」最可靠的信号。
+const serviceAccountPrefix = "service-account-"
+
+// Claims 是 Keycloak 签发的 access token 载荷。
 //
-// 只声明本项目实际消费的字段。多余的声明会造成一种"这些字段都参与判定"
-// 的错觉，实际却没人读——鉴权相关的结构体尤其要避免这种误导。
+// 只声明本项目实际消费的字段。Keycloak 的 token 还带 session_state、
+// allowed-origins、email_verified 等一堆字段，全声明进来会造成
+// 「这些都参与判定」的错觉——鉴权结构体尤其要避免这种误导。
 type Claims struct {
 	Issuer    string   `json:"iss"`
 	Subject   string   `json:"sub"`
@@ -21,14 +26,26 @@ type Claims struct {
 	// JTI 是 token 唯一标识，登出/踢人时写进黑名单
 	JTI string `json:"jti"`
 
-	// ClientID 是签发该 token 的 OAuth2 客户端
-	ClientID string `json:"client_id"`
+	// AuthorizedParty 是 Keycloak 的 azp，即换取该 token 的客户端。
+	// 注意不是 client_id——Keycloak 的 access token 里用的是 azp。
+	AuthorizedParty string `json:"azp"`
+
 	// Scope 为空格分隔，遵循 RFC 6749
 	Scope string `json:"scope"`
 
-	// 以下字段只在用户令牌上出现，client_credentials 令牌没有
-	Username string   `json:"preferred_username"`
-	Roles    []string `json:"roles"`
+	Username string `json:"preferred_username"`
+	Email    string `json:"email"`
+
+	// RealmAccess 是 realm 级角色。Keycloak 把角色嵌在这里，
+	// 而不是放在顶层 roles claim——直接读 roles 会永远拿到空。
+	RealmAccess struct {
+		Roles []string `json:"roles"`
+	} `json:"realm_access"`
+
+	// ResourceAccess 是各客户端的 client 级角色，键为 client id。
+	ResourceAccess map[string]struct {
+		Roles []string `json:"roles"`
+	} `json:"resource_access"`
 }
 
 // Scopes 把空格分隔的 scope 串拆成切片。
@@ -39,21 +56,42 @@ func (c *Claims) Scopes() []string {
 	return strings.Fields(c.Scope)
 }
 
-// UserID 从 sub 解析用户 ID。
-// 服务令牌的 sub 是 client_id，解析不出数字，返回 0。
-func (c *Claims) UserID() int64 {
-	id, err := strconv.ParseInt(c.Subject, 10, 64)
-	if err != nil {
-		return 0
+// Roles 汇总 realm 角色与指定客户端的 client 角色。
+//
+// clientID 为空时只返回 realm 角色。Casbin 判定和超管短路都基于这个结果，
+// 所以两级角色必须一起返回——只看其中一级会让在 Keycloak 里
+// 按 client 授权的角色静默失效。
+func (c *Claims) Roles(clientID string) []string {
+	roles := make([]string, 0, len(c.RealmAccess.Roles))
+	roles = append(roles, c.RealmAccess.Roles...)
+
+	if clientID != "" {
+		if ra, ok := c.ResourceAccess[clientID]; ok {
+			roles = append(roles, ra.Roles...)
+		}
 	}
-	return id
+	return roles
 }
 
 // IsServiceToken 判断这是不是 client_credentials 签发的服务令牌。
-// 判据是 sub 等于 client_id——该 grant 背后没有用户，
-// 规范做法就是把 sub 设成客户端标识。
+//
+// Keycloak 下不能用「sub == client_id」判断：服务账号有自己的用户 UUID，
+// sub 是那个 UUID 而不是客户端标识。可靠信号是用户名的
+// service-account- 前缀。
 func (c *Claims) IsServiceToken() bool {
-	return c.ClientID != "" && c.Subject == c.ClientID
+	return strings.HasPrefix(c.Username, serviceAccountPrefix)
+}
+
+// ServiceName 从服务账号用户名里还原出客户端标识。
+// 非服务令牌返回空串。
+func (c *Claims) ServiceName() string {
+	if !c.IsServiceToken() {
+		return ""
+	}
+	if c.AuthorizedParty != "" {
+		return c.AuthorizedParty
+	}
+	return strings.TrimPrefix(c.Username, serviceAccountPrefix)
 }
 
 // validate 校验与签名无关的时间和 issuer 声明。
@@ -68,7 +106,6 @@ func (c *Claims) validate(wantIssuer string, now time.Time, leeway time.Duration
 	if now.After(time.Unix(c.ExpiresAt, 0).Add(leeway)) {
 		return ErrTokenExpired
 	}
-	// iat 允许缺省；存在时不接受明显来自未来的 token（时钟漂移之外）
 	if c.IssuedAt != 0 && now.Add(leeway).Before(time.Unix(c.IssuedAt, 0)) {
 		return fmt.Errorf("%w: iat 位于未来", ErrInvalidToken)
 	}
@@ -76,7 +113,7 @@ func (c *Claims) validate(wantIssuer string, now time.Time, leeway time.Duration
 }
 
 // audience 兼容 aud 的两种合法形式：字符串或字符串数组。
-// JWT 规范两者都允许，只处理其中一种会在对接其他 IdP 时踩坑。
+// Keycloak 单个受众时发字符串、多个时发数组，只处理一种会随配置变化而失败。
 type audience []string
 
 func (a *audience) UnmarshalJSON(b []byte) error {

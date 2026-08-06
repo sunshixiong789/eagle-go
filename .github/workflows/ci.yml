@@ -1,0 +1,141 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+# 同一分支上新的推送会取消尚未完成的旧任务，避免排队浪费
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.26"
+
+jobs:
+  proto:
+    name: 契约检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # buf breaking 需要历史提交做对比基准
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - uses: bufbuild/buf-action@v1
+        with:
+          setup_only: true
+
+      - name: buf lint
+        run: buf lint
+
+      # PR 上拦截破坏性契约变更。契约是跨服务、跨语言的公共依赖，
+      # 破坏性改动一旦合入，下游要到运行时才会发现。
+      - name: buf breaking
+        if: github.event_name == 'pull_request'
+        run: buf breaking --against ".git#branch=${{ github.base_ref }}"
+
+      # 生成代码必须与 proto 保持同步。不检查的话，
+      # 改了 proto 却忘记重新生成的提交会一路合进主干。
+      - name: 验证生成代码是最新的
+        run: |
+          buf generate --template buf.gen.yaml
+          buf generate --template buf.gen.config.yaml
+          if ! git diff --exit-code; then
+            echo "::error::生成代码与 proto 不一致，请在本地运行 buf generate 后提交"
+            exit 1
+          fi
+
+  test:
+    name: 构建与测试
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      # 集成测试用 embedded-postgres 在进程内拉起真实 PostgreSQL，
+      # 因此 CI 不需要声明 services，本地也不需要 Docker。
+      # 缓存 PG 二进制，省掉每次约 100MB 的下载。
+      - name: 缓存 embedded-postgres 二进制
+        uses: actions/cache@v4
+        with:
+          path: ~/.embedded-postgres-go
+          key: embedded-postgres-${{ runner.os }}
+
+      - name: 构建
+        run: go build ./...
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: 测试
+        run: go test -race -coverprofile=coverage.out ./...
+
+      - name: 上传覆盖率报告
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
+
+  lint:
+    name: 静态检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+
+  migrations:
+    name: 迁移可回滚性
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: eagle
+          POSTGRES_PASSWORD: eagle
+          POSTGRES_DB: eagle
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: 安装 goose
+        run: go install github.com/pressly/goose/v3/cmd/goose@v3.27.3
+
+      # up 能跑通不代表 down 也能。回滚脚本平时没人执行，
+      # 等到线上真要回滚时才发现写错，代价极高。
+      - name: up -> down -> up 往返验证
+        env:
+          DSN: postgres://eagle:eagle@127.0.0.1:5432/eagle?sslmode=disable
+        run: |
+          goose -dir db/migrations postgres "$DSN" up
+          goose -dir db/migrations postgres "$DSN" down-to 0
+          goose -dir db/migrations postgres "$DSN" up
+          goose -dir db/migrations postgres "$DSN" status

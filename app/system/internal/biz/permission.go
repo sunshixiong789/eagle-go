@@ -15,6 +15,12 @@ const (
 // RootPermissionID 是顶级节点的 parent_id 取值。
 const RootPermissionID int64 = 0
 
+// 状态取值。
+const (
+	StatusDisabled int32 = 0
+	StatusEnabled  int32 = 1
+)
+
 // Permission 是权限领域模型，同时承载菜单树结构。
 type Permission struct {
 	ID        int64
@@ -46,21 +52,17 @@ type PermissionRepo interface {
 	Update(ctx context.Context, p *Permission) (*Permission, error)
 	Delete(ctx context.Context, id int64) error
 	CountChildren(ctx context.Context, id int64) (int64, error)
-	ListByUserID(ctx context.Context, userID int64) ([]*Permission, error)
-	ListCodesByUserID(ctx context.Context, userID int64) ([]string, error)
-	// InvalidateAllPermissionCache 在权限本身变更（而非授权关系变更）后
-	// 清空全部用户的权限缓存
-	InvalidateAllPermissionCache(ctx context.Context) error
 }
 
 // PermissionUsecase 编排权限相关的业务规则。
 type PermissionUsecase struct {
-	repo PermissionRepo
+	repo   PermissionRepo
+	policy PolicyStore
 }
 
 // NewPermissionUsecase 构造权限用例。
-func NewPermissionUsecase(repo PermissionRepo) *PermissionUsecase {
-	return &PermissionUsecase{repo: repo}
+func NewPermissionUsecase(repo PermissionRepo, policy PolicyStore) *PermissionUsecase {
+	return &PermissionUsecase{repo: repo, policy: policy}
 }
 
 // CreatePermission 新建权限节点。
@@ -95,18 +97,7 @@ func (uc *PermissionUsecase) UpdatePermission(ctx context.Context, p *Permission
 			return nil, err
 		}
 	}
-
-	updated, err := uc.repo.Update(ctx, p)
-	if err != nil {
-		return nil, err
-	}
-	// 权限码或状态变了，所有人的权限集合都可能受影响
-	if current.Code != updated.Code || current.Status != updated.Status {
-		if err := uc.repo.InvalidateAllPermissionCache(ctx); err != nil {
-			return nil, err
-		}
-	}
-	return updated, nil
+	return uc.repo.Update(ctx, p)
 }
 
 // DeletePermission 删除权限节点。存在子节点时拒绝，避免留下孤儿节点。
@@ -121,28 +112,69 @@ func (uc *PermissionUsecase) DeletePermission(ctx context.Context, id int64) err
 	if count > 0 {
 		return ErrPermissionHasChildren
 	}
-	if err := uc.repo.Delete(ctx, id); err != nil {
-		return err
-	}
-	return uc.repo.InvalidateAllPermissionCache(ctx)
+	return uc.repo.Delete(ctx, id)
 }
 
-// GetUserMenus 返回用户可见的目录与菜单，以及全部权限码。
-// 前端用前者渲染路由、用后者做按钮级显隐。
-func (uc *PermissionUsecase) GetUserMenus(ctx context.Context, userID int64) ([]*Permission, []string, error) {
-	all, err := uc.repo.ListByUserID(ctx, userID)
+// GetMenusForRoles 返回给定角色可见的菜单树与权限码。
+//
+// 菜单不再按「用户 ID」查库：用户的角色由 Keycloak 随 token 下发，
+// 本服务据角色向 Casbin 要权限码，再用权限码过滤权限树。
+// 这样菜单与鉴权判定共用同一份策略，不会出现「菜单看得见但点了 403」。
+func (uc *PermissionUsecase) GetMenusForRoles(ctx context.Context, roles []string) ([]*Permission, []string, error) {
+	codes, err := uc.policy.PermissionsOf(ctx, roles)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	menus := make([]*Permission, 0, len(all))
-	codes := make([]string, 0, len(all))
+	all, err := uc.repo.List(ctx, ListPermissionsQuery{Status: ptr(StatusEnabled)})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	granted := make(map[string]struct{}, len(codes))
+	for _, c := range codes {
+		granted[c] = struct{}{}
+	}
+
+	// 先挑出有权限的叶子与菜单
+	visible := make(map[int64]*Permission, len(all))
+	byID := make(map[int64]*Permission, len(all))
 	for _, p := range all {
+		byID[p.ID] = p
+	}
+	for _, p := range all {
+		if p.Code == "" {
+			// 目录本身没有权限码，靠子节点带出来
+			continue
+		}
+		if _, ok := granted[p.Code]; ok {
+			visible[p.ID] = p
+		}
+	}
+
+	// 再把可见节点的祖先链补上，否则菜单会因为父目录缺失而挂不上树
+	for id := range visible {
+		for cur := byID[id]; cur != nil && cur.ParentID != RootPermissionID; {
+			parent, ok := byID[cur.ParentID]
+			if !ok {
+				break
+			}
+			if _, seen := visible[parent.ID]; seen {
+				break
+			}
+			visible[parent.ID] = parent
+			cur = parent
+		}
+	}
+
+	menus := make([]*Permission, 0, len(visible))
+	for _, p := range all {
+		if _, ok := visible[p.ID]; !ok {
+			continue
+		}
+		// 按钮不进菜单树，前端用权限码单独控制显隐
 		if p.Type != PermissionTypeButton {
 			menus = append(menus, p)
-		}
-		if p.Code != "" {
-			codes = append(codes, p.Code)
 		}
 	}
 	return menus, codes, nil
@@ -158,7 +190,7 @@ func (uc *PermissionUsecase) ensureNoCycle(ctx context.Context, id, newParentID 
 		return ErrPermissionCycle
 	}
 
-	// 树深有限，加个上限防止数据本身已经成环时无限循环
+	// 树深有限，加上限防止数据本身已成环时无限循环
 	const maxDepth = 32
 	cursor := newParentID
 	for i := 0; i < maxDepth; i++ {
@@ -174,6 +206,7 @@ func (uc *PermissionUsecase) ensureNoCycle(ctx context.Context, id, newParentID 
 		}
 		cursor = node.ParentID
 	}
-	// 走到深度上限说明数据里已经存在环
 	return ErrPermissionCycle
 }
+
+func ptr[T any](v T) *T { return &v }

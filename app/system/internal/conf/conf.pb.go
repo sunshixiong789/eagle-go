@@ -194,19 +194,22 @@ func (x *Data) GetRedis() *Data_Redis {
 	return nil
 }
 
-// system 作为 OAuth2 资源服务器的配置
+// system 作为 OAuth2 资源服务器（面向 Keycloak）的配置
 type Auth struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// 认证中心的 issuer，用于拉取 JWKS 验签
+	// Keycloak realm 的 issuer，形如
+	// https://keycloak.example.com/realms/eagle
+	// 必须与 token 里的 iss 完全一致，含协议、端口和是否带尾斜杠
 	Issuer string `protobuf:"bytes,1,opt,name=issuer,proto3" json:"issuer,omitempty"`
-	// JWKS 本地缓存刷新间隔。密钥轮转后旧 token 仍能验证，
-	// 因为 JWKS 同时返回未过期的历史公钥
-	JwksRefreshInterval *durationpb.Duration `protobuf:"bytes,2,opt,name=jwks_refresh_interval,json=jwksRefreshInterval,proto3" json:"jwks_refresh_interval,omitempty"`
-	// 用户权限码缓存时长。权限变更时会主动失效，此 TTL 只是兜底
-	PermCacheTtl *durationpb.Duration `protobuf:"bytes,3,opt,name=perm_cache_ttl,json=permCacheTtl,proto3" json:"perm_cache_ttl,omitempty"`
+	// 本服务在 Keycloak 中的 client id。
+	// 用于从 token 的 resource_access 里取出本服务的 client 角色
+	ClientId string `protobuf:"bytes,2,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
+	// 期望的 aud。Keycloak 默认把 aud 设成 "account"，
+	// 通常要配 audience mapper 才有意义，留空则不校验
+	Audience string `protobuf:"bytes,3,opt,name=audience,proto3" json:"audience,omitempty"`
 	// 字典项缓存时长
 	DictCacheTtl *durationpb.Duration `protobuf:"bytes,4,opt,name=dict_cache_ttl,json=dictCacheTtl,proto3" json:"dict_cache_ttl,omitempty"`
-	// 拥有该角色码的用户跳过权限判定
+	// 拥有该角色的主体跳过 Casbin 判定
 	SuperAdminRole string `protobuf:"bytes,5,opt,name=super_admin_role,json=superAdminRole,proto3" json:"super_admin_role,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
@@ -249,18 +252,18 @@ func (x *Auth) GetIssuer() string {
 	return ""
 }
 
-func (x *Auth) GetJwksRefreshInterval() *durationpb.Duration {
+func (x *Auth) GetClientId() string {
 	if x != nil {
-		return x.JwksRefreshInterval
+		return x.ClientId
 	}
-	return nil
+	return ""
 }
 
-func (x *Auth) GetPermCacheTtl() *durationpb.Duration {
+func (x *Auth) GetAudience() string {
 	if x != nil {
-		return x.PermCacheTtl
+		return x.Audience
 	}
-	return nil
+	return ""
 }
 
 func (x *Auth) GetDictCacheTtl() *durationpb.Duration {
@@ -666,11 +669,11 @@ const file_system_internal_conf_conf_proto_rawDesc = "" +
 	"\x02db\x18\x03 \x01(\x05R\x02db\x12<\n" +
 	"\fdial_timeout\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\vdialTimeout\x12<\n" +
 	"\fread_timeout\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\vreadTimeout\x12>\n" +
-	"\rwrite_timeout\x18\x06 \x01(\v2\x19.google.protobuf.DurationR\fwriteTimeout\"\x99\x02\n" +
+	"\rwrite_timeout\x18\x06 \x01(\v2\x19.google.protobuf.DurationR\fwriteTimeout\"\xc2\x01\n" +
 	"\x04Auth\x12\x16\n" +
-	"\x06issuer\x18\x01 \x01(\tR\x06issuer\x12M\n" +
-	"\x15jwks_refresh_interval\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\x13jwksRefreshInterval\x12?\n" +
-	"\x0eperm_cache_ttl\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\fpermCacheTtl\x12?\n" +
+	"\x06issuer\x18\x01 \x01(\tR\x06issuer\x12\x1b\n" +
+	"\tclient_id\x18\x02 \x01(\tR\bclientId\x12\x1a\n" +
+	"\baudience\x18\x03 \x01(\tR\baudience\x12?\n" +
 	"\x0edict_cache_ttl\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\fdictCacheTtl\x12(\n" +
 	"\x10super_admin_role\x18\x05 \x01(\tR\x0esuperAdminRole\"\xa2\x01\n" +
 	"\rObservability\x12#\n" +
@@ -713,21 +716,19 @@ var file_system_internal_conf_conf_proto_depIdxs = []int32{
 	6,  // 5: eagle.system.conf.Server.grpc:type_name -> eagle.system.conf.Server.GRPC
 	7,  // 6: eagle.system.conf.Data.database:type_name -> eagle.system.conf.Data.Database
 	8,  // 7: eagle.system.conf.Data.redis:type_name -> eagle.system.conf.Data.Redis
-	9,  // 8: eagle.system.conf.Auth.jwks_refresh_interval:type_name -> google.protobuf.Duration
-	9,  // 9: eagle.system.conf.Auth.perm_cache_ttl:type_name -> google.protobuf.Duration
-	9,  // 10: eagle.system.conf.Auth.dict_cache_ttl:type_name -> google.protobuf.Duration
-	9,  // 11: eagle.system.conf.Server.HTTP.timeout:type_name -> google.protobuf.Duration
-	9,  // 12: eagle.system.conf.Server.GRPC.timeout:type_name -> google.protobuf.Duration
-	9,  // 13: eagle.system.conf.Data.Database.max_conn_lifetime:type_name -> google.protobuf.Duration
-	9,  // 14: eagle.system.conf.Data.Database.max_conn_idle_time:type_name -> google.protobuf.Duration
-	9,  // 15: eagle.system.conf.Data.Redis.dial_timeout:type_name -> google.protobuf.Duration
-	9,  // 16: eagle.system.conf.Data.Redis.read_timeout:type_name -> google.protobuf.Duration
-	9,  // 17: eagle.system.conf.Data.Redis.write_timeout:type_name -> google.protobuf.Duration
-	18, // [18:18] is the sub-list for method output_type
-	18, // [18:18] is the sub-list for method input_type
-	18, // [18:18] is the sub-list for extension type_name
-	18, // [18:18] is the sub-list for extension extendee
-	0,  // [0:18] is the sub-list for field type_name
+	9,  // 8: eagle.system.conf.Auth.dict_cache_ttl:type_name -> google.protobuf.Duration
+	9,  // 9: eagle.system.conf.Server.HTTP.timeout:type_name -> google.protobuf.Duration
+	9,  // 10: eagle.system.conf.Server.GRPC.timeout:type_name -> google.protobuf.Duration
+	9,  // 11: eagle.system.conf.Data.Database.max_conn_lifetime:type_name -> google.protobuf.Duration
+	9,  // 12: eagle.system.conf.Data.Database.max_conn_idle_time:type_name -> google.protobuf.Duration
+	9,  // 13: eagle.system.conf.Data.Redis.dial_timeout:type_name -> google.protobuf.Duration
+	9,  // 14: eagle.system.conf.Data.Redis.read_timeout:type_name -> google.protobuf.Duration
+	9,  // 15: eagle.system.conf.Data.Redis.write_timeout:type_name -> google.protobuf.Duration
+	16, // [16:16] is the sub-list for method output_type
+	16, // [16:16] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_system_internal_conf_conf_proto_init() }

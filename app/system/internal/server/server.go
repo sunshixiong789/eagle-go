@@ -13,7 +13,6 @@ import (
 	"github.com/google/wire"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/eagle-go/eagle/app/system/internal/biz"
 	"github.com/eagle-go/eagle/app/system/internal/conf"
 	"github.com/eagle-go/eagle/pkg/authn"
 	"github.com/eagle-go/eagle/pkg/authz"
@@ -27,11 +26,15 @@ var ProviderSet = wire.NewSet(
 	NewMiddlewares,
 )
 
-// NewVerifier 构造 token 验证器。
+// NewVerifier 构造 Keycloak token 验证器。
 func NewVerifier(c *conf.Auth, rdb *redis.Client) *authn.Verifier {
 	return authn.NewVerifier(
 		context.Background(),
-		authn.Config{Issuer: c.GetIssuer()},
+		authn.Config{
+			Issuer:   c.GetIssuer(),
+			ClientID: c.GetClientId(),
+			Audience: c.GetAudience(),
+		},
 		authn.NewRedisRevocations(rdb),
 	)
 }
@@ -41,18 +44,18 @@ func NewVerifier(c *conf.Auth, rdb *redis.Client) *authn.Verifier {
 // 顺序是有讲究的：
 //   - recovery 必须在最外层，否则内层 panic 会直接打挂进程
 //   - logging 紧随其后，才能记录到后面被拒绝的请求
-//   - ratelimit 在鉴权之前：过载保护不该依赖"先把 token 验完"
-//   - authn -> authz：先确认你是谁，再判断你能不能做
+//   - ratelimit 在鉴权之前：过载保护不该依赖「先把 token 验完」
+//   - authn -> authz：先确认你是谁（Keycloak 验签），再判断你能不能做（Casbin）
 //   - 参数校验放最内层：只有通过鉴权的请求才值得花这个代价
 func NewMiddlewares(
 	logger *slog.Logger,
 	verifier *authn.Verifier,
-	userUC *biz.UserUsecase,
+	enforcer *authz.Enforcer,
 	authConf *conf.Auth,
 ) []middleware.Middleware {
 	superAdmin := authConf.GetSuperAdminRole()
 	if superAdmin == "" {
-		superAdmin = biz.BuiltinAdminRoleCode
+		superAdmin = "admin"
 	}
 
 	return []middleware.Middleware{
@@ -62,7 +65,7 @@ func NewMiddlewares(
 		authn.Server(verifier),
 		authz.Server(
 			authz.WithSuperAdminRole(superAdmin),
-			authz.WithPermissionLoader(userUC.ListPermissionCodes),
+			authz.WithEnforcer(enforcer),
 		),
 		protovalidatemw.ProtoValidate(),
 	}

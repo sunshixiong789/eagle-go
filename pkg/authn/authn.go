@@ -36,11 +36,18 @@ type Revocations interface {
 
 // Config 是资源服务器的验证参数。
 type Config struct {
-	// Issuer 必须与认证中心 discovery 文档里的 issuer 完全一致
+	// Issuer 必须与 Keycloak realm 的 issuer 完全一致，
+	// 形如 https://keycloak.example.com/realms/eagle
 	Issuer string
-	// JWKSURL 为空时按 OIDC 约定推导为 <issuer>/.well-known/jwks.json
+	// JWKSURL 为空时按 Keycloak 约定推导为 <issuer>/protocol/openid-connect/certs。
+	// 注意 Keycloak 的 JWKS 路径不是 OIDC 常见的 /.well-known/jwks.json
 	JWKSURL string
-	// Audience 非空时校验 aud 声明
+	// ClientID 是本服务在 Keycloak 中的 client id，
+	// 用于从 resource_access 中取出本服务的 client 角色
+	ClientID string
+	// Audience 非空时校验 aud 声明。
+	// Keycloak 默认把 aud 设为 "account"，通常需要配 audience mapper 才有意义，
+	// 因此默认不校验
 	Audience string
 	// Leeway 容忍的时钟漂移，默认 30s
 	Leeway time.Duration
@@ -50,6 +57,7 @@ type Config struct {
 type Verifier struct {
 	keySet      oidc.KeySet
 	issuer      string
+	clientID    string
 	audience    string
 	leeway      time.Duration
 	revocations Revocations
@@ -63,7 +71,7 @@ type Verifier struct {
 func NewVerifier(ctx context.Context, cfg Config, revocations Revocations) *Verifier {
 	jwksURL := cfg.JWKSURL
 	if jwksURL == "" {
-		jwksURL = strings.TrimSuffix(cfg.Issuer, "/") + "/.well-known/jwks.json"
+		jwksURL = strings.TrimSuffix(cfg.Issuer, "/") + "/protocol/openid-connect/certs"
 	}
 	leeway := cfg.Leeway
 	if leeway <= 0 {
@@ -73,6 +81,7 @@ func NewVerifier(ctx context.Context, cfg Config, revocations Revocations) *Veri
 	return &Verifier{
 		keySet:      oidc.NewRemoteKeySet(ctx, jwksURL),
 		issuer:      cfg.Issuer,
+		clientID:    cfg.ClientID,
 		audience:    cfg.Audience,
 		leeway:      leeway,
 		revocations: revocations,
@@ -137,25 +146,24 @@ func Server(v *Verifier) middleware.Middleware {
 				return nil, err
 			}
 
-			return handler(identity.NewContext(ctx, toPrincipal(claims)), req)
+			return handler(identity.NewContext(ctx, v.toPrincipal(claims)), req)
 		}
 	}
 }
 
-func toPrincipal(c *Claims) *identity.Principal {
-	p := &identity.Principal{
-		Subject:   c.Subject,
-		ClientID:  c.ClientID,
-		Scopes:    c.Scopes(),
+func (v *Verifier) toPrincipal(c *Claims) *identity.Principal {
+	return &identity.Principal{
+		Subject:  c.Subject,
+		Username: c.Username,
+		Email:    c.Email,
+		ClientID: c.AuthorizedParty,
+		Scopes:   c.Scopes(),
+		// realm 角色 + 本服务的 client 角色一并取出。
+		// 服务账号同样可以在 Keycloak 里被授予角色，所以不分支处理。
+		Roles:     c.Roles(v.clientID),
 		TokenID:   c.JTI,
 		IsService: c.IsServiceToken(),
 	}
-	if !p.IsService {
-		p.UserID = c.UserID()
-		p.Username = c.Username
-		p.RoleCodes = c.Roles
-	}
-	return p
 }
 
 // bearerToken 从 Authorization 头取出 Bearer 令牌。

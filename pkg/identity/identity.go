@@ -7,42 +7,45 @@ import "context"
 
 type ctxKey struct{}
 
-// Principal 是一次调用的已认证主体。
+// Principal 是一次调用的已认证主体，由认证中间件从 Keycloak token 构造。
 //
-// 它可能是终端用户（授权码/后台直登换来的 token），
-// 也可能是服务自身（client_credentials 换来的服务令牌）——由 IsService 区分。
+// 它可能是终端用户，也可能是服务自身（client_credentials 服务账号），
+// 由 IsService 区分。
 type Principal struct {
-	// Subject 是 token 的 sub。用户令牌为用户 ID 的十进制字符串，
-	// 服务令牌为 client_id。
+	// Subject 是 Keycloak token 的 sub，用户在本系统的唯一锚点。
+	//
+	// 注意它是 UUID 字符串而不是自增整数：用户主数据在 Keycloak，
+	// 本系统的 sys_user_profile 也以此为外部键关联。
 	Subject string
 
-	// UserID 仅在用户令牌下有效（IsService 为 false）。
-	UserID int64
-	// Username 仅用于日志与审计，不参与鉴权判定。
+	// Username 是 preferred_username。用于日志与审计，不参与鉴权判定。
 	Username string
+	Email    string
 
-	// ClientID 是签发该 token 的 OAuth2 客户端。
+	// ClientID 是换取该 token 的客户端（Keycloak 的 azp）。
 	ClientID string
-	// Scopes 是 token 携带的 scope。服务令牌靠它换取权限码。
+
+	// Scopes 是 token 携带的 scope。
 	Scopes []string
-	// RoleCodes 是用户所属角色码，用于超管短路。
-	RoleCodes []string
+
+	// Roles 汇总了 realm 角色与本服务的 client 角色。
+	// Casbin 判定与超管短路都基于它。
+	Roles []string
 
 	// TokenID 是 jti，登出/踢人时写入黑名单的键。
 	TokenID string
 
-	// IsService 标记这是 client_credentials 签发的服务令牌，
-	// 背后没有真实用户，因此不做用户权限查询、只按 scope 判定。
+	// IsService 标记这是服务账号令牌，背后没有真实用户。
 	IsService bool
 }
 
-// HasRole 判断主体是否具备某个角色码。
-func (p *Principal) HasRole(code string) bool {
+// HasRole 判断主体是否具备某个角色。
+func (p *Principal) HasRole(role string) bool {
 	if p == nil {
 		return false
 	}
-	for _, c := range p.RoleCodes {
-		if c == code {
+	for _, r := range p.Roles {
+		if r == role {
 			return true
 		}
 	}
@@ -73,12 +76,22 @@ func FromContext(ctx context.Context) (*Principal, bool) {
 	return p, ok && p != nil
 }
 
-// UserID 是取当前用户 ID 的便捷方法，服务令牌或未认证时返回 0。
-// service 层处理 "me" 类接口（改自己密码、查自己菜单）时用它。
-func UserID(ctx context.Context) int64 {
+// Subject 是取当前用户标识的便捷方法。
+// 服务令牌或未认证时返回空串——服务账号不代表任何真实用户，
+// 「查我自己的菜单」这类接口对它就不该有结果。
+func Subject(ctx context.Context) string {
 	p, ok := FromContext(ctx)
 	if !ok || p.IsService {
-		return 0
+		return ""
 	}
-	return p.UserID
+	return p.Subject
+}
+
+// Roles 返回当前主体的角色，未认证时为 nil。
+func Roles(ctx context.Context) []string {
+	p, ok := FromContext(ctx)
+	if !ok {
+		return nil
+	}
+	return p.Roles
 }

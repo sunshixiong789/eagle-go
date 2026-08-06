@@ -49,18 +49,25 @@ message Data {
   Redis redis = 2;
 }
 
-// system 作为 OAuth2 资源服务器的配置
+// system 作为 OAuth2 资源服务器（面向 Keycloak）的配置
 message Auth {
-  // 认证中心的 issuer，用于拉取 JWKS 验签
+  // Keycloak realm 的 issuer，形如
+  // https://keycloak.example.com/realms/eagle
+  // 必须与 token 里的 iss 完全一致，含协议、端口和是否带尾斜杠
   string issuer = 1;
-  // JWKS 本地缓存刷新间隔。密钥轮转后旧 token 仍能验证，
-  // 因为 JWKS 同时返回未过期的历史公钥
-  google.protobuf.Duration jwks_refresh_interval = 2;
-  // 用户权限码缓存时长。权限变更时会主动失效，此 TTL 只是兜底
-  google.protobuf.Duration perm_cache_ttl = 3;
+
+  // 本服务在 Keycloak 中的 client id。
+  // 用于从 token 的 resource_access 里取出本服务的 client 角色
+  string client_id = 2;
+
+  // 期望的 aud。Keycloak 默认把 aud 设成 "account"，
+  // 通常要配 audience mapper 才有意义，留空则不校验
+  string audience = 3;
+
   // 字典项缓存时长
   google.protobuf.Duration dict_cache_ttl = 4;
-  // 拥有该角色码的用户跳过权限判定
+
+  // 拥有该角色的主体跳过 Casbin 判定
   string super_admin_role = 5;
 }
 

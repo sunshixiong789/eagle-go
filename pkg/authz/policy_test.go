@@ -18,20 +18,26 @@ func TestPolicyFor(t *testing.T) {
 	}{
 		{
 			name:      "声明了权限码的方法",
-			operation: "/eagle.system.v1.UserService/CreateUser",
-			wantPerm:  "system:user:add",
+			operation: "/eagle.system.v1.PermissionService/CreatePermission",
+			wantPerm:  "system:permission:add",
 			wantKnown: true,
 		},
 		{
 			name:      "只需登录、未声明权限码的方法",
-			operation: "/eagle.system.v1.UserService/ChangeMyPassword",
+			operation: "/eagle.system.v1.PermissionService/GetMyMenus",
 			wantPerm:  "",
 			wantKnown: true,
 		},
 		{
-			name:      "内部服务方法",
-			operation: "/eagle.system.v1.InternalUserService/VerifyCredentials",
-			wantPerm:  "internal:auth:verify",
+			name:      "角色权限分配",
+			operation: "/eagle.system.v1.RoleBindingService/SetRolePermissions",
+			wantPerm:  "system:role:assign",
+			wantKnown: true,
+		},
+		{
+			name:      "查自己的权限只需登录",
+			operation: "/eagle.system.v1.RoleBindingService/GetMyPermissions",
+			wantPerm:  "",
 			wantKnown: true,
 		},
 		{
@@ -42,7 +48,7 @@ func TestPolicyFor(t *testing.T) {
 		},
 		{
 			// gRPC 反射、健康检查等不在本项目契约里的方法，
-			// 必须解析为 Known=false，从而落到"需要登录"的保守分支
+			// 必须解析为 Known=false，从而落到「需要登录」的保守分支
 			name:      "未知服务",
 			operation: "/grpc.reflection.v1.ServerReflection/ServerReflectionInfo",
 			wantKnown: false,
@@ -71,7 +77,7 @@ func TestPolicyFor(t *testing.T) {
 }
 
 func TestPolicyForIsCached(t *testing.T) {
-	const op = "/eagle.system.v1.RoleService/DeleteRole"
+	const op = "/eagle.system.v1.PermissionService/DeletePermission"
 
 	first := PolicyFor(op)
 	second := PolicyFor(op)
@@ -79,8 +85,8 @@ func TestPolicyForIsCached(t *testing.T) {
 	if first != second {
 		t.Fatalf("缓存前后结果不一致: %+v vs %+v", first, second)
 	}
-	if first.Perm != "system:role:remove" {
-		t.Errorf("Perm = %q, want %q", first.Perm, "system:role:remove")
+	if first.Perm != "system:permission:remove" {
+		t.Errorf("Perm = %q, want %q", first.Perm, "system:permission:remove")
 	}
 	if _, ok := policyCache.Load(op); !ok {
 		t.Error("查询后 policyCache 中应存在该 operation")
@@ -94,8 +100,8 @@ func TestSplitOperation(t *testing.T) {
 		wantMethod  string
 		wantOK      bool
 	}{
-		{"/eagle.system.v1.UserService/CreateUser", "eagle.system.v1.UserService", "CreateUser", true},
-		{"eagle.system.v1.UserService/CreateUser", "eagle.system.v1.UserService", "CreateUser", true},
+		{"/eagle.system.v1.DictService/CreateDictType", "eagle.system.v1.DictService", "CreateDictType", true},
+		{"eagle.system.v1.DictService/CreateDictType", "eagle.system.v1.DictService", "CreateDictType", true},
 		{"/OnlyService", "", "", false},
 		{"/trailing/", "", "", false},
 		{"", "", "", false},

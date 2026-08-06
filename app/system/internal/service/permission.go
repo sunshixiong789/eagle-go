@@ -118,15 +118,17 @@ func (s *PermissionService) DeletePermission(ctx context.Context, req *v1.Delete
 	return &v1.DeletePermissionResponse{}, nil
 }
 
-// GetMyMenus 返回当前登录用户的菜单树与权限码。
-// 用户 ID 取自 token，调用方无法查询他人的菜单。
+// GetMyMenus 返回当前登录者的菜单树与权限码。
+//
+// 角色取自 token 而非请求参数：让调用方传角色就等于允许任何人
+// 查看任意角色的菜单，进而摸清整个系统的功能边界。
 func (s *PermissionService) GetMyMenus(ctx context.Context, _ *v1.GetMyMenusRequest) (*v1.GetMyMenusResponse, error) {
-	uid := identity.UserID(ctx)
-	if uid == 0 {
-		return nil, errors.Unauthorized("UNAUTHENTICATED", "需要以用户身份登录")
+	p, ok := identity.FromContext(ctx)
+	if !ok {
+		return nil, errors.Unauthorized("UNAUTHENTICATED", "需要登录")
 	}
 
-	menus, codes, err := s.uc.GetUserMenus(ctx, uid)
+	menus, codes, err := s.uc.GetMenusForRoles(ctx, p.Roles)
 	if err != nil {
 		return nil, err
 	}

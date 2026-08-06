@@ -32,10 +32,7 @@ import (
 
 const testPGPort = 55433
 
-var (
-	testData  *Data
-	testPGDSN string
-)
+var testData *Data
 
 func TestMain(m *testing.M) {
 	// testing.Short() 依赖已解析的测试 flag，TestMain 里必须先手动 Parse
@@ -69,10 +66,10 @@ func runWithFixtures(m *testing.M) (int, error) {
 	}
 	defer func() { _ = pg.Stop() }()
 
-	testPGDSN = fmt.Sprintf(
+	dsn := fmt.Sprintf(
 		"postgres://eagle:eagle@127.0.0.1:%d/eagle_test?sslmode=disable", testPGPort)
 
-	if err := runMigrations(testPGDSN); err != nil {
+	if err := runMigrations(dsn); err != nil {
 		return 0, fmt.Errorf("执行迁移: %w", err)
 	}
 
@@ -82,7 +79,7 @@ func runWithFixtures(m *testing.M) (int, error) {
 	}
 	defer mr.Close()
 
-	d, cleanup, err := newTestData(testPGDSN, mr.Addr())
+	d, cleanup, err := newTestData(dsn, mr.Addr())
 	if err != nil {
 		return 0, fmt.Errorf("构造 Data: %w", err)
 	}
@@ -93,7 +90,8 @@ func runWithFixtures(m *testing.M) (int, error) {
 }
 
 // runMigrations 跑的是 db/migrations 下的真实迁移文件，
-// 而不是测试里另写一份建表 SQL——后者会让迁移脚本本身失去验证。
+// 而不是让 ent 自动建表——后者会让迁移脚本本身失去验证，
+// 且生产用的是 goose，测试却走另一条路径就失去了意义。
 func runMigrations(dsn string) error {
 	sqlDB, err := sql.Open("postgres", dsn)
 	if err != nil {
@@ -123,28 +121,12 @@ func newTestData(dsn, redisAddr string) (*Data, func(), error) {
 			Redis:    &conf.Data_Redis{Addr: redisAddr},
 		},
 		&conf.Auth{
-			PermCacheTtl: durationpb.New(time.Minute),
 			DictCacheTtl: durationpb.New(time.Minute),
 		},
 	)
 }
 
-// resetTables 在用例之间清空业务表，保持相互独立。
-// 保留 00003 种入的角色/权限/字典基线数据。
-func resetTables(t *testing.T) {
-	t.Helper()
-	ctx := context.Background()
-
-	_, err := testData.db.Pool.Exec(ctx, `
-		DELETE FROM sys_user_role;
-		DELETE FROM sys_user;
-	`)
-	if err != nil {
-		t.Fatalf("清理测试数据: %v", err)
-	}
-	flushCache(t)
-}
-
+// flushCache 清空 Redis，保持用例之间互不影响。
 func flushCache(t *testing.T) {
 	t.Helper()
 	if err := testData.rdb.FlushAll(context.Background()).Err(); err != nil {

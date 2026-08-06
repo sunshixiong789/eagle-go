@@ -13,11 +13,9 @@ import (
 
 // ProviderSet 是 service 层的 wire provider 集合。
 var ProviderSet = wire.NewSet(
-	NewUserService,
-	NewRoleService,
 	NewPermissionService,
 	NewDictService,
-	NewInternalUserService,
+	NewRoleBindingService,
 )
 
 // 分页参数的边界。

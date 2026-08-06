@@ -2,7 +2,6 @@ package authz
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	kratoserrors "github.com/go-kratos/kratos/v3/errors"
@@ -27,7 +26,6 @@ func serverCtx(operation string) context.Context {
 	return transport.NewServerContext(context.Background(), &stubTransport{operation: operation})
 }
 
-// 一个记录是否被调用过的终端 handler
 func probeHandler(called *bool) func(context.Context, any) (any, error) {
 	return func(_ context.Context, _ any) (any, error) {
 		*called = true
@@ -35,19 +33,32 @@ func probeHandler(called *bool) func(context.Context, any) (any, error) {
 	}
 }
 
+// newTestEnforcer 构造纯内存判定器，并按 policies 写入 p 规则。
+func newTestEnforcer(t *testing.T, policies map[string][]string) *Enforcer {
+	t.Helper()
+
+	e, err := NewEnforcer(nil)
+	if err != nil {
+		t.Fatalf("NewEnforcer: %v", err)
+	}
+	for role, perms := range policies {
+		if err := e.SetRolePermissions(context.Background(), role, perms); err != nil {
+			t.Fatalf("SetRolePermissions(%s): %v", role, err)
+		}
+	}
+	return e
+}
+
+const opCreatePermission = "/eagle.system.v1.PermissionService/CreatePermission"
+
 func TestServerRejectsAnonymous(t *testing.T) {
 	var called bool
-	mw := Server(WithPermissionLoader(func(context.Context, int64) ([]string, error) {
-		return nil, nil
-	}))
+	mw := Server(WithEnforcer(newTestEnforcer(t, nil)))
 
-	_, err := mw(probeHandler(&called))(serverCtx("/eagle.system.v1.UserService/CreateUser"), nil)
+	_, err := mw(probeHandler(&called))(serverCtx(opCreatePermission), nil)
 
-	if err == nil {
-		t.Fatal("匿名调用应被拒绝")
-	}
-	if got := kratoserrors.Code(err); got != 401 {
-		t.Errorf("状态码 = %d, want 401", got)
+	if kratoserrors.Code(err) != 401 {
+		t.Errorf("匿名调用状态码 = %d, want 401", kratoserrors.Code(err))
 	}
 	if called {
 		t.Error("handler 不应被执行")
@@ -56,21 +67,18 @@ func TestServerRejectsAnonymous(t *testing.T) {
 
 func TestServerRejectsMissingPermission(t *testing.T) {
 	var called bool
-	mw := Server(WithPermissionLoader(func(context.Context, int64) ([]string, error) {
-		// 用户只有查询权限，没有新增权限
-		return []string{"system:user:query", "system:user:list"}, nil
-	}))
+	mw := Server(WithEnforcer(newTestEnforcer(t, map[string][]string{
+		// 只有查询权限，没有新增权限
+		"viewer": {"system:permission:query", "system:permission:list"},
+	})))
 
-	ctx := identity.NewContext(serverCtx("/eagle.system.v1.UserService/CreateUser"), &identity.Principal{
-		UserID: 42, Username: "alice",
+	ctx := identity.NewContext(serverCtx(opCreatePermission), &identity.Principal{
+		Subject: "u-1", Roles: []string{"viewer"},
 	})
 	_, err := mw(probeHandler(&called))(ctx, nil)
 
-	if err == nil {
-		t.Fatal("缺少权限码时应被拒绝")
-	}
-	if got := kratoserrors.Code(err); got != 403 {
-		t.Errorf("状态码 = %d, want 403", got)
+	if kratoserrors.Code(err) != 403 {
+		t.Errorf("状态码 = %d, want 403", kratoserrors.Code(err))
 	}
 	if called {
 		t.Error("handler 不应被执行")
@@ -79,15 +87,135 @@ func TestServerRejectsMissingPermission(t *testing.T) {
 
 func TestServerAllowsWithPermission(t *testing.T) {
 	var called bool
-	mw := Server(WithPermissionLoader(func(context.Context, int64) ([]string, error) {
-		return []string{"system:user:add"}, nil
-	}))
+	mw := Server(WithEnforcer(newTestEnforcer(t, map[string][]string{
+		"editor": {"system:permission:add"},
+	})))
 
-	ctx := identity.NewContext(serverCtx("/eagle.system.v1.UserService/CreateUser"), &identity.Principal{
-		UserID: 42,
+	ctx := identity.NewContext(serverCtx(opCreatePermission), &identity.Principal{
+		Subject: "u-1", Roles: []string{"editor"},
 	})
 	if _, err := mw(probeHandler(&called))(ctx, nil); err != nil {
-		t.Fatalf("持有权限码时应放行, got %v", err)
+		t.Fatalf("持有权限时应放行, got %v", err)
+	}
+	if !called {
+		t.Error("handler 应被执行")
+	}
+}
+
+// 用户可能同时拥有多个角色，任一命中即放行。
+func TestServerAllowsWhenAnyRoleGrants(t *testing.T) {
+	var called bool
+	mw := Server(WithEnforcer(newTestEnforcer(t, map[string][]string{
+		"viewer": {"system:permission:query"},
+		"editor": {"system:permission:add"},
+	})))
+
+	ctx := identity.NewContext(serverCtx(opCreatePermission), &identity.Principal{
+		Subject: "u-1", Roles: []string{"viewer", "editor"},
+	})
+	if _, err := mw(probeHandler(&called))(ctx, nil); err != nil {
+		t.Fatalf("任一角色命中即应放行, got %v", err)
+	}
+	if !called {
+		t.Error("handler 应被执行")
+	}
+}
+
+// 通配策略：system:* 应覆盖 system 域下的具体权限码。
+func TestServerSupportsWildcardPolicy(t *testing.T) {
+	var called bool
+	mw := Server(WithEnforcer(newTestEnforcer(t, map[string][]string{
+		"ops": {"system:*"},
+	})))
+
+	ctx := identity.NewContext(serverCtx(opCreatePermission), &identity.Principal{
+		Subject: "u-1", Roles: []string{"ops"},
+	})
+	if _, err := mw(probeHandler(&called))(ctx, nil); err != nil {
+		t.Fatalf("通配策略应覆盖具体权限码, got %v", err)
+	}
+	if !called {
+		t.Error("handler 应被执行")
+	}
+}
+
+// 回归测试：权限码之间不得因为「形状相同」而互相匹配。
+//
+// 曾用 keyMatch2 做通配，而它是为 URL 路径设计的，把 `:xxx` 当成路径参数。
+// 权限码正好是冒号分隔的，导致 system:permission:query 被解析成
+// system:{任意}:{任意}，与 system:permission:add 匹配成功——
+// 只读角色由此获得全部写权限。改回 keyMatch 后本用例守住这个边界。
+func TestSameShapedPermissionCodesDoNotMatchEachOther(t *testing.T) {
+	e := newTestEnforcer(t, map[string][]string{
+		"viewer": {"system:permission:query"},
+	})
+
+	cases := []struct {
+		perm string
+		want bool
+	}{
+		{"system:permission:query", true}, // 精确匹配
+		{"system:permission:add", false},  // 同形状但不同动作
+		{"system:permission:remove", false},
+		{"system:dict:query", false}, // 同形状但不同资源
+		{"other:permission:query", false},
+	}
+
+	for _, c := range cases {
+		got, err := e.Allow([]string{"viewer"}, c.perm)
+		if err != nil {
+			t.Fatalf("Allow(%q): %v", c.perm, err)
+		}
+		if got != c.want {
+			t.Errorf("Allow(viewer, %q) = %v, want %v", c.perm, got, c.want)
+		}
+	}
+}
+
+// 通配只应在策略侧生效，且不得跨域。
+func TestWildcardScopeIsBounded(t *testing.T) {
+	e := newTestEnforcer(t, map[string][]string{
+		"ops": {"system:*"},
+	})
+
+	cases := []struct {
+		perm string
+		want bool
+	}{
+		{"system:permission:add", true},
+		{"system:dict:remove", true},
+		{"internal:auth:verify", false}, // 不同域不应被 system:* 覆盖
+		{"billing:invoice:add", false},
+	}
+
+	for _, c := range cases {
+		got, err := e.Allow([]string{"ops"}, c.perm)
+		if err != nil {
+			t.Fatalf("Allow(%q): %v", c.perm, err)
+		}
+		if got != c.want {
+			t.Errorf("Allow(ops, %q) = %v, want %v", c.perm, got, c.want)
+		}
+	}
+}
+
+// 角色继承：子角色应自动获得父角色的权限。
+func TestServerHonorsRoleInheritance(t *testing.T) {
+	e := newTestEnforcer(t, map[string][]string{
+		"editor": {"system:permission:add"},
+	})
+	if err := e.AddRoleInheritance(context.Background(), "lead", "editor"); err != nil {
+		t.Fatalf("AddRoleInheritance: %v", err)
+	}
+
+	var called bool
+	mw := Server(WithEnforcer(e))
+
+	ctx := identity.NewContext(serverCtx(opCreatePermission), &identity.Principal{
+		Subject: "u-1", Roles: []string{"lead"},
+	})
+	if _, err := mw(probeHandler(&called))(ctx, nil); err != nil {
+		t.Fatalf("继承而来的权限应放行, got %v", err)
 	}
 	if !called {
 		t.Error("handler 应被执行")
@@ -96,17 +224,14 @@ func TestServerAllowsWithPermission(t *testing.T) {
 
 func TestServerSuperAdminShortCircuits(t *testing.T) {
 	var called bool
-	loaderCalled := false
+	// 判定器里没有任何策略，超管仍应放行
 	mw := Server(
 		WithSuperAdminRole("admin"),
-		WithPermissionLoader(func(context.Context, int64) ([]string, error) {
-			loaderCalled = true
-			return nil, nil
-		}),
+		WithEnforcer(newTestEnforcer(t, nil)),
 	)
 
-	ctx := identity.NewContext(serverCtx("/eagle.system.v1.UserService/DeleteUser"), &identity.Principal{
-		UserID: 1, RoleCodes: []string{"admin"},
+	ctx := identity.NewContext(serverCtx(opCreatePermission), &identity.Principal{
+		Subject: "u-1", Roles: []string{"admin"},
 	})
 	if _, err := mw(probeHandler(&called))(ctx, nil); err != nil {
 		t.Fatalf("超管应被放行, got %v", err)
@@ -114,21 +239,17 @@ func TestServerSuperAdminShortCircuits(t *testing.T) {
 	if !called {
 		t.Error("handler 应被执行")
 	}
-	if loaderCalled {
-		t.Error("超管应短路，不该再查权限表")
-	}
 }
 
 func TestServerAllowsAuthenticatedWhenNoPermDeclared(t *testing.T) {
 	var called bool
-	mw := Server(WithPermissionLoader(func(context.Context, int64) ([]string, error) {
-		return nil, nil
-	}))
+	mw := Server(WithEnforcer(newTestEnforcer(t, nil)))
 
-	// ChangeMyPassword 未声明权限码，登录即可
-	ctx := identity.NewContext(serverCtx("/eagle.system.v1.UserService/ChangeMyPassword"), &identity.Principal{
-		UserID: 42,
-	})
+	// GetMyMenus 未声明权限码，登录即可
+	ctx := identity.NewContext(
+		serverCtx("/eagle.system.v1.PermissionService/GetMyMenus"),
+		&identity.Principal{Subject: "u-1"},
+	)
 	if _, err := mw(probeHandler(&called))(ctx, nil); err != nil {
 		t.Fatalf("已登录用户应可访问未声明权限码的方法, got %v", err)
 	}
@@ -137,33 +258,31 @@ func TestServerAllowsAuthenticatedWhenNoPermDeclared(t *testing.T) {
 	}
 }
 
-func TestServerServiceTokenUsesScopes(t *testing.T) {
-	mw := Server(WithPermissionLoader(func(context.Context, int64) ([]string, error) {
-		t.Error("服务令牌不应触发用户权限查询")
-		return nil, nil
-	}))
+// 服务账号与终端用户走同一套判定：两者的角色都由 Keycloak 下发。
+func TestServerTreatsServiceAccountsLikeUsers(t *testing.T) {
+	mw := Server(WithEnforcer(newTestEnforcer(t, map[string][]string{
+		"svc-writer": {"system:permission:add"},
+	})))
 
-	op := serverCtx("/eagle.system.v1.InternalUserService/VerifyCredentials")
-
-	t.Run("scope 匹配则放行", func(t *testing.T) {
+	t.Run("角色命中则放行", func(t *testing.T) {
 		var called bool
-		ctx := identity.NewContext(op, &identity.Principal{
-			IsService: true, ClientID: "eagle-auth",
-			Scopes: []string{"internal:auth:verify", "internal:auth:read"},
+		ctx := identity.NewContext(serverCtx(opCreatePermission), &identity.Principal{
+			Subject: "svc-uuid", IsService: true, ClientID: "eagle-worker",
+			Roles: []string{"svc-writer"},
 		})
 		if _, err := mw(probeHandler(&called))(ctx, nil); err != nil {
-			t.Fatalf("scope 命中时应放行, got %v", err)
+			t.Fatalf("服务账号持有角色时应放行, got %v", err)
 		}
 		if !called {
 			t.Error("handler 应被执行")
 		}
 	})
 
-	t.Run("scope 不匹配则 403", func(t *testing.T) {
+	t.Run("角色不匹配则 403", func(t *testing.T) {
 		var called bool
-		ctx := identity.NewContext(op, &identity.Principal{
-			IsService: true, ClientID: "some-other-service",
-			Scopes: []string{"internal:something:else"},
+		ctx := identity.NewContext(serverCtx(opCreatePermission), &identity.Principal{
+			Subject: "svc-uuid", IsService: true, ClientID: "other",
+			Roles: []string{"svc-reader"},
 		})
 		_, err := mw(probeHandler(&called))(ctx, nil)
 		if kratoserrors.Code(err) != 403 {
@@ -175,33 +294,13 @@ func TestServerServiceTokenUsesScopes(t *testing.T) {
 	})
 }
 
-// 鉴权组件的失败方向必须是关闭的：权限查询出错时拒绝，而不是放行。
-func TestServerDeniesWhenLoaderFails(t *testing.T) {
-	var called bool
-	mw := Server(WithPermissionLoader(func(context.Context, int64) ([]string, error) {
-		return nil, errors.New("database is down")
-	}))
-
-	ctx := identity.NewContext(serverCtx("/eagle.system.v1.UserService/CreateUser"), &identity.Principal{
-		UserID: 42,
-	})
-	_, err := mw(probeHandler(&called))(ctx, nil)
-
-	if kratoserrors.Code(err) != 403 {
-		t.Errorf("权限加载失败时状态码 = %d, want 403", kratoserrors.Code(err))
-	}
-	if called {
-		t.Error("handler 不应被执行")
-	}
-}
-
-// 未配置 loader 属于装配错误，同样必须拒绝而非放行。
-func TestServerDeniesWhenLoaderMissing(t *testing.T) {
+// 未配置判定器属于装配错误，必须拒绝而非放行。
+func TestServerDeniesWhenEnforcerMissing(t *testing.T) {
 	var called bool
 	mw := Server()
 
-	ctx := identity.NewContext(serverCtx("/eagle.system.v1.UserService/CreateUser"), &identity.Principal{
-		UserID: 42,
+	ctx := identity.NewContext(serverCtx(opCreatePermission), &identity.Principal{
+		Subject: "u-1", Roles: []string{"editor"},
 	})
 	_, err := mw(probeHandler(&called))(ctx, nil)
 
@@ -210,5 +309,36 @@ func TestServerDeniesWhenLoaderMissing(t *testing.T) {
 	}
 	if called {
 		t.Error("handler 不应被执行")
+	}
+}
+
+// 撤销权限后应立即失效，不能因为策略还在内存里就继续放行。
+func TestSetRolePermissionsRevokesImmediately(t *testing.T) {
+	e := newTestEnforcer(t, map[string][]string{
+		"editor": {"system:permission:add"},
+	})
+	mw := Server(WithEnforcer(e))
+
+	ctx := identity.NewContext(serverCtx(opCreatePermission), &identity.Principal{
+		Subject: "u-1", Roles: []string{"editor"},
+	})
+
+	var called bool
+	if _, err := mw(probeHandler(&called))(ctx, nil); err != nil {
+		t.Fatalf("撤销前应放行, got %v", err)
+	}
+
+	// 收回全部权限
+	if err := e.SetRolePermissions(context.Background(), "editor", nil); err != nil {
+		t.Fatalf("SetRolePermissions: %v", err)
+	}
+
+	called = false
+	_, err := mw(probeHandler(&called))(ctx, nil)
+	if kratoserrors.Code(err) != 403 {
+		t.Errorf("撤销后状态码 = %d, want 403", kratoserrors.Code(err))
+	}
+	if called {
+		t.Error("撤销后 handler 不应被执行")
 	}
 }

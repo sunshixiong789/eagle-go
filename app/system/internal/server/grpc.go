@@ -10,17 +10,12 @@ import (
 )
 
 // NewGRPCServer 构造 gRPC 服务器。
-//
-// 内部服务（InternalUserService）只注册在这里、不绑 HTTP 路由，
-// 从传输层就杜绝了它被外部直接调用的可能。
 func NewGRPCServer(
 	c *conf.Server,
 	ms []middleware.Middleware,
-	user *service.UserService,
-	role *service.RoleService,
 	perm *service.PermissionService,
 	dict *service.DictService,
-	internal *service.InternalUserService,
+	binding *service.RoleBindingService,
 ) *grpc.Server {
 	opts := []grpc.ServerOption{
 		grpc.Middleware(ms...),
@@ -37,11 +32,9 @@ func NewGRPCServer(
 
 	srv := grpc.NewServer(opts...)
 
-	v1.RegisterUserServiceServer(srv, user)
-	v1.RegisterRoleServiceServer(srv, role)
 	v1.RegisterPermissionServiceServer(srv, perm)
 	v1.RegisterDictServiceServer(srv, dict)
-	v1.RegisterInternalUserServiceServer(srv, internal)
+	v1.RegisterRoleBindingServiceServer(srv, binding)
 
 	return srv
 }

@@ -21,30 +21,17 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// 业务错误原因。与 HTTP/gRPC 状态码解耦：状态码表达"哪一类错误"，
-// reason 表达"具体是什么"，客户端按 reason 做分支处理。
+// 业务错误原因。与 HTTP/gRPC 状态码解耦：状态码表达「哪一类错误」，
+// reason 表达「具体是什么」，客户端按 reason 做分支处理。
 //
 // 用法（沿用官方 kratos-layout 的做法，不引 protoc-gen-go-errors）：
 //
-//	errors.NotFound(v1.ErrorReason_ERROR_REASON_USER_NOT_FOUND.String(), "用户不存在")
+//	errors.NotFound(v1.ErrorReason_ERROR_REASON_PERMISSION_NOT_FOUND.String(), "权限不存在")
 type ErrorReason int32
 
 const (
 	ErrorReason_ERROR_REASON_UNSPECIFIED ErrorReason = 0
-	// 用户
-	ErrorReason_ERROR_REASON_USER_NOT_FOUND      ErrorReason = 1
-	ErrorReason_ERROR_REASON_USER_ALREADY_EXISTS ErrorReason = 2
-	ErrorReason_ERROR_REASON_USER_DISABLED       ErrorReason = 3
-	ErrorReason_ERROR_REASON_PASSWORD_INCORRECT  ErrorReason = 4
-	// 内置管理员不允许删除或停用，避免把自己锁在系统外
-	ErrorReason_ERROR_REASON_USER_PROTECTED ErrorReason = 5
-	// 角色
-	ErrorReason_ERROR_REASON_ROLE_NOT_FOUND       ErrorReason = 10
-	ErrorReason_ERROR_REASON_ROLE_CODE_DUPLICATED ErrorReason = 11
-	// 角色下仍有用户时不允许删除
-	ErrorReason_ERROR_REASON_ROLE_IN_USE    ErrorReason = 12
-	ErrorReason_ERROR_REASON_ROLE_PROTECTED ErrorReason = 13
-	// 权限
+	// 权限节点
 	ErrorReason_ERROR_REASON_PERMISSION_NOT_FOUND       ErrorReason = 20
 	ErrorReason_ERROR_REASON_PERMISSION_CODE_DUPLICATED ErrorReason = 21
 	// 存在子节点时不允许删除
@@ -56,21 +43,16 @@ const (
 	ErrorReason_ERROR_REASON_DICT_TYPE_DUPLICATED ErrorReason = 31
 	ErrorReason_ERROR_REASON_DICT_DATA_NOT_FOUND  ErrorReason = 32
 	ErrorReason_ERROR_REASON_DICT_DATA_DUPLICATED ErrorReason = 33
+	// 角色权限绑定
+	ErrorReason_ERROR_REASON_ROLE_NOT_BOUND ErrorReason = 40
+	// 授予了权限树中不存在的权限码，多半是拼写错误
+	ErrorReason_ERROR_REASON_UNKNOWN_PERMISSION_CODE ErrorReason = 41
 )
 
 // Enum value maps for ErrorReason.
 var (
 	ErrorReason_name = map[int32]string{
 		0:  "ERROR_REASON_UNSPECIFIED",
-		1:  "ERROR_REASON_USER_NOT_FOUND",
-		2:  "ERROR_REASON_USER_ALREADY_EXISTS",
-		3:  "ERROR_REASON_USER_DISABLED",
-		4:  "ERROR_REASON_PASSWORD_INCORRECT",
-		5:  "ERROR_REASON_USER_PROTECTED",
-		10: "ERROR_REASON_ROLE_NOT_FOUND",
-		11: "ERROR_REASON_ROLE_CODE_DUPLICATED",
-		12: "ERROR_REASON_ROLE_IN_USE",
-		13: "ERROR_REASON_ROLE_PROTECTED",
 		20: "ERROR_REASON_PERMISSION_NOT_FOUND",
 		21: "ERROR_REASON_PERMISSION_CODE_DUPLICATED",
 		22: "ERROR_REASON_PERMISSION_HAS_CHILDREN",
@@ -79,18 +61,11 @@ var (
 		31: "ERROR_REASON_DICT_TYPE_DUPLICATED",
 		32: "ERROR_REASON_DICT_DATA_NOT_FOUND",
 		33: "ERROR_REASON_DICT_DATA_DUPLICATED",
+		40: "ERROR_REASON_ROLE_NOT_BOUND",
+		41: "ERROR_REASON_UNKNOWN_PERMISSION_CODE",
 	}
 	ErrorReason_value = map[string]int32{
 		"ERROR_REASON_UNSPECIFIED":                0,
-		"ERROR_REASON_USER_NOT_FOUND":             1,
-		"ERROR_REASON_USER_ALREADY_EXISTS":        2,
-		"ERROR_REASON_USER_DISABLED":              3,
-		"ERROR_REASON_PASSWORD_INCORRECT":         4,
-		"ERROR_REASON_USER_PROTECTED":             5,
-		"ERROR_REASON_ROLE_NOT_FOUND":             10,
-		"ERROR_REASON_ROLE_CODE_DUPLICATED":       11,
-		"ERROR_REASON_ROLE_IN_USE":                12,
-		"ERROR_REASON_ROLE_PROTECTED":             13,
 		"ERROR_REASON_PERMISSION_NOT_FOUND":       20,
 		"ERROR_REASON_PERMISSION_CODE_DUPLICATED": 21,
 		"ERROR_REASON_PERMISSION_HAS_CHILDREN":    22,
@@ -99,6 +74,8 @@ var (
 		"ERROR_REASON_DICT_TYPE_DUPLICATED":       31,
 		"ERROR_REASON_DICT_DATA_NOT_FOUND":        32,
 		"ERROR_REASON_DICT_DATA_DUPLICATED":       33,
+		"ERROR_REASON_ROLE_NOT_BOUND":             40,
+		"ERROR_REASON_UNKNOWN_PERMISSION_CODE":    41,
 	}
 )
 
@@ -133,19 +110,9 @@ var File_eagle_system_v1_error_reason_proto protoreflect.FileDescriptor
 
 const file_eagle_system_v1_error_reason_proto_rawDesc = "" +
 	"\n" +
-	"\"eagle/system/v1/error_reason.proto\x12\x0feagle.system.v1*\x9a\x05\n" +
+	"\"eagle/system/v1/error_reason.proto\x12\x0feagle.system.v1*\xb1\x03\n" +
 	"\vErrorReason\x12\x1c\n" +
-	"\x18ERROR_REASON_UNSPECIFIED\x10\x00\x12\x1f\n" +
-	"\x1bERROR_REASON_USER_NOT_FOUND\x10\x01\x12$\n" +
-	" ERROR_REASON_USER_ALREADY_EXISTS\x10\x02\x12\x1e\n" +
-	"\x1aERROR_REASON_USER_DISABLED\x10\x03\x12#\n" +
-	"\x1fERROR_REASON_PASSWORD_INCORRECT\x10\x04\x12\x1f\n" +
-	"\x1bERROR_REASON_USER_PROTECTED\x10\x05\x12\x1f\n" +
-	"\x1bERROR_REASON_ROLE_NOT_FOUND\x10\n" +
-	"\x12%\n" +
-	"!ERROR_REASON_ROLE_CODE_DUPLICATED\x10\v\x12\x1c\n" +
-	"\x18ERROR_REASON_ROLE_IN_USE\x10\f\x12\x1f\n" +
-	"\x1bERROR_REASON_ROLE_PROTECTED\x10\r\x12%\n" +
+	"\x18ERROR_REASON_UNSPECIFIED\x10\x00\x12%\n" +
 	"!ERROR_REASON_PERMISSION_NOT_FOUND\x10\x14\x12+\n" +
 	"'ERROR_REASON_PERMISSION_CODE_DUPLICATED\x10\x15\x12(\n" +
 	"$ERROR_REASON_PERMISSION_HAS_CHILDREN\x10\x16\x12!\n" +
@@ -153,7 +120,9 @@ const file_eagle_system_v1_error_reason_proto_rawDesc = "" +
 	" ERROR_REASON_DICT_TYPE_NOT_FOUND\x10\x1e\x12%\n" +
 	"!ERROR_REASON_DICT_TYPE_DUPLICATED\x10\x1f\x12$\n" +
 	" ERROR_REASON_DICT_DATA_NOT_FOUND\x10 \x12%\n" +
-	"!ERROR_REASON_DICT_DATA_DUPLICATED\x10!B8Z6github.com/eagle-go/eagle/api/eagle/system/v1;systemv1b\x06proto3"
+	"!ERROR_REASON_DICT_DATA_DUPLICATED\x10!\x12\x1f\n" +
+	"\x1bERROR_REASON_ROLE_NOT_BOUND\x10(\x12(\n" +
+	"$ERROR_REASON_UNKNOWN_PERMISSION_CODE\x10)B8Z6github.com/eagle-go/eagle/api/eagle/system/v1;systemv1b\x06proto3"
 
 var (
 	file_eagle_system_v1_error_reason_proto_rawDescOnce sync.Once

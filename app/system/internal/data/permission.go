@@ -5,7 +5,8 @@ import (
 	"fmt"
 
 	"github.com/eagle-go/eagle/app/system/internal/biz"
-	"github.com/eagle-go/eagle/pkg/db/sqlc"
+	"github.com/eagle-go/eagle/ent"
+	"github.com/eagle-go/eagle/ent/permission"
 )
 
 type permissionRepo struct {
@@ -17,37 +18,40 @@ func NewPermissionRepo(data *Data) biz.PermissionRepo {
 	return &permissionRepo{data: data}
 }
 
-func toBizPermission(p sqlc.SysPermission) *biz.Permission {
+func toBizPermission(p *ent.Permission) *biz.Permission {
+	if p == nil {
+		return nil
+	}
 	return &biz.Permission{
 		ID:        p.ID,
 		ParentID:  p.ParentID,
 		Name:      p.Name,
 		Code:      p.Code,
-		Type:      toInt32(p.Type),
+		Type:      p.Type,
 		Path:      p.Path,
 		Component: p.Component,
 		Icon:      p.Icon,
 		Sort:      p.Sort,
 		Visible:   p.Visible,
-		Status:    toInt32(p.Status),
+		Status:    p.Status,
 		CreatedAt: p.CreatedAt,
 		UpdatedAt: p.UpdatedAt,
 	}
 }
 
 func (r *permissionRepo) Create(ctx context.Context, p *biz.Permission) (*biz.Permission, error) {
-	created, err := r.data.db.CreatePermission(ctx, sqlc.CreatePermissionParams{
-		ParentID:  p.ParentID,
-		Name:      p.Name,
-		Code:      p.Code,
-		Type:      toInt16(p.Type),
-		Path:      p.Path,
-		Component: p.Component,
-		Icon:      p.Icon,
-		Sort:      p.Sort,
-		Visible:   p.Visible,
-		Status:    toInt16(p.Status),
-	})
+	created, err := r.data.client.Permission.Create().
+		SetParentID(p.ParentID).
+		SetName(p.Name).
+		SetCode(p.Code).
+		SetType(p.Type).
+		SetPath(p.Path).
+		SetComponent(p.Component).
+		SetIcon(p.Icon).
+		SetSort(p.Sort).
+		SetVisible(p.Visible).
+		SetStatus(p.Status).
+		Save(ctx)
 	if err != nil {
 		if isUniqueViolation(err) {
 			return nil, biz.ErrPermissionCodeDuplicated
@@ -58,9 +62,9 @@ func (r *permissionRepo) Create(ctx context.Context, p *biz.Permission) (*biz.Pe
 }
 
 func (r *permissionRepo) GetByID(ctx context.Context, id int64) (*biz.Permission, error) {
-	p, err := r.data.db.GetPermissionByID(ctx, id)
+	p, err := r.data.client.Permission.Get(ctx, id)
 	if err != nil {
-		if isNoRows(err) {
+		if isNotFound(err) {
 			return nil, biz.ErrPermissionNotFound
 		}
 		return nil, fmt.Errorf("get permission %d: %w", id, err)
@@ -68,14 +72,24 @@ func (r *permissionRepo) GetByID(ctx context.Context, id int64) (*biz.Permission
 	return toBizPermission(p), nil
 }
 
+// List 平铺返回权限，树由调用方按 ParentID 拼装。
+// 权限总量只有百级，一次全量取出比递归 CTE 更简单也更快。
 func (r *permissionRepo) List(ctx context.Context, q biz.ListPermissionsQuery) ([]*biz.Permission, error) {
-	rows, err := r.data.db.ListPermissions(ctx, sqlc.ListPermissionsParams{
-		Status: int32PtrToInt16Ptr(q.Status),
-		Type:   int32PtrToInt16Ptr(q.Type),
-	})
+	query := r.data.client.Permission.Query()
+	if q.Status != nil {
+		query = query.Where(permission.StatusEQ(*q.Status))
+	}
+	if q.Type != nil {
+		query = query.Where(permission.TypeEQ(*q.Type))
+	}
+
+	rows, err := query.
+		Order(ent.Asc(permission.FieldParentID), ent.Asc(permission.FieldSort), ent.Asc(permission.FieldID)).
+		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list permissions: %w", err)
 	}
+
 	out := make([]*biz.Permission, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, toBizPermission(row))
@@ -84,21 +98,20 @@ func (r *permissionRepo) List(ctx context.Context, q biz.ListPermissionsQuery) (
 }
 
 func (r *permissionRepo) Update(ctx context.Context, p *biz.Permission) (*biz.Permission, error) {
-	updated, err := r.data.db.UpdatePermission(ctx, sqlc.UpdatePermissionParams{
-		ID:        p.ID,
-		ParentID:  p.ParentID,
-		Name:      p.Name,
-		Code:      p.Code,
-		Type:      toInt16(p.Type),
-		Path:      p.Path,
-		Component: p.Component,
-		Icon:      p.Icon,
-		Sort:      p.Sort,
-		Visible:   p.Visible,
-		Status:    toInt16(p.Status),
-	})
+	updated, err := r.data.client.Permission.UpdateOneID(p.ID).
+		SetParentID(p.ParentID).
+		SetName(p.Name).
+		SetCode(p.Code).
+		SetType(p.Type).
+		SetPath(p.Path).
+		SetComponent(p.Component).
+		SetIcon(p.Icon).
+		SetSort(p.Sort).
+		SetVisible(p.Visible).
+		SetStatus(p.Status).
+		Save(ctx)
 	if err != nil {
-		if isNoRows(err) {
+		if isNotFound(err) {
 			return nil, biz.ErrPermissionNotFound
 		}
 		if isUniqueViolation(err) {
@@ -110,52 +123,22 @@ func (r *permissionRepo) Update(ctx context.Context, p *biz.Permission) (*biz.Pe
 }
 
 func (r *permissionRepo) Delete(ctx context.Context, id int64) error {
-	rows, err := r.data.db.DeletePermission(ctx, id)
+	err := r.data.client.Permission.DeleteOneID(id).Exec(ctx)
 	if err != nil {
+		if isNotFound(err) {
+			return biz.ErrPermissionNotFound
+		}
 		return fmt.Errorf("delete permission %d: %w", id, err)
-	}
-	if rows == 0 {
-		return biz.ErrPermissionNotFound
 	}
 	return nil
 }
 
 func (r *permissionRepo) CountChildren(ctx context.Context, id int64) (int64, error) {
-	count, err := r.data.db.CountChildPermissions(ctx, id)
+	n, err := r.data.client.Permission.Query().
+		Where(permission.ParentIDEQ(id)).
+		Count(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("count children of permission %d: %w", id, err)
 	}
-	return count, nil
-}
-
-func (r *permissionRepo) ListByUserID(ctx context.Context, userID int64) ([]*biz.Permission, error) {
-	rows, err := r.data.db.ListPermissionsByUserID(ctx, userID)
-	if err != nil {
-		return nil, fmt.Errorf("list permissions of user %d: %w", userID, err)
-	}
-	out := make([]*biz.Permission, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, toBizPermission(row))
-	}
-	return out, nil
-}
-
-func (r *permissionRepo) ListCodesByUserID(ctx context.Context, userID int64) ([]string, error) {
-	return cached(ctx, r.data, userPermKey(userID), r.data.cache.permTTL,
-		func(ctx context.Context) ([]string, error) {
-			codes, err := r.data.db.ListPermissionCodesByUserID(ctx, userID)
-			if err != nil {
-				return nil, fmt.Errorf("list permission codes of user %d: %w", userID, err)
-			}
-			return codes, nil
-		})
-}
-
-// InvalidateAllPermissionCache 清空所有用户的权限缓存。
-//
-// 权限节点本身（权限码、启用状态）变更会影响到所有持有该权限的用户，
-// 逐个算出受影响用户的成本高于直接全清——权限变更是低频操作，
-// 缓存重建的代价可以接受。
-func (r *permissionRepo) InvalidateAllPermissionCache(ctx context.Context) error {
-	return r.data.invalidateByPrefix(ctx, keyPrefixUserPerm)
+	return int64(n), nil
 }
