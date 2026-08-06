@@ -7,6 +7,7 @@ import (
 
 	v1 "github.com/eagle-go/eagle/api/eagle/system/v1"
 	"github.com/eagle-go/eagle/app/system/internal/biz"
+	"github.com/eagle-go/eagle/app/system/internal/domain"
 	"github.com/eagle-go/eagle/pkg/identity"
 )
 
@@ -22,30 +23,32 @@ func NewPermissionService(uc *biz.PermissionUsecase) *PermissionService {
 	return &PermissionService{uc: uc}
 }
 
-func toProtoPermission(p *biz.Permission) *v1.Permission {
+// toProtoPermission 把聚合根投影成传输对象。
+// 聚合根的字段是私有的，只能经访问器读取——这正是它能保证不变量的前提。
+func toProtoPermission(p *domain.Permission) *v1.Permission {
 	if p == nil {
 		return nil
 	}
 	return &v1.Permission{
-		Id:        p.ID,
-		ParentId:  p.ParentID,
-		Name:      p.Name,
-		Code:      p.Code,
-		Type:      p.Type,
-		Path:      p.Path,
-		Component: p.Component,
-		Icon:      p.Icon,
-		Sort:      p.Sort,
-		Visible:   p.Visible,
-		Status:    p.Status,
-		CreatedAt: ts(p.CreatedAt),
-		UpdatedAt: ts(p.UpdatedAt),
+		Id:        p.ID(),
+		ParentId:  p.ParentID(),
+		Name:      p.Name(),
+		Code:      p.Code().String(),
+		Type:      int32(p.Type()),
+		Path:      p.Path(),
+		Component: p.Component(),
+		Icon:      p.Icon(),
+		Sort:      p.Sort(),
+		Visible:   p.Visible(),
+		Status:    fromStatus(p.Status()),
+		CreatedAt: ts(p.CreatedAt()),
+		UpdatedAt: ts(p.UpdatedAt()),
 	}
 }
 
 // CreatePermission 新建权限节点。
 func (s *PermissionService) CreatePermission(ctx context.Context, req *v1.CreatePermissionRequest) (*v1.CreatePermissionResponse, error) {
-	p, err := s.uc.CreatePermission(ctx, &biz.Permission{
+	p, err := s.uc.CreatePermission(ctx, domain.NewPermissionParams{
 		ParentID:  req.GetParentId(),
 		Name:      req.GetName(),
 		Code:      req.GetCode(),
@@ -74,9 +77,9 @@ func (s *PermissionService) GetPermission(ctx context.Context, req *v1.GetPermis
 
 // ListPermissions 平铺返回权限列表。
 func (s *PermissionService) ListPermissions(ctx context.Context, req *v1.ListPermissionsRequest) (*v1.ListPermissionsResponse, error) {
-	perms, err := s.uc.ListPermissions(ctx, biz.ListPermissionsQuery{
-		Status: req.Status,
-		Type:   req.Type,
+	perms, err := s.uc.ListPermissions(ctx, domain.ListPermissionsQuery{
+		Status: toStatusPtr(req.Status),
+		Type:   toPermissionTypePtr(req.Type),
 	})
 	if err != nil {
 		return nil, err
@@ -91,8 +94,7 @@ func (s *PermissionService) ListPermissions(ctx context.Context, req *v1.ListPer
 
 // UpdatePermission 更新权限节点。
 func (s *PermissionService) UpdatePermission(ctx context.Context, req *v1.UpdatePermissionRequest) (*v1.UpdatePermissionResponse, error) {
-	p, err := s.uc.UpdatePermission(ctx, &biz.Permission{
-		ID:        req.GetId(),
+	p, err := s.uc.UpdatePermission(ctx, req.GetId(), domain.NewPermissionParams{
 		ParentID:  req.GetParentId(),
 		Name:      req.GetName(),
 		Code:      req.GetCode(),
@@ -137,5 +139,8 @@ func (s *PermissionService) GetMyMenus(ctx context.Context, _ *v1.GetMyMenusRequ
 	for _, m := range menus {
 		out = append(out, toProtoPermission(m))
 	}
-	return &v1.GetMyMenusResponse{Menus: out, PermissionCodes: codes}, nil
+	return &v1.GetMyMenusResponse{
+		Menus:           out,
+		PermissionCodes: domain.PermissionCodeStrings(codes),
+	}, nil
 }

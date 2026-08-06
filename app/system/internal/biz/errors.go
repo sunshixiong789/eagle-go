@@ -1,29 +1,75 @@
 package biz
 
 import (
-	"github.com/go-kratos/kratos/v3/errors"
+	"errors"
+
+	kerrors "github.com/go-kratos/kratos/v3/errors"
 
 	v1 "github.com/eagle-go/eagle/api/eagle/system/v1"
+	"github.com/eagle-go/eagle/app/system/internal/domain"
 )
 
-// 领域错误。构造方式沿用官方 kratos-layout：
-// HTTP/gRPC 状态码由构造函数决定，reason 取自 proto 枚举，
-// 客户端按 reason 分支处理而不是去匹配错误文案。
-var (
-	ErrPermissionNotFound       = errors.NotFound(reason(v1.ErrorReason_ERROR_REASON_PERMISSION_NOT_FOUND), "权限不存在")
-	ErrPermissionCodeDuplicated = errors.Conflict(reason(v1.ErrorReason_ERROR_REASON_PERMISSION_CODE_DUPLICATED), "权限码已存在")
-	ErrPermissionHasChildren    = errors.Conflict(reason(v1.ErrorReason_ERROR_REASON_PERMISSION_HAS_CHILDREN), "存在子节点，无法删除")
-	ErrPermissionCycle          = errors.BadRequest(reason(v1.ErrorReason_ERROR_REASON_PERMISSION_CYCLE), "上级权限不能是自身或其后代")
+// 领域层用标准库 error 表达业务错误，不知道 HTTP 状态码的存在。
+// 状态码是传输层关注点，映射在这条边界上完成——领域规则因此可以
+// 脱离 Kratos 单测，换传输框架也不必改领域代码。
+var errorMapping = []struct {
+	domainErr error
+	toKratos  func(error) *kerrors.Error
+}{
+	{domain.ErrPermissionNotFound, notFound(v1.ErrorReason_ERROR_REASON_PERMISSION_NOT_FOUND)},
+	{domain.ErrPermissionCodeDuplicated, conflict(v1.ErrorReason_ERROR_REASON_PERMISSION_CODE_DUPLICATED)},
+	{domain.ErrPermissionHasChildren, conflict(v1.ErrorReason_ERROR_REASON_PERMISSION_HAS_CHILDREN)},
+	{domain.ErrPermissionCycle, badRequest(v1.ErrorReason_ERROR_REASON_PERMISSION_CYCLE)},
 
-	ErrDictTypeNotFound   = errors.NotFound(reason(v1.ErrorReason_ERROR_REASON_DICT_TYPE_NOT_FOUND), "字典类型不存在")
-	ErrDictTypeDuplicated = errors.Conflict(reason(v1.ErrorReason_ERROR_REASON_DICT_TYPE_DUPLICATED), "字典类型已存在")
-	ErrDictDataNotFound   = errors.NotFound(reason(v1.ErrorReason_ERROR_REASON_DICT_DATA_NOT_FOUND), "字典项不存在")
-	ErrDictDataDuplicated = errors.Conflict(reason(v1.ErrorReason_ERROR_REASON_DICT_DATA_DUPLICATED), "同一字典下键值已存在")
+	// 以下都是「请求本身不合法」，统一映射成 400
+	{domain.ErrInvalidPermissionCode, badRequest(v1.ErrorReason_ERROR_REASON_UNKNOWN_PERMISSION_CODE)},
+	{domain.ErrButtonRequiresCode, badRequest(v1.ErrorReason_ERROR_REASON_UNKNOWN_PERMISSION_CODE)},
+	{domain.ErrInvalidPermissionType, badRequest(v1.ErrorReason_ERROR_REASON_UNKNOWN_PERMISSION_CODE)},
+	{domain.ErrEmptyPermissionName, badRequest(v1.ErrorReason_ERROR_REASON_UNKNOWN_PERMISSION_CODE)},
 
-	ErrRoleNotBound = errors.NotFound(reason(v1.ErrorReason_ERROR_REASON_ROLE_NOT_BOUND), "该角色尚未配置任何权限")
-	// 授予权限树中不存在的权限码通常是拼写错误。放过去的话，
-	// 这条策略永远不会命中任何接口，而配置的人会以为已经授权成功。
-	ErrUnknownPermissionCode = errors.BadRequest(reason(v1.ErrorReason_ERROR_REASON_UNKNOWN_PERMISSION_CODE), "权限码在权限树中不存在")
-)
+	{domain.ErrRoleNotBound, notFound(v1.ErrorReason_ERROR_REASON_ROLE_NOT_BOUND)},
+	{domain.ErrUnknownPermissionCode, badRequest(v1.ErrorReason_ERROR_REASON_UNKNOWN_PERMISSION_CODE)},
+	{domain.ErrEmptyRole, badRequest(v1.ErrorReason_ERROR_REASON_ROLE_NOT_BOUND)},
+	{domain.ErrSelfInheritance, badRequest(v1.ErrorReason_ERROR_REASON_PERMISSION_CYCLE)},
 
-func reason(r v1.ErrorReason) string { return r.String() }
+	{domain.ErrDictTypeNotFound, notFound(v1.ErrorReason_ERROR_REASON_DICT_TYPE_NOT_FOUND)},
+	{domain.ErrDictTypeDuplicated, conflict(v1.ErrorReason_ERROR_REASON_DICT_TYPE_DUPLICATED)},
+	{domain.ErrDictDataNotFound, notFound(v1.ErrorReason_ERROR_REASON_DICT_DATA_NOT_FOUND)},
+	{domain.ErrDictDataDuplicated, conflict(v1.ErrorReason_ERROR_REASON_DICT_DATA_DUPLICATED)},
+}
+
+// toTransportError 把领域错误翻译成带状态码的 Kratos 错误。
+//
+// 无法识别的错误原样返回而不是包成 500：那多半是基础设施故障
+// （数据库超时之类），已经在 data 层带上了足够的上下文，
+// 在这里再裹一层只会丢失原因。
+func toTransportError(err error) error {
+	if err == nil {
+		return nil
+	}
+	for _, m := range errorMapping {
+		if errors.Is(err, m.domainErr) {
+			// 保留原始错误作为 cause，日志里仍能看到领域层的具体描述
+			return m.toKratos(err).WithCause(err)
+		}
+	}
+	return err
+}
+
+func notFound(r v1.ErrorReason) func(error) *kerrors.Error {
+	return func(err error) *kerrors.Error {
+		return kerrors.NotFound(r.String(), err.Error())
+	}
+}
+
+func conflict(r v1.ErrorReason) func(error) *kerrors.Error {
+	return func(err error) *kerrors.Error {
+		return kerrors.Conflict(r.String(), err.Error())
+	}
+}
+
+func badRequest(r v1.ErrorReason) func(error) *kerrors.Error {
+	return func(err error) *kerrors.Error {
+		return kerrors.BadRequest(r.String(), err.Error())
+	}
+}

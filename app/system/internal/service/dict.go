@@ -5,6 +5,7 @@ import (
 
 	v1 "github.com/eagle-go/eagle/api/eagle/system/v1"
 	"github.com/eagle-go/eagle/app/system/internal/biz"
+	"github.com/eagle-go/eagle/app/system/internal/domain"
 )
 
 // DictService 实现 v1.DictService。
@@ -19,7 +20,7 @@ func NewDictService(uc *biz.DictUsecase) *DictService {
 	return &DictService{uc: uc}
 }
 
-func toProtoDictType(t *biz.DictType) *v1.DictType {
+func toProtoDictType(t *domain.DictType) *v1.DictType {
 	if t == nil {
 		return nil
 	}
@@ -27,14 +28,14 @@ func toProtoDictType(t *biz.DictType) *v1.DictType {
 		Id:        t.ID,
 		Name:      t.Name,
 		Type:      t.Type,
-		Status:    t.Status,
+		Status:    fromStatus(t.Status),
 		Remark:    t.Remark,
 		CreatedAt: ts(t.CreatedAt),
 		UpdatedAt: ts(t.UpdatedAt),
 	}
 }
 
-func toProtoDictData(d *biz.DictData) *v1.DictData {
+func toProtoDictData(d *domain.DictData) *v1.DictData {
 	if d == nil {
 		return nil
 	}
@@ -46,7 +47,7 @@ func toProtoDictData(d *biz.DictData) *v1.DictData {
 		Sort:      d.Sort,
 		CssClass:  d.CSSClass,
 		IsDefault: d.IsDefault,
-		Status:    d.Status,
+		Status:    fromStatus(d.Status),
 		Remark:    d.Remark,
 		CreatedAt: ts(d.CreatedAt),
 		UpdatedAt: ts(d.UpdatedAt),
@@ -57,10 +58,10 @@ func toProtoDictData(d *biz.DictData) *v1.DictData {
 
 // CreateDictType 新建字典类型。
 func (s *DictService) CreateDictType(ctx context.Context, req *v1.CreateDictTypeRequest) (*v1.CreateDictTypeResponse, error) {
-	t, err := s.uc.CreateDictType(ctx, &biz.DictType{
+	t, err := s.uc.CreateDictType(ctx, &domain.DictType{
 		Name:   req.GetName(),
 		Type:   req.GetType(),
-		Status: req.GetStatus(),
+		Status: toStatus(req.GetStatus()),
 		Remark: req.GetRemark(),
 	})
 	if err != nil {
@@ -73,9 +74,9 @@ func (s *DictService) CreateDictType(ctx context.Context, req *v1.CreateDictType
 func (s *DictService) ListDictTypes(ctx context.Context, req *v1.ListDictTypesRequest) (*v1.ListDictTypesResponse, error) {
 	offset, limit := paginate(req.GetPage(), req.GetPageSize())
 
-	types, total, err := s.uc.ListDictTypes(ctx, biz.ListDictTypesQuery{
+	types, total, err := s.uc.ListDictTypes(ctx, domain.ListDictTypesQuery{
 		Keyword:  req.GetKeyword(),
-		Status:   req.Status,
+		Status:   toStatusPtr(req.Status),
 		Offset:   offset,
 		PageSize: limit,
 	})
@@ -92,10 +93,10 @@ func (s *DictService) ListDictTypes(ctx context.Context, req *v1.ListDictTypesRe
 
 // UpdateDictType 更新字典类型。
 func (s *DictService) UpdateDictType(ctx context.Context, req *v1.UpdateDictTypeRequest) (*v1.UpdateDictTypeResponse, error) {
-	t, err := s.uc.UpdateDictType(ctx, &biz.DictType{
+	t, err := s.uc.UpdateDictType(ctx, &domain.DictType{
 		ID:     req.GetId(),
 		Name:   req.GetName(),
-		Status: req.GetStatus(),
+		Status: toStatus(req.GetStatus()),
 		Remark: req.GetRemark(),
 	})
 	if err != nil {
@@ -116,14 +117,14 @@ func (s *DictService) DeleteDictType(ctx context.Context, req *v1.DeleteDictType
 
 // CreateDictData 新建字典项。
 func (s *DictService) CreateDictData(ctx context.Context, req *v1.CreateDictDataRequest) (*v1.CreateDictDataResponse, error) {
-	d, err := s.uc.CreateDictData(ctx, &biz.DictData{
+	d, err := s.uc.CreateDictData(ctx, &domain.DictData{
 		DictType:  req.GetDictType(),
 		Label:     req.GetLabel(),
 		Value:     req.GetValue(),
 		Sort:      req.GetSort(),
 		CSSClass:  req.GetCssClass(),
 		IsDefault: req.GetIsDefault(),
-		Status:    req.GetStatus(),
+		Status:    toStatus(req.GetStatus()),
 		Remark:    req.GetRemark(),
 	})
 	if err != nil {
@@ -136,10 +137,10 @@ func (s *DictService) CreateDictData(ctx context.Context, req *v1.CreateDictData
 func (s *DictService) ListDictData(ctx context.Context, req *v1.ListDictDataRequest) (*v1.ListDictDataResponse, error) {
 	offset, limit := paginate(req.GetPage(), req.GetPageSize())
 
-	data, total, err := s.uc.ListDictData(ctx, biz.ListDictDataQuery{
+	data, total, err := s.uc.ListDictData(ctx, domain.ListDictDataQuery{
 		DictType: req.DictType,
 		Keyword:  req.GetKeyword(),
-		Status:   req.Status,
+		Status:   toStatusPtr(req.Status),
 		Offset:   offset,
 		PageSize: limit,
 	})
@@ -156,14 +157,14 @@ func (s *DictService) ListDictData(ctx context.Context, req *v1.ListDictDataRequ
 
 // UpdateDictData 更新字典项。
 func (s *DictService) UpdateDictData(ctx context.Context, req *v1.UpdateDictDataRequest) (*v1.UpdateDictDataResponse, error) {
-	d, err := s.uc.UpdateDictData(ctx, &biz.DictData{
+	d, err := s.uc.UpdateDictData(ctx, &domain.DictData{
 		ID:        req.GetId(),
 		Label:     req.GetLabel(),
 		Value:     req.GetValue(),
 		Sort:      req.GetSort(),
 		CSSClass:  req.GetCssClass(),
 		IsDefault: req.GetIsDefault(),
-		Status:    req.GetStatus(),
+		Status:    toStatus(req.GetStatus()),
 		Remark:    req.GetRemark(),
 	})
 	if err != nil {

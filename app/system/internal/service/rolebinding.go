@@ -7,6 +7,7 @@ import (
 
 	v1 "github.com/eagle-go/eagle/api/eagle/system/v1"
 	"github.com/eagle-go/eagle/app/system/internal/biz"
+	"github.com/eagle-go/eagle/app/system/internal/domain"
 	"github.com/eagle-go/eagle/pkg/identity"
 )
 
@@ -22,13 +23,13 @@ func NewRoleBindingService(uc *biz.RoleBindingUsecase) *RoleBindingService {
 	return &RoleBindingService{uc: uc}
 }
 
-func toProtoBinding(b *biz.RoleBinding) *v1.RoleBinding {
+func toProtoBinding(b *domain.RoleBinding) *v1.RoleBinding {
 	if b == nil {
 		return nil
 	}
 	return &v1.RoleBinding{
-		Role:            b.Role,
-		PermissionCodes: b.PermissionCodes,
+		Role:            b.Role().String(),
+		PermissionCodes: b.CodeStrings(),
 	}
 }
 
@@ -80,12 +81,12 @@ func (s *RoleBindingService) GetMyPermissions(ctx context.Context, _ *v1.GetMyPe
 		return nil, errors.Unauthorized("UNAUTHENTICATED", "需要登录")
 	}
 
-	codes, err := s.uc.PermissionsOf(ctx, p.Roles)
+	codes, err := s.uc.ResolveCodes(ctx, p.Roles)
 	if err != nil {
 		return nil, err
 	}
 	return &v1.GetMyPermissionsResponse{
 		Roles:           p.Roles,
-		PermissionCodes: codes,
+		PermissionCodes: domain.PermissionCodeStrings(codes),
 	}, nil
 }

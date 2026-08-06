@@ -80,13 +80,28 @@ rpc CreatePermission(CreatePermissionRequest) returns (CreatePermissionResponse)
 
 **失败方向是关闭的**：Casbin 判定出错、中间件未正确装配时一律拒绝，而不是放行。
 
-### 通配用 `keyMatch` 而非 `keyMatch2`
+### 两个通配相关的坑（都已写成回归测试）
 
-这是一个曾经踩过的坑，已写成回归测试。`keyMatch2` 为 URL 路径设计，会把 `:xxx` 当成路径参数；
+**一、不要用 `keyMatch2`。** 它为 URL 路径设计，会把 `:xxx` 当成路径参数；
 而权限码正是冒号分隔的，于是 `system:permission:query` 被解析成 `system:{任意}:{任意}`，
 与 `system:permission:add` 匹配成功——**只读角色由此获得全部写权限**。
 
-`keyMatch` 只认 `*`：`system:*` 覆盖整个 system 域，不含 `*` 的策略退化为精确比较。
+**二、通配只允许出现在末段。** Casbin 的 `keyMatch` 只看第一个 `*` 并做前缀匹配，
+完全忽略其后的内容：`system:*:add` 在它眼里等价于 `system:*`，会连 `system:user:edit`
+一起放行——写的人以为限定了动作，实际授出了整个域。
+`domain.NewPermissionCode` 在构造阶段就拒绝这种形态。
+
+合法形态只有两种：严格三段的具体权限码（`system:user:add`），
+或末段为 `*` 的通配策略（`system:*`、`system:user:*`）。
+
+### 领域层与 Casbin 的一致性由测试保证
+
+`domain.PermissionCode.Covers` 和 Casbin 各有一份匹配实现——前者让「授权是否生效」
+可以脱离 Casbin 单测、也是后台展示权限的依据，后者是运行时真正的守门人。
+两者漂移轻则「后台显示已授权、调用却 403」，重则越权。
+
+`TestDomainCoversMatchesCasbinEnforcement` 遍历策略×目标的组合逐条比对，
+漂移发生时立刻变红，不靠注释约定同步。
 
 ---
 
@@ -127,6 +142,47 @@ goose -dir db/migrations postgres "postgres://eagle:eagle@127.0.0.1:5432/eagle?s
 
 ---
 
+## 分层：DDD Lite + Clean Architecture + Kratos
+
+依赖方向自外向内单向流动，`domain` 处在最内层且不依赖任何东西：
+
+```
+server ──→ service ──→ biz(用例) ──→ domain
+                          data ────────┘   （实现 domain 定义的仓储接口）
+```
+
+| 层 | 职责 | 允许依赖 |
+|---|---|---|
+| `server` | HTTP/gRPC 装配、中间件链 | service, conf |
+| `service` | proto ↔ 领域对象互转，从 context 取调用者身份 | biz, domain |
+| `biz` | 用例编排 + 领域错误到状态码的映射 | domain |
+| **`domain`** | **实体（含不变量）· 值对象 · 仓储接口** | **无** |
+| `data` | 仓储实现：ent + Redis + Casbin 适配 | domain |
+
+### 战术 DDD 只用在有不变量的地方
+
+这是有意的取舍。授权域（权限树、角色绑定）有真实的不变量要守护，用聚合根和值对象；
+字典是纯 CRUD，套聚合根只增加仪式感而无收益，就保持贫血。
+
+**值对象 `PermissionCode`**：权限码同时出现在 proto 注解、Casbin 策略、权限树三处，
+任何一处走样都会造成「配置看起来成功了但永远不生效」的静默失败。
+提升为值对象后，格式规则只有一份，越界的值构造不出来。
+
+**聚合根 `Permission`**：字段全部私有，只能经 `NewPermission` / `Update` 修改，
+不变量（名称非空、类型合法、按钮必须有权限码）在方法里就地校验——
+不存在「构造出一个违反不变量的实体」的路径。
+
+**集合视图 `PermissionTree`**：单个聚合根看不到兄弟和祖先，
+所以「防环」「补全祖先链」这类跨节点规则放在树上，而不是硬塞进 Permission。
+
+回报是领域规则可以完全脱离数据库单测：
+
+```bash
+go test ./app/system/internal/domain/...
+```
+
+0.4 秒跑完，不启动任何外部依赖。
+
 ## 目录结构
 
 ```
@@ -138,9 +194,10 @@ eagle-go/
 │   ├── cmd/server/         # 入口 + wire 装配
 │   └── internal/
 │       ├── server/         # HTTP/gRPC 装配、中间件链
-│       ├── service/        # proto ↔ 领域模型转换
-│       ├── biz/            # 用例编排 + 仓储接口（不依赖任何基础设施）
-│       ├── data/           # 仓储实现：ent + Redis + Casbin 适配
+│       ├── service/        # proto ↔ 领域对象转换
+│       ├── biz/            # 用例编排 + 错误映射
+│       ├── domain/         # 实体 · 值对象 · 仓储接口（零依赖）
+│       ├── data/           # 仓储实现：ent + Redis + Casbin
 │       └── conf/           # 配置契约
 ├── ent/schema/             # ent Schema as Code
 ├── pkg/
@@ -152,9 +209,6 @@ eagle-go/
 ├── db/migrations/          # goose 迁移
 └── deploy/
 ```
-
-分层遵循依赖倒置：**`biz` 定义仓储接口，`data` 实现它**。
-`biz` 不 import 任何 ent/redis/casbin/protobuf，领域规则可以脱离基础设施单测。
 
 ---
 

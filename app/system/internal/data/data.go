@@ -1,4 +1,4 @@
-// Package data 是 system 服务的基础设施层：biz 层仓储接口的具体实现。
+// Package data 是 system 服务的基础设施层：domain 层仓储接口的具体实现。
 //
 // 承担三件事：ent 生成类型与领域模型之间的转换、
 // ent 错误到领域错误的映射、以及 Redis 缓存的读写与失效。
@@ -29,7 +29,7 @@ var ProviderSet = wire.NewSet(
 	NewEntClient,
 	NewRedisClient,
 	NewEnforcer,
-	NewPolicyStore,
+	NewPolicyRepo,
 	NewPermissionRepo,
 	NewDictRepo,
 )

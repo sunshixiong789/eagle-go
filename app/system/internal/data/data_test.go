@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/eagle-go/eagle/app/system/internal/biz"
+	"github.com/eagle-go/eagle/app/system/internal/domain"
 	"github.com/eagle-go/eagle/ent/casbinrule"
 	"github.com/eagle-go/eagle/pkg/authz"
 )
@@ -26,42 +26,64 @@ func TestPermissionRepoCRUD(t *testing.T) {
 	ctx := context.Background()
 	repo := NewPermissionRepo(testData)
 
-	created, err := repo.Create(ctx, &biz.Permission{
-		ParentID: biz.RootPermissionID,
+	created, err := repo.Create(ctx, newPermission(t, domain.NewPermissionParams{
+		ParentID: domain.RootPermissionID,
 		Name:     "测试目录",
 		Code:     "test:crud:root",
-		Type:     biz.PermissionTypeDir,
-		Status:   biz.StatusEnabled,
+		Type:     int32(domain.PermissionTypeDir),
+		Status:   int32(domain.StatusEnabled),
 		Visible:  true,
-	})
+	}))
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	t.Cleanup(func() { _ = repo.Delete(ctx, created.ID) })
+	t.Cleanup(func() { _ = repo.Delete(ctx, created.ID()) })
 
-	if created.ID == 0 {
+	if created.ID() == 0 {
 		t.Fatal("创建后应返回自增 ID")
 	}
-	if created.CreatedAt.IsZero() {
+	if created.CreatedAt().IsZero() {
 		t.Error("created_at 应被填充")
 	}
 
-	got, err := repo.GetByID(ctx, created.ID)
+	got, err := repo.GetByID(ctx, created.ID())
 	if err != nil {
 		t.Fatalf("GetByID: %v", err)
 	}
-	if got.Code != "test:crud:root" {
-		t.Errorf("code = %q", got.Code)
+	if got.Code().String() != "test:crud:root" {
+		t.Errorf("code = %q", got.Code())
 	}
 
-	got.Name = "改名后"
+	// 聚合根的字段是私有的，只能经领域行为修改——
+	// 这保证了不可能绕过不变量校验改坏实体
+	if err := got.Update(domain.NewPermissionParams{
+		ParentID: domain.RootPermissionID,
+		Name:     "改名后",
+		Code:     "test:crud:root",
+		Type:     int32(domain.PermissionTypeDir),
+		Status:   int32(domain.StatusEnabled),
+		Visible:  true,
+	}); err != nil {
+		t.Fatalf("Update 实体: %v", err)
+	}
+
 	updated, err := repo.Update(ctx, got)
 	if err != nil {
 		t.Fatalf("Update: %v", err)
 	}
-	if updated.Name != "改名后" {
-		t.Errorf("name = %q, want 改名后", updated.Name)
+	if updated.Name() != "改名后" {
+		t.Errorf("name = %q, want 改名后", updated.Name())
 	}
+}
+
+// newPermission 构造合法的权限聚合根，构造失败直接终止用例。
+func newPermission(t *testing.T, params domain.NewPermissionParams) *domain.Permission {
+	t.Helper()
+	p, err := domain.NewPermission(params)
+	if err != nil {
+		t.Fatalf("构造 Permission: %v", err)
+	}
+	return p
 }
 
 // 权限码唯一由条件唯一索引保证，data 层要把它翻译成领域错误。
@@ -72,13 +94,13 @@ func TestPermissionRepoDuplicateCode(t *testing.T) {
 	repo := NewPermissionRepo(testData)
 
 	// 迁移已种入 system:dict:list
-	_, err := repo.Create(ctx, &biz.Permission{
+	_, err := repo.Create(ctx, newPermission(t, domain.NewPermissionParams{
 		Name:   "重复码",
 		Code:   "system:dict:list",
-		Type:   biz.PermissionTypeButton,
-		Status: biz.StatusEnabled,
-	})
-	if !errors.Is(err, biz.ErrPermissionCodeDuplicated) {
+		Type:   int32(domain.PermissionTypeButton),
+		Status: int32(domain.StatusEnabled),
+	}))
+	if !errors.Is(err, domain.ErrPermissionCodeDuplicated) {
 		t.Errorf("重复权限码应返回 ErrPermissionCodeDuplicated, got %v", err)
 	}
 }
@@ -93,16 +115,16 @@ func TestPermissionRepoAllowsMultipleEmptyCodes(t *testing.T) {
 
 	var ids []int64
 	for _, name := range []string{"空码目录A", "空码目录B"} {
-		p, err := repo.Create(ctx, &biz.Permission{
+		p, err := repo.Create(ctx, newPermission(t, domain.NewPermissionParams{
 			Name:   name,
 			Code:   "",
-			Type:   biz.PermissionTypeDir,
-			Status: biz.StatusEnabled,
-		})
+			Type:   int32(domain.PermissionTypeDir),
+			Status: int32(domain.StatusEnabled),
+		}))
 		if err != nil {
 			t.Fatalf("Create %s: %v", name, err)
 		}
-		ids = append(ids, p.ID)
+		ids = append(ids, p.ID())
 	}
 	t.Cleanup(func() {
 		for _, id := range ids {
@@ -117,10 +139,10 @@ func TestPermissionRepoNotFound(t *testing.T) {
 	ctx := context.Background()
 	repo := NewPermissionRepo(testData)
 
-	if _, err := repo.GetByID(ctx, 999999); !errors.Is(err, biz.ErrPermissionNotFound) {
+	if _, err := repo.GetByID(ctx, 999999); !errors.Is(err, domain.ErrPermissionNotFound) {
 		t.Errorf("应返回 ErrPermissionNotFound, got %v", err)
 	}
-	if err := repo.Delete(ctx, 999999); !errors.Is(err, biz.ErrPermissionNotFound) {
+	if err := repo.Delete(ctx, 999999); !errors.Is(err, domain.ErrPermissionNotFound) {
 		t.Errorf("删除不存在的节点应返回 ErrPermissionNotFound, got %v", err)
 	}
 }
@@ -156,7 +178,7 @@ func TestPermissionRepoListFilters(t *testing.T) {
 	ctx := context.Background()
 	repo := NewPermissionRepo(testData)
 
-	all, err := repo.List(ctx, biz.ListPermissionsQuery{})
+	all, err := repo.List(ctx, domain.ListPermissionsQuery{})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -164,8 +186,8 @@ func TestPermissionRepoListFilters(t *testing.T) {
 		t.Fatal("种子数据应包含权限节点")
 	}
 
-	buttonType := biz.PermissionTypeButton
-	buttons, err := repo.List(ctx, biz.ListPermissionsQuery{Type: &buttonType})
+	buttonType := domain.PermissionTypeButton
+	buttons, err := repo.List(ctx, domain.ListPermissionsQuery{Type: &buttonType})
 	if err != nil {
 		t.Fatalf("List(buttons): %v", err)
 	}
@@ -173,7 +195,7 @@ func TestPermissionRepoListFilters(t *testing.T) {
 		t.Fatal("应能筛出按钮类节点")
 	}
 	for _, p := range buttons {
-		if p.Type != biz.PermissionTypeButton {
+		if p.Type() != domain.PermissionTypeButton {
 			t.Errorf("筛选结果混入了非按钮节点: %+v", p)
 		}
 	}
@@ -184,14 +206,46 @@ func TestPermissionRepoListFilters(t *testing.T) {
 
 // ── Casbin 策略 ───────────────────────────────────────────
 
-func newTestPolicyStore(t *testing.T) biz.PolicyStore {
+func newTestPolicyStore(t *testing.T) domain.PolicyRepo {
 	t.Helper()
 
 	enforcer, err := NewEnforcer(testData.client)
 	if err != nil {
 		t.Fatalf("NewEnforcer: %v", err)
 	}
-	return NewPolicyStore(enforcer, testData.client)
+	return NewPolicyRepo(enforcer, testData.client)
+}
+
+// mustRoles 构造角色值对象切片。
+func mustRoles(t *testing.T, names ...string) []domain.Role {
+	t.Helper()
+	out := make([]domain.Role, 0, len(names))
+	for _, n := range names {
+		r, err := domain.NewRole(n)
+		if err != nil {
+			t.Fatalf("构造角色 %q: %v", n, err)
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+// mustBinding 构造角色权限绑定。
+func mustBinding(t *testing.T, role string, codes ...string) *domain.RoleBinding {
+	t.Helper()
+	r, err := domain.NewRole(role)
+	if err != nil {
+		t.Fatalf("构造角色: %v", err)
+	}
+	cs, err := domain.ParsePermissionCodes(codes)
+	if err != nil {
+		t.Fatalf("解析权限码: %v", err)
+	}
+	b, err := domain.NewRoleBinding(r, cs)
+	if err != nil {
+		t.Fatalf("构造绑定: %v", err)
+	}
+	return b
 }
 
 // 策略必须真的从库里加载出来，而不是只存在于内存。
@@ -200,9 +254,10 @@ func TestPolicyStoreLoadsSeededPolicies(t *testing.T) {
 
 	ctx := context.Background()
 	store := newTestPolicyStore(t)
+	user := mustRoles(t, "user")
 
 	// 迁移种入：p, user, system:dict:query
-	ok, err := store.Allow(ctx, []string{"user"}, "system:dict:query")
+	ok, err := store.Allow(ctx, user, domain.MustPermissionCode("system:dict:query"))
 	if err != nil {
 		t.Fatalf("Allow: %v", err)
 	}
@@ -211,7 +266,7 @@ func TestPolicyStoreLoadsSeededPolicies(t *testing.T) {
 	}
 
 	// user 是只读角色，不应有写权限
-	ok, err = store.Allow(ctx, []string{"user"}, "system:permission:remove")
+	ok, err = store.Allow(ctx, user, domain.MustPermissionCode("system:permission:remove"))
 	if err != nil {
 		t.Fatalf("Allow: %v", err)
 	}
@@ -226,11 +281,12 @@ func TestPolicyStoreWildcardFromSeed(t *testing.T) {
 
 	ctx := context.Background()
 	store := newTestPolicyStore(t)
+	admin := mustRoles(t, "admin")
 
 	for _, perm := range []string{
 		"system:permission:add", "system:dict:remove", "system:role:assign",
 	} {
-		ok, err := store.Allow(ctx, []string{"admin"}, perm)
+		ok, err := store.Allow(ctx, admin, domain.MustPermissionCode(perm))
 		if err != nil {
 			t.Fatalf("Allow(%s): %v", perm, err)
 		}
@@ -247,13 +303,13 @@ func TestPolicyStoreRoleInheritanceFromSeed(t *testing.T) {
 	ctx := context.Background()
 	store := newTestPolicyStore(t)
 
-	perms, err := store.PermissionsOf(ctx, []string{"admin"})
+	codes, err := store.ResolveCodes(ctx, mustRoles(t, "admin"))
 	if err != nil {
-		t.Fatalf("PermissionsOf: %v", err)
+		t.Fatalf("ResolveCodes: %v", err)
 	}
 	// admin 继承 user，因此应包含 user 的只读权限
-	if !slices.Contains(perms, "system:dict:query") {
-		t.Errorf("admin 应继承 user 的 system:dict:query, got %v", perms)
+	if !slices.Contains(domain.PermissionCodeStrings(codes), "system:dict:query") {
+		t.Errorf("admin 应继承 user 的 system:dict:query, got %v", codes)
 	}
 }
 
@@ -270,16 +326,19 @@ func TestPolicyStoreSetRolePermissionsPersists(t *testing.T) {
 			Where(casbinrule.V0EQ(role)).Exec(ctx)
 	})
 
-	if err := store.SetRolePermissions(ctx, role, []string{"system:dict:query", "system:dict:list"}); err != nil {
-		t.Fatalf("SetRolePermissions: %v", err)
+	binding := mustBinding(t, role, "system:dict:query", "system:dict:list")
+	if err := store.SaveBinding(ctx, binding); err != nil {
+		t.Fatalf("SaveBinding: %v", err)
 	}
 
 	// 用一个全新的 enforcer 从库里重新加载，验证确实持久化了
 	fresh := newTestPolicyStore(t)
-	perms, err := fresh.RolePermissions(ctx, role)
+	got, err := fresh.FindBinding(ctx, mustRoles(t, role)[0])
 	if err != nil {
-		t.Fatalf("RolePermissions: %v", err)
+		t.Fatalf("FindBinding: %v", err)
 	}
+
+	perms := got.CodeStrings()
 	slices.Sort(perms)
 	want := []string{"system:dict:list", "system:dict:query"}
 	if !slices.Equal(perms, want) {
@@ -300,15 +359,17 @@ func TestPolicyStoreSetRolePermissionsReplaces(t *testing.T) {
 			Where(casbinrule.V0EQ(role)).Exec(ctx)
 	})
 
-	if err := store.SetRolePermissions(ctx, role, []string{"system:dict:query", "system:dict:add"}); err != nil {
+	if err := store.SaveBinding(ctx, mustBinding(t, role, "system:dict:query", "system:dict:add")); err != nil {
 		t.Fatalf("首次设置: %v", err)
 	}
-	if err := store.SetRolePermissions(ctx, role, []string{"system:dict:query"}); err != nil {
+	if err := store.SaveBinding(ctx, mustBinding(t, role, "system:dict:query")); err != nil {
 		t.Fatalf("覆盖设置: %v", err)
 	}
 
 	fresh := newTestPolicyStore(t)
-	ok, err := fresh.Allow(ctx, []string{role}, "system:dict:add")
+	roles := mustRoles(t, role)
+
+	ok, err := fresh.Allow(ctx, roles, domain.MustPermissionCode("system:dict:add"))
 	if err != nil {
 		t.Fatalf("Allow: %v", err)
 	}
@@ -316,7 +377,7 @@ func TestPolicyStoreSetRolePermissionsReplaces(t *testing.T) {
 		t.Error("被覆盖掉的权限不应残留")
 	}
 
-	ok, err = fresh.Allow(ctx, []string{role}, "system:dict:query")
+	ok, err = fresh.Allow(ctx, roles, domain.MustPermissionCode("system:dict:query"))
 	if err != nil {
 		t.Fatalf("Allow: %v", err)
 	}
@@ -335,12 +396,18 @@ func TestPolicyStoreListBoundRoles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListBoundRoles: %v", err)
 	}
-	if !slices.Contains(roles, "admin") || !slices.Contains(roles, "user") {
-		t.Errorf("应包含种子角色 admin 与 user, got %v", roles)
+
+	names := make([]string, 0, len(roles))
+	for _, r := range roles {
+		names = append(names, r.String())
+	}
+
+	if !slices.Contains(names, "admin") || !slices.Contains(names, "user") {
+		t.Errorf("应包含种子角色 admin 与 user, got %v", names)
 	}
 	// 结果要进后台列表，顺序必须稳定
-	if !slices.IsSorted(roles) {
-		t.Errorf("结果应有序, got %v", roles)
+	if !slices.IsSorted(names) {
+		t.Errorf("结果应有序, got %v", names)
 	}
 }
 
@@ -396,7 +463,7 @@ func TestDictRepoInvalidateCache(t *testing.T) {
 		t.Fatal("预热后应存在缓存")
 	}
 
-	if err := repo.InvalidateDictCache(ctx, dictType); err != nil {
+	if err := repo.InvalidateCache(ctx, dictType); err != nil {
 		t.Fatalf("InvalidateDictCache: %v", err)
 	}
 	if n, _ := redisClient().Exists(ctx, dictDataKey(dictType)).Result(); n != 0 {
@@ -410,10 +477,10 @@ func TestDictRepoTypeCRUD(t *testing.T) {
 	ctx := context.Background()
 	repo := NewDictRepo(testData)
 
-	created, err := repo.CreateType(ctx, &biz.DictType{
+	created, err := repo.CreateType(ctx, &domain.DictType{
 		Name:   "测试字典",
 		Type:   "test_dict_crud",
-		Status: biz.StatusEnabled,
+		Status: domain.StatusEnabled,
 	})
 	if err != nil {
 		t.Fatalf("CreateType: %v", err)
@@ -421,10 +488,10 @@ func TestDictRepoTypeCRUD(t *testing.T) {
 	t.Cleanup(func() { _ = repo.DeleteType(ctx, created.ID) })
 
 	// 重复的 type 应被唯一约束拦下并翻译成领域错误
-	_, err = repo.CreateType(ctx, &biz.DictType{
-		Name: "重复", Type: "test_dict_crud", Status: biz.StatusEnabled,
+	_, err = repo.CreateType(ctx, &domain.DictType{
+		Name: "重复", Type: "test_dict_crud", Status: domain.StatusEnabled,
 	})
-	if !errors.Is(err, biz.ErrDictTypeDuplicated) {
+	if !errors.Is(err, domain.ErrDictTypeDuplicated) {
 		t.Errorf("重复类型应返回 ErrDictTypeDuplicated, got %v", err)
 	}
 
@@ -444,16 +511,16 @@ func TestDictRepoDataRejectsUnknownType(t *testing.T) {
 	ctx := context.Background()
 	repo := NewDictRepo(testData)
 
-	_, err := repo.CreateData(ctx, &biz.DictData{
+	_, err := repo.CreateData(ctx, &domain.DictData{
 		DictType: "no_such_dict_type",
 		Label:    "孤儿项",
 		Value:    "x",
-		Status:   biz.StatusEnabled,
+		Status:   domain.StatusEnabled,
 	})
 	if err == nil {
 		t.Fatal("挂在不存在的字典类型下应失败")
 	}
-	if !errors.Is(err, biz.ErrDictTypeNotFound) && !errors.Is(err, biz.ErrDictDataDuplicated) {
+	if !errors.Is(err, domain.ErrDictTypeNotFound) && !errors.Is(err, domain.ErrDictDataDuplicated) {
 		// ent 把外键与唯一冲突都归为 ConstraintError，
 		// 这里只要求它被翻译成领域错误而非裸的数据库错误
 		t.Logf("外键冲突被映射为: %v", err)
