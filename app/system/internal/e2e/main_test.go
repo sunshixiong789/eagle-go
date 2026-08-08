@@ -186,7 +186,10 @@ func newTestEnv(t *testing.T) *testEnv {
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	verifier := server.NewVerifier(authConf, rdb)
-	middlewares := server.NewMiddlewares(logger, verifier, enforcer, authConf)
+	middlewares, err := server.NewMiddlewares(logger, verifier, enforcer, authConf)
+	if err != nil {
+		t.Fatalf("构造中间件链: %v", err)
+	}
 
 	permRepo := data.NewPermissionRepo(d)
 	policyRepo := data.NewPolicyRepo(enforcer, entClient)

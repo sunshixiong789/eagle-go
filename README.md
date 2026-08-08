@@ -173,6 +173,45 @@ docker compose -f deploy/docker-compose.yml --profile obs up -d
 
 然后把 `configs/config.yaml` 的 `otlp_endpoint` 填成 `127.0.0.1:4317`。
 
+### 拿一个真实 token 试试
+
+realm 里不预置用户，先创建一个（`Passw0rd!` 仅为示例）：
+
+```bash
+docker exec eagle-keycloak /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user admin --password admin
+```
+
+创建用户时**必须带 firstName/lastName**，否则 Keycloak 26 的 `VERIFY_PROFILE`
+必需动作会让登录报 `Account is not fully set up`：
+
+```bash
+docker exec eagle-keycloak /opt/keycloak/bin/kcadm.sh create users -r eagle -s username=alice -s enabled=true -s firstName=Alice -s lastName=Test -s email=alice@example.com
+```
+
+```bash
+docker exec eagle-keycloak /opt/keycloak/bin/kcadm.sh set-password -r eagle --username alice --new-password 'Passw0rd!'
+```
+
+```bash
+docker exec eagle-keycloak /opt/keycloak/bin/kcadm.sh add-roles -r eagle --uusername alice --rolename admin
+```
+
+取 token 并调接口：
+
+```bash
+curl -s -d client_id=eagle-web -d username=alice -d 'password=Passw0rd!' -d grant_type=password http://127.0.0.1:8080/realms/eagle/protocol/openid-connect/token
+```
+
+```bash
+curl -s -H "Authorization: Bearer <access_token>" http://127.0.0.1:8000/v1/system/permissions
+```
+
+服务间调用用服务账号（`client_credentials`）：
+
+```bash
+curl -s -d client_id=eagle-worker -d client_secret=dev-only-worker-secret -d grant_type=client_credentials http://127.0.0.1:8080/realms/eagle/protocol/openid-connect/token
+```
+
 ### 配置里的时长写法
 
 所有 duration 由 `google.protobuf.Duration` 承载，**只接受「秒数 + s」**：`3600s`、`0.5s`。
@@ -278,7 +317,7 @@ eagle-go/
 | 可观测性（OTel 链路 + Prometheus 指标） | ✅ 已装配，配置解析有回归测试 |
 | 部署（Dockerfile · compose · Keycloak realm） | ✅ 已就绪 |
 | 端到端鉴权链路 | ✅ 真实 HTTP + 真实签名 JWT 验证 401/403/200 语义 |
-| 对接真实 Keycloak | 🚧 token 形状与验证路径已验证，签发流程（登录/授权码/刷新）未实跑 |
+| 对接真实 Keycloak | ✅ 真实 realm 导入、真实 token 签发、完整鉴权链路已跑通 |
 | Helm chart · 生产部署 | 🚧 待完成 |
 
 ## 安全提示

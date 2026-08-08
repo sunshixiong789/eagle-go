@@ -36,7 +36,11 @@ func wireApp(confServer *conf.Server, confData *conf.Data, auth *conf.Auth, obse
 		cleanup()
 		return nil, nil, err
 	}
-	v := server.NewMiddlewares(logger, verifier, enforcer, auth)
+	v, err := server.NewMiddlewares(logger, verifier, enforcer, auth)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
 	permissionRepo := data.NewPermissionRepo(dataData)
 	policyRepo := data.NewPolicyRepo(enforcer, entClient)
 	permissionUsecase := biz.NewPermissionUsecase(permissionRepo, policyRepo)

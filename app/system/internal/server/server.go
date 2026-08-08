@@ -3,6 +3,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	protovalidatemw "github.com/go-kratos/kratos/contrib/middleware/validate/v3"
@@ -14,11 +15,15 @@ import (
 	"github.com/go-kratos/kratos/v3/middleware/recovery"
 	"github.com/google/wire"
 	"github.com/redis/go-redis/v9"
+	"go.opentelemetry.io/otel"
 
 	"github.com/eagle-go/eagle/app/system/internal/conf"
 	"github.com/eagle-go/eagle/pkg/authn"
 	"github.com/eagle-go/eagle/pkg/authz"
 )
+
+// meterName 是本服务所有自定义指标的 instrumentation scope。
+const meterName = "github.com/eagle-go/eagle/app/system"
 
 // ProviderSet 是 server 层的 wire provider 集合。
 var ProviderSet = wire.NewSet(
@@ -54,10 +59,15 @@ func NewMiddlewares(
 	verifier *authn.Verifier,
 	enforcer *authz.Enforcer,
 	authConf *conf.Auth,
-) []middleware.Middleware {
+) ([]middleware.Middleware, error) {
 	superAdmin := authConf.GetSuperAdminRole()
 	if superAdmin == "" {
 		superAdmin = "admin"
+	}
+
+	metricsMW, err := newMetricsMiddleware()
+	if err != nil {
+		return nil, err
 	}
 
 	return []middleware.Middleware{
@@ -65,7 +75,7 @@ func NewMiddlewares(
 		// tracing 紧贴 recovery：这样后续每一层——包括被拒绝的请求——
 		// 都落在同一个 span 里，排查 403 时能看到完整调用链
 		tracing.Server(),
-		metrics.Server(),
+		metricsMW,
 		logging.Server(logger),
 		ratelimit.Server(),
 		authn.Server(verifier),
@@ -74,5 +84,34 @@ func NewMiddlewares(
 			authz.WithEnforcer(enforcer),
 		),
 		protovalidatemw.ProtoValidate(),
+	}, nil
+}
+
+// newMetricsMiddleware 构造带 instrument 的指标中间件。
+//
+// 必须显式传入 counter 与 histogram：metrics.Server() 不带任何 Option 时
+// 是彻底的空转——
+//
+//	if op.requests == nil && op.seconds == nil { return handler(ctx, req) }
+//
+// 中间件照样挂在链上、请求照样通过，但一个指标都不会产生。
+// 这种失败没有任何报错，只有真去抓一次 /metrics 才看得出来。
+//
+// 构造失败时返回错误而不是降级跳过：静默跳过正是上面那个坑的翻版。
+func newMetricsMiddleware() (middleware.Middleware, error) {
+	meter := otel.Meter(meterName)
+
+	requests, err := metrics.DefaultRequestsCounter(meter, metrics.DefaultServerRequestsCounterName)
+	if err != nil {
+		return nil, fmt.Errorf("server: 构造请求计数器: %w", err)
 	}
+	seconds, err := metrics.DefaultSecondsHistogram(meter, metrics.DefaultServerSecondsHistogramName)
+	if err != nil {
+		return nil, fmt.Errorf("server: 构造耗时直方图: %w", err)
+	}
+
+	return metrics.Server(
+		metrics.WithRequests(requests),
+		metrics.WithSeconds(seconds),
+	), nil
 }

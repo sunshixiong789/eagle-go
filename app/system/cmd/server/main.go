@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	kratosmetrics "github.com/go-kratos/kratos/contrib/otel/v3/metrics"
 	"github.com/go-kratos/kratos/contrib/otel/v3/tracing"
 	"github.com/go-kratos/kratos/v3"
 	"github.com/go-kratos/kratos/v3/config"
@@ -102,9 +103,10 @@ func setupObservability(o *conf.Observability) (func(context.Context) error, err
 		InstanceID:     id,
 		OTLPEndpoint:   o.GetOtlpEndpoint(),
 		// 集群内到 collector 通常是明文 gRPC；跨网络务必改为 TLS
-		OTLPInsecure: true,
-		SampleRatio:  o.GetTraceSampleRatio(),
-		MetricsAddr:  o.GetMetricsAddr(),
+		OTLPInsecure:   true,
+		SampleRatio:    o.GetTraceSampleRatio(),
+		MetricsAddr:    o.GetMetricsAddr(),
+		HistogramViews: []string{kratosmetrics.DefaultServerSecondsHistogramName},
 	})
 }
 

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"time"
 
+	kratosmetrics "github.com/go-kratos/kratos/contrib/otel/v3/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/otel"
@@ -42,6 +43,10 @@ type Config struct {
 
 	// MetricsAddr 是 Prometheus 抓取端点地址，如 0.0.0.0:9100。留空则不暴露。
 	MetricsAddr string
+
+	// HistogramViews 列出需要按「耗时」语义配置桶边界的直方图名。
+	// 不在此列出的直方图会沿用 SDK 默认边界，对秒级耗时而言几乎不可用。
+	HistogramViews []string
 }
 
 // Setup 初始化全局 TracerProvider 与 MeterProvider，并按需启动指标端点。
@@ -172,10 +177,18 @@ func setupMetrics(cfg Config, res *resource.Resource) (func(context.Context) err
 		return nil, fmt.Errorf("otelx: 创建 Prometheus 导出器: %w", err)
 	}
 
-	mp := metricsdk.NewMeterProvider(
+	opts := []metricsdk.Option{
 		metricsdk.WithResource(res),
 		metricsdk.WithReader(exporter),
-	)
+	}
+	// 直方图必须显式注册 view，否则用 SDK 默认桶边界（0,5,10,25,...,10000）。
+	// 那套边界是给通用数值准备的，而请求耗时以秒计通常落在 0.005~1 之间，
+	// 会全部挤进第一个桶——P95/P99 直接失去意义。
+	for _, name := range cfg.HistogramViews {
+		opts = append(opts, metricsdk.WithView(kratosmetrics.DefaultSecondsHistogramView(name)))
+	}
+
+	mp := metricsdk.NewMeterProvider(opts...)
 	otel.SetMeterProvider(mp)
 
 	return mp.Shutdown, nil
