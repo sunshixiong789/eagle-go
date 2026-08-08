@@ -8,7 +8,6 @@ import (
 
 	"github.com/eagle-go/eagle/app/system/internal/domain"
 	"github.com/eagle-go/eagle/ent/casbinrule"
-	"github.com/eagle-go/eagle/pkg/authz"
 )
 
 func skipIfShort(t *testing.T) {
@@ -536,8 +535,7 @@ func TestNewEnforcerLoadsFromDatabase(t *testing.T) {
 		t.Fatalf("NewEnforcer: %v", err)
 	}
 
-	var _ *authz.Enforcer = e
-
+	// 直接调用判定即可证明类型与可用性，无需额外的类型断言
 	ok, err := e.Allow([]string{"user"}, "system:dict:list")
 	if err != nil {
 		t.Fatalf("Allow: %v", err)

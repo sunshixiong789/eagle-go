@@ -61,15 +61,19 @@ func Setup(ctx context.Context, cfg Config) (shutdown func(context.Context) erro
 	// 收集各组件的关闭函数，任一初始化失败时回滚已完成的部分，
 	// 避免留下已启动但无人管理的后台 goroutine
 	var shutdowns []func(context.Context) error
-	rollback := func() {
+	rollback := func(ctx context.Context) {
+		// WithoutCancel + 超时：清理不能因为父 ctx 已取消就被跳过
+		// （那会留下运行中的 goroutine），但也不能无限期挂住启动流程
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
 		for _, fn := range shutdowns {
-			_ = fn(context.Background())
+			_ = fn(ctx)
 		}
 	}
 
 	tracerShutdown, err := setupTracing(ctx, cfg, res)
 	if err != nil {
-		rollback()
+		rollback(ctx)
 		return nil, err
 	}
 	if tracerShutdown != nil {
@@ -78,7 +82,7 @@ func Setup(ctx context.Context, cfg Config) (shutdown func(context.Context) erro
 
 	meterShutdown, err := setupMetrics(cfg, res)
 	if err != nil {
-		rollback()
+		rollback(ctx)
 		return nil, err
 	}
 	if meterShutdown != nil {

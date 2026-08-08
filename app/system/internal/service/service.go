@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/google/wire"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/eagle-go/eagle/app/system/internal/domain"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // ProviderSet 是 service 层的 wire provider 集合。
@@ -74,12 +74,4 @@ func ts(t time.Time) *timestamppb.Timestamp {
 		return nil
 	}
 	return timestamppb.New(t)
-}
-
-// tsPtr 处理可空时间（如 last_login_at）。
-func tsPtr(t *time.Time) *timestamppb.Timestamp {
-	if t == nil || t.IsZero() {
-		return nil
-	}
-	return timestamppb.New(*t)
 }

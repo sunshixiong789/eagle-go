@@ -90,7 +90,10 @@ func WithTx(ctx context.Context, client *ent.Client, fn func(tx *ent.Tx) error) 
 
 	if err := fn(tx); err != nil {
 		if rbErr := tx.Rollback(); rbErr != nil {
-			return fmt.Errorf("%w (rollback failed: %v)", err, rbErr)
+			// 两个错误都用 %w 包进去：回滚失败往往意味着连接已经断了，
+			// 上层可能要按「连接问题」而非「业务失败」来处理，
+			// 用 %v 会让 errors.Is 查不到它
+			return fmt.Errorf("%w (回滚也失败: %w)", err, rbErr)
 		}
 		return err
 	}

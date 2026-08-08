@@ -143,6 +143,18 @@ go test ./...
 go test -short ./...
 ```
 
+### 竞态检测（Windows 上的坑）
+
+CI 跑的是 `go test -race`，而 `-race` 依赖 cgo，需要 C 编译器。
+**Windows 上没装 gcc 时它跑不起来**，报 `-race requires cgo`。
+
+不想在本机装 MinGW 的话，用 Linux 容器跑（PostgreSQL 的 `initdb`
+拒绝 root，所以要建一个普通用户）：
+
+```bash
+docker run --rm -v "$PWD:/src" -w /src golang:1.26 sh -c 'useradd -m -u 1500 t && su t -c "cd /src && HOME=/home/t GOPATH=/home/t/go GOCACHE=/home/t/c go test -race ./..."'
+```
+
 ### 启动依赖与服务
 
 ```bash
