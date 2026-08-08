@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	kratoserrors "github.com/go-kratos/kratos/v3/errors"
 	"github.com/go-kratos/kratos/v3/middleware"
 	"github.com/go-kratos/kratos/v3/transport"
 
@@ -23,10 +24,20 @@ import (
 )
 
 // 认证相关错误。
+//
+// 这些是内部哨兵值，供 errors.Is 判定；它们不会直接出现在响应里，
+// 中间件会在传输层边界把它们翻译成带 reason 的 kratos 错误。
 var (
 	ErrInvalidToken = errors.New("authn: token 无效")
 	ErrTokenExpired = errors.New("authn: token 已过期")
 	ErrTokenRevoked = errors.New("authn: token 已被撤销")
+)
+
+// 认证失败的 reason，客户端据此决定「刷新 token」还是「重新登录」。
+const (
+	ReasonUnauthenticated = "UNAUTHENTICATED"
+	ReasonTokenExpired    = "TOKEN_EXPIRED"
+	ReasonTokenRevoked    = "TOKEN_REVOKED"
 )
 
 // Revocations 查询 token 是否已被撤销（登出、踢人、改密码）。
@@ -143,11 +154,31 @@ func Server(v *Verifier) middleware.Middleware {
 				// token 存在但无效：直接拒绝，不能降级成匿名继续走。
 				// 否则一个过期 token 会静默变成"未登录"，
 				// 让本该 401 的请求在 public 接口上悄悄成功。
-				return nil, err
+				return nil, toTransportError(err)
 			}
 
 			return handler(identity.NewContext(ctx, v.toPrincipal(claims)), req)
 		}
+	}
+}
+
+// toTransportError 把内部错误翻译成带状态码的传输层错误。
+//
+// 不做这层翻译的话，Kratos 会把无法识别的错误一律当成 500——
+// 于是「token 过期」在客户端看来和「服务端崩了」没有区别：
+// 前端不会去刷新 token，而监控里每个过期凭证都变成一次服务故障告警。
+//
+// 对外只给 reason，不透出内部错误文本：签名校验失败的具体原因
+// 对调用方没有价值，对探测者反而是线索。
+func toTransportError(err error) error {
+	switch {
+	case errors.Is(err, ErrTokenExpired):
+		// 单独给一个 reason：客户端据此走刷新流程而不是把用户踢回登录页
+		return kratoserrors.Unauthorized(ReasonTokenExpired, "登录已过期")
+	case errors.Is(err, ErrTokenRevoked):
+		return kratoserrors.Unauthorized(ReasonTokenRevoked, "凭证已失效，请重新登录")
+	default:
+		return kratoserrors.Unauthorized(ReasonUnauthenticated, "凭证无效")
 	}
 }
 

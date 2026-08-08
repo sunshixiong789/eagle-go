@@ -128,6 +128,15 @@ go test ./...
 集成测试用 [embedded-postgres](https://github.com/fergusstrange/embedded-postgres) 下载并在进程内拉起真实 PostgreSQL，
 跑 `db/migrations` 下的真实迁移；Redis 侧用 miniredis。首次运行会下载 PG 二进制（约 100MB），之后从本地缓存启动。
 
+端到端测试（`app/system/internal/e2e`）更进一步：真实 HTTP 服务器、
+与生产一致的中间件链，外加一个签发**真实 RS256 JWT** 的 Keycloak 替身——
+严格按 Keycloak 的 claim 结构下发，含 `realm_access.roles` 与
+`resource_access.<client>.roles`——据此验证完整的 401 / 403 / 200 语义。
+
+不用替身而直接构造 `Principal` 的话，最容易出错的一段恰好会被排除在测试之外：
+签名验证、claim 名拼写、角色的嵌套层级。这几处写错都不会报错，
+只会表现为「配了权限却还是 403」。
+
 跳过集成测试：
 
 ```bash
@@ -268,7 +277,8 @@ eagle-go/
 | Casbin 鉴权中间件 | ✅ 已验证（401/403/200、通配边界、角色继承、失败关闭） |
 | 可观测性（OTel 链路 + Prometheus 指标） | ✅ 已装配，配置解析有回归测试 |
 | 部署（Dockerfile · compose · Keycloak realm） | ✅ 已就绪 |
-| Keycloak 端到端联调 | 🚧 验签链路与 realm 配置已就绪，未对着真实 Keycloak 跑通 |
+| 端到端鉴权链路 | ✅ 真实 HTTP + 真实签名 JWT 验证 401/403/200 语义 |
+| 对接真实 Keycloak | 🚧 token 形状与验证路径已验证，签发流程（登录/授权码/刷新）未实跑 |
 | Helm chart · 生产部署 | 🚧 待完成 |
 
 ## 安全提示
