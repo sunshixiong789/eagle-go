@@ -2,10 +2,20 @@ syntax = "proto3";
 
 package eagle.system.conf;
 
+// 全部时长字段都用 Duration 而不是裸字符串/整数：类型在编译期就固定了单位，
+// 不会出现「这个数字到底是秒还是毫秒」的歧义。
+//
+// 但 YAML 里只认「数字 + s」这一种写法，如 3600s、0.5s。
+// Go 风格的 1h / 30m / 500ms 会在启动阶段解析失败，且报错信息只说
+// invalid google.protobuf.Duration value，不指向具体是哪个字段——
+// 这个坑真实踩过，见 app/system/configs/config.yaml 开头的说明
+// 和 conf_test.go 里挡住它的回归测试。
 import "google/protobuf/duration.proto";
 
 option go_package = "github.com/eagle-go/eagle/app/system/internal/conf;conf";
 
+// Bootstrap 是配置文件的根消息，对应 app/system/configs/config.yaml 的顶层结构：
+// 四个字段各是文件里的一个顶层 key（server/data/auth/observability）。
 message Bootstrap {
   Server server = 1;
   Data data = 2;
@@ -13,15 +23,23 @@ message Bootstrap {
   Observability observability = 4;
 }
 
+// Server 是 HTTP/gRPC 监听参数。
 message Server {
   message HTTP {
+    // 网络类型，如 tcp。留空即可——不设置时用 Kratos 的默认值，
+    // 只有 unix socket 这类特殊场景才需要显式指定。
     string network = 1;
+    // 监听地址，如 0.0.0.0:8000
     string addr = 2;
+    // 单次请求的处理超时，本项目默认 5s
     google.protobuf.Duration timeout = 3;
   }
   message GRPC {
+    // 网络类型，如 tcp。留空即可，同 HTTP.network
     string network = 1;
+    // 监听地址，如 0.0.0.0:9000
     string addr = 2;
+    // 单次请求的处理超时，本项目默认 5s
     google.protobuf.Duration timeout = 3;
   }
   HTTP http = 1;
@@ -32,17 +50,29 @@ message Data {
   message Database {
     // pgx 连接串，如 postgres://user:pass@host:5432/db?sslmode=disable
     string dsn = 1;
+    // 连接池上限。开发环境 20 足够，生产按并发量调
     int32 max_conns = 2;
+    // 连接池常驻的最小连接数，避免每次冷启动都重新握手
     int32 min_conns = 3;
+    // 单个连接的最长存活时间，到点后即使空闲也会被回收重建，
+    // 避免连接长期存活后遇到的数据库侧超时/负载均衡漂移问题
     google.protobuf.Duration max_conn_lifetime = 4;
+    // 连接空闲超过这个时长就会被释放，回收长期没人用的连接
     google.protobuf.Duration max_conn_idle_time = 5;
   }
   message Redis {
+    // 形如 host:port，如 127.0.0.1:6379
     string addr = 1;
+    // 未设密码的实例留空
     string password = 2;
+    // Redis 逻辑库编号，默认 0
     int32 db = 3;
+    // 建立连接的超时
     google.protobuf.Duration dial_timeout = 4;
+    // 单次读操作的超时。鉴权链路上的撤销检查会经过这里，
+    // 值太大会拖慢每个请求；本项目默认 0.5s
     google.protobuf.Duration read_timeout = 5;
+    // 单次写操作的超时，默认 0.5s
     google.protobuf.Duration write_timeout = 6;
   }
   Database database = 1;

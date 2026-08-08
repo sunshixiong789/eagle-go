@@ -22,6 +22,8 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// Bootstrap 是配置文件的根消息，对应 app/system/configs/config.yaml 的顶层结构：
+// 四个字段各是文件里的一个顶层 key（server/data/auth/observability）。
 type Bootstrap struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Server        *Server                `protobuf:"bytes,1,opt,name=server,proto3" json:"server,omitempty"`
@@ -90,6 +92,7 @@ func (x *Bootstrap) GetObservability() *Observability {
 	return nil
 }
 
+// Server 是 HTTP/gRPC 监听参数。
 type Server struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Http          *Server_HTTP           `protobuf:"bytes,1,opt,name=http,proto3" json:"http,omitempty"`
@@ -369,10 +372,14 @@ func (x *Observability) GetMetricsAddr() string {
 }
 
 type Server_HTTP struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Network       string                 `protobuf:"bytes,1,opt,name=network,proto3" json:"network,omitempty"`
-	Addr          string                 `protobuf:"bytes,2,opt,name=addr,proto3" json:"addr,omitempty"`
-	Timeout       *durationpb.Duration   `protobuf:"bytes,3,opt,name=timeout,proto3" json:"timeout,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 网络类型，如 tcp。留空即可——不设置时用 Kratos 的默认值，
+	// 只有 unix socket 这类特殊场景才需要显式指定。
+	Network string `protobuf:"bytes,1,opt,name=network,proto3" json:"network,omitempty"`
+	// 监听地址，如 0.0.0.0:8000
+	Addr string `protobuf:"bytes,2,opt,name=addr,proto3" json:"addr,omitempty"`
+	// 单次请求的处理超时，本项目默认 5s
+	Timeout       *durationpb.Duration `protobuf:"bytes,3,opt,name=timeout,proto3" json:"timeout,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -429,10 +436,13 @@ func (x *Server_HTTP) GetTimeout() *durationpb.Duration {
 }
 
 type Server_GRPC struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Network       string                 `protobuf:"bytes,1,opt,name=network,proto3" json:"network,omitempty"`
-	Addr          string                 `protobuf:"bytes,2,opt,name=addr,proto3" json:"addr,omitempty"`
-	Timeout       *durationpb.Duration   `protobuf:"bytes,3,opt,name=timeout,proto3" json:"timeout,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 网络类型，如 tcp。留空即可，同 HTTP.network
+	Network string `protobuf:"bytes,1,opt,name=network,proto3" json:"network,omitempty"`
+	// 监听地址，如 0.0.0.0:9000
+	Addr string `protobuf:"bytes,2,opt,name=addr,proto3" json:"addr,omitempty"`
+	// 单次请求的处理超时，本项目默认 5s
+	Timeout       *durationpb.Duration `protobuf:"bytes,3,opt,name=timeout,proto3" json:"timeout,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -491,10 +501,15 @@ func (x *Server_GRPC) GetTimeout() *durationpb.Duration {
 type Data_Database struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// pgx 连接串，如 postgres://user:pass@host:5432/db?sslmode=disable
-	Dsn             string               `protobuf:"bytes,1,opt,name=dsn,proto3" json:"dsn,omitempty"`
-	MaxConns        int32                `protobuf:"varint,2,opt,name=max_conns,json=maxConns,proto3" json:"max_conns,omitempty"`
-	MinConns        int32                `protobuf:"varint,3,opt,name=min_conns,json=minConns,proto3" json:"min_conns,omitempty"`
+	Dsn string `protobuf:"bytes,1,opt,name=dsn,proto3" json:"dsn,omitempty"`
+	// 连接池上限。开发环境 20 足够，生产按并发量调
+	MaxConns int32 `protobuf:"varint,2,opt,name=max_conns,json=maxConns,proto3" json:"max_conns,omitempty"`
+	// 连接池常驻的最小连接数，避免每次冷启动都重新握手
+	MinConns int32 `protobuf:"varint,3,opt,name=min_conns,json=minConns,proto3" json:"min_conns,omitempty"`
+	// 单个连接的最长存活时间，到点后即使空闲也会被回收重建，
+	// 避免连接长期存活后遇到的数据库侧超时/负载均衡漂移问题
 	MaxConnLifetime *durationpb.Duration `protobuf:"bytes,4,opt,name=max_conn_lifetime,json=maxConnLifetime,proto3" json:"max_conn_lifetime,omitempty"`
+	// 连接空闲超过这个时长就会被释放，回收长期没人用的连接
 	MaxConnIdleTime *durationpb.Duration `protobuf:"bytes,5,opt,name=max_conn_idle_time,json=maxConnIdleTime,proto3" json:"max_conn_idle_time,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
@@ -566,13 +581,20 @@ func (x *Data_Database) GetMaxConnIdleTime() *durationpb.Duration {
 }
 
 type Data_Redis struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Addr          string                 `protobuf:"bytes,1,opt,name=addr,proto3" json:"addr,omitempty"`
-	Password      string                 `protobuf:"bytes,2,opt,name=password,proto3" json:"password,omitempty"`
-	Db            int32                  `protobuf:"varint,3,opt,name=db,proto3" json:"db,omitempty"`
-	DialTimeout   *durationpb.Duration   `protobuf:"bytes,4,opt,name=dial_timeout,json=dialTimeout,proto3" json:"dial_timeout,omitempty"`
-	ReadTimeout   *durationpb.Duration   `protobuf:"bytes,5,opt,name=read_timeout,json=readTimeout,proto3" json:"read_timeout,omitempty"`
-	WriteTimeout  *durationpb.Duration   `protobuf:"bytes,6,opt,name=write_timeout,json=writeTimeout,proto3" json:"write_timeout,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 形如 host:port，如 127.0.0.1:6379
+	Addr string `protobuf:"bytes,1,opt,name=addr,proto3" json:"addr,omitempty"`
+	// 未设密码的实例留空
+	Password string `protobuf:"bytes,2,opt,name=password,proto3" json:"password,omitempty"`
+	// Redis 逻辑库编号，默认 0
+	Db int32 `protobuf:"varint,3,opt,name=db,proto3" json:"db,omitempty"`
+	// 建立连接的超时
+	DialTimeout *durationpb.Duration `protobuf:"bytes,4,opt,name=dial_timeout,json=dialTimeout,proto3" json:"dial_timeout,omitempty"`
+	// 单次读操作的超时。鉴权链路上的撤销检查会经过这里，
+	// 值太大会拖慢每个请求；本项目默认 0.5s
+	ReadTimeout *durationpb.Duration `protobuf:"bytes,5,opt,name=read_timeout,json=readTimeout,proto3" json:"read_timeout,omitempty"`
+	// 单次写操作的超时，默认 0.5s
+	WriteTimeout  *durationpb.Duration `protobuf:"bytes,6,opt,name=write_timeout,json=writeTimeout,proto3" json:"write_timeout,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }

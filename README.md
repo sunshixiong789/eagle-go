@@ -4,6 +4,9 @@ Go 微服务基础架子，对标 eagle cloud（Java 版）的系统底座：**�
 
 **Kratos v3** · **ent** · **Keycloak** · **Casbin** · PostgreSQL 17。
 
+第一次接触这个项目、想从零手把手跑起来的，看 [GETTING_STARTED.md](GETTING_STARTED.md)。
+本文档默认你已经熟悉 Go / Kratos / DDD，讲的是"为什么这么设计"。
+
 ---
 
 ## 架构
