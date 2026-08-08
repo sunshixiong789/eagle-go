@@ -63,10 +63,20 @@ func TestMain(m *testing.M) {
 }
 
 func run(m *testing.M) (int, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return 0, fmt.Errorf("定位用户目录: %w", err)
+	}
+	// 独立于其他测试包的运行目录：go test ./... 并行执行不同包，
+	// 共用解压目录会互相踩（详见 data 包 main_test.go 的说明）
+	runtimeDir := filepath.Join(home, ".embedded-postgres-go", "eagle-e2e")
+
 	testPG = embeddedpostgres.NewDatabase(
 		embeddedpostgres.DefaultConfig().
 			Username("eagle").Password("eagle").Database("eagle_e2e").
 			Port(testPGPort).
+			RuntimePath(runtimeDir).
+			DataPath(filepath.Join(runtimeDir, "data")).
 			Logger(io.Discard),
 	)
 	if err := testPG.Start(); err != nil {
@@ -81,7 +91,6 @@ func run(m *testing.M) (int, error) {
 		return 0, err
 	}
 
-	var err error
 	testRedis, err = miniredis.Run()
 	if err != nil {
 		return 0, fmt.Errorf("启动 miniredis: %w", err)

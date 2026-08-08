@@ -41,6 +41,10 @@ func NewVerifier(c *conf.Auth, rdb *redis.Client) *authn.Verifier {
 			Issuer:   c.GetIssuer(),
 			ClientID: c.GetClientId(),
 			Audience: c.GetAudience(),
+			// 留空时 authn 会按 Keycloak 约定从 issuer 推导。
+			// 容器/K8s 里通常要显式指定：token 里的公开 issuer
+			// 与本服务可达的集群内地址往往不是同一个。
+			JWKSURL: c.GetJwksUrl(),
 		},
 		authn.NewRedisRevocations(rdb),
 	)

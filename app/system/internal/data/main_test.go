@@ -51,13 +51,39 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+// isolatedRuntimePath 为当前测试包分配独立的 embedded-postgres 运行目录。
+//
+// 放在用户缓存目录下而不是系统临时目录：解压出来的 PG 二进制有上百 MB，
+// 复用同一位置可以避免每次测试都重新解压。
+func isolatedRuntimePath(pkg string) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("定位用户目录: %w", err)
+	}
+	return filepath.Join(home, ".embedded-postgres-go", "eagle-"+pkg), nil
+}
+
 func runWithFixtures(m *testing.M) (int, error) {
+	runtimeDir, err := isolatedRuntimePath("data")
+	if err != nil {
+		return 0, err
+	}
+
 	pg := embeddedpostgres.NewDatabase(
 		embeddedpostgres.DefaultConfig().
 			Username("eagle").
 			Password("eagle").
 			Database("eagle_test").
 			Port(testPGPort).
+			// 每个测试包必须有独立的解压/数据目录。
+			//
+			// go test ./... 会并行跑不同包的测试二进制，而 embedded-postgres
+			// 默认把二进制解压到同一个 ~/.embedded-postgres-go/extracted。
+			// 多个包同时解压和清理会互相踩，症状是 initdb 报共享文件缺失
+			// 或 "directory is not empty"——看起来像数据库坏了，实际是测试
+			// 基础设施的竞态。只隔离端口不够。
+			RuntimePath(runtimeDir).
+			DataPath(filepath.Join(runtimeDir, "data")).
 			// 默认会把日志打到 stdout，淹没测试输出
 			Logger(io.Discard),
 	)

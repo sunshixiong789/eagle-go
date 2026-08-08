@@ -69,6 +69,16 @@ message Auth {
 
   // 拥有该角色的主体跳过 Casbin 判定
   string super_admin_role = 5;
+
+  // 拉取 JWKS 的地址，留空则按 Keycloak 约定推导为
+  // <issuer>/protocol/openid-connect/certs
+  //
+  // 之所以能与 issuer 分开配：容器与 K8s 里，token 里的公开 issuer
+  // （https://sso.example.com/realms/eagle）几乎从不等于本服务该走的
+  // 集群内地址（http://keycloak.default.svc:8080/realms/eagle）。
+  // 两者不分开就只能二选一——要么让内网流量绕到公网再回来，
+  // 要么放弃 iss 校验。
+  string jwks_url = 6;
 }
 
 message Observability {

@@ -7,6 +7,9 @@
   "ssoSessionIdleTimeout": 1800,
   "ssoSessionMaxLifespan": 36000,
 
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+
   "sslRequired": "none",
   "registrationAllowed": false,
   "bruteForceProtected": true,

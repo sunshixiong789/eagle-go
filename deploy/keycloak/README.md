@@ -22,6 +22,27 @@ ERROR: Unrecognized field "_comment_ttl" (class RealmRepresentation), not marked
 黑名单，而黑名单只需保留到 token 自然过期为止。TTL 越长，黑名单占用越久、
 被撤销的凭证可用窗口也越长。
 
+### refresh token 必须一次性使用
+
+```json
+"revokeRefreshToken": true,
+"refreshTokenMaxReuse": 0
+```
+
+**这两项默认是关的，关着就是一个真实的安全缺口。**
+
+默认行为下 Keycloak 每次续期都会下发新的 refresh token，但**旧的仍然有效**。
+于是 refresh token 一旦从浏览器存储、日志或代理中泄漏，攻击者可以在整个
+`refresh_expires_in` 窗口内反复换取新的 access token，而合法用户毫无察觉。
+
+`eagle-web` 是公共客户端（SPA，无法保存 secret），OAuth 2.0 Security BCP
+对这类客户端明确要求 refresh token 一次性使用并具备重放检测能力。开启后，
+一个已被用过的 refresh token 再次出现会被判定为重放，Keycloak 直接作废
+整个会话——这正是发现令牌被盗的手段。
+
+代价：客户端必须每次都保存续期返回的新 refresh token。用旧的会被拒，
+这是预期行为而非故障。
+
 ### 客户端
 
 | clientId | 用途 | 关键配置 |

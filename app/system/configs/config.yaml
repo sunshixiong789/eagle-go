@@ -52,9 +52,13 @@ auth:
   super_admin_role: admin
 
 observability:
-  # 留空则不上报链路，服务照常运行。
-  # 本地要看链路：docker compose --profile obs up -d 后填 127.0.0.1:4317
-  otlp_endpoint: ""
+  # 指向本地 obs profile 里的 OTel Collector。
+  #
+  # 默认就填上而不是留空：留空会让「启动了 obs 栈却看不到链路」成为
+  # 一个需要翻文档才能解开的坑。collector 不在时导出器只在后台静默重试，
+  # 实测服务照常启动、接口照常响应、日志零噪音，因此填着没有副作用。
+  # 完全不想上报时置空即可。
+  otlp_endpoint: "127.0.0.1:4317"
   # 开发期全采样；生产建议降到 0.01~0.1
   trace_sample_ratio: 1.0
   log_level: info

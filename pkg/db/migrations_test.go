@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -24,12 +25,21 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	}
 	flag.Parse()
 
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("定位用户目录: %v", err)
+	}
+	// 独立运行目录，避免与其他测试包并行时争抢解压目录
+	runtimeDir := filepath.Join(home, ".embedded-postgres-go", "eagle-migrations")
+
 	pg := embeddedpostgres.NewDatabase(
 		embeddedpostgres.DefaultConfig().
 			Username("eagle").
 			Password("eagle").
 			Database("eagle_migrate_test").
 			Port(migrationTestPort).
+			RuntimePath(runtimeDir).
+			DataPath(filepath.Join(runtimeDir, "data")).
 			Logger(io.Discard),
 	)
 	if err := pg.Start(); err != nil {

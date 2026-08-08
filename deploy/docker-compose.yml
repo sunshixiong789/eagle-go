@@ -65,7 +65,7 @@ services:
   # 可观测性栈：默认不启动，需要时
   #   docker compose --profile obs up -d
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:latest
+    image: otel/opentelemetry-collector-contrib:0.121.0
     container_name: eagle-otel
     profiles: ["obs"]
     command: ["--config=/etc/otel/config.yaml"]
@@ -78,7 +78,7 @@ services:
       - tempo
 
   tempo:
-    image: grafana/tempo:latest
+    image: grafana/tempo:2.7.2
     container_name: eagle-tempo
     profiles: ["obs"]
     command: ["-config.file=/etc/tempo/tempo.yaml"]
@@ -88,7 +88,7 @@ services:
       - "3200:3200"
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.2.1
     container_name: eagle-prometheus
     profiles: ["obs"]
     volumes:
@@ -97,7 +97,7 @@ services:
       - "9090:9090"
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.6.0
     container_name: eagle-grafana
     profiles: ["obs"]
     environment:

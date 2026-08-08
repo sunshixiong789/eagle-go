@@ -211,8 +211,17 @@ type Auth struct {
 	DictCacheTtl *durationpb.Duration `protobuf:"bytes,4,opt,name=dict_cache_ttl,json=dictCacheTtl,proto3" json:"dict_cache_ttl,omitempty"`
 	// 拥有该角色的主体跳过 Casbin 判定
 	SuperAdminRole string `protobuf:"bytes,5,opt,name=super_admin_role,json=superAdminRole,proto3" json:"super_admin_role,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// 拉取 JWKS 的地址，留空则按 Keycloak 约定推导为
+	// <issuer>/protocol/openid-connect/certs
+	//
+	// 之所以能与 issuer 分开配：容器与 K8s 里，token 里的公开 issuer
+	// （https://sso.example.com/realms/eagle）几乎从不等于本服务该走的
+	// 集群内地址（http://keycloak.default.svc:8080/realms/eagle）。
+	// 两者不分开就只能二选一——要么让内网流量绕到公网再回来，
+	// 要么放弃 iss 校验。
+	JwksUrl       string `protobuf:"bytes,6,opt,name=jwks_url,json=jwksUrl,proto3" json:"jwks_url,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Auth) Reset() {
@@ -276,6 +285,13 @@ func (x *Auth) GetDictCacheTtl() *durationpb.Duration {
 func (x *Auth) GetSuperAdminRole() string {
 	if x != nil {
 		return x.SuperAdminRole
+	}
+	return ""
+}
+
+func (x *Auth) GetJwksUrl() string {
+	if x != nil {
+		return x.JwksUrl
 	}
 	return ""
 }
@@ -669,13 +685,14 @@ const file_system_internal_conf_conf_proto_rawDesc = "" +
 	"\x02db\x18\x03 \x01(\x05R\x02db\x12<\n" +
 	"\fdial_timeout\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\vdialTimeout\x12<\n" +
 	"\fread_timeout\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\vreadTimeout\x12>\n" +
-	"\rwrite_timeout\x18\x06 \x01(\v2\x19.google.protobuf.DurationR\fwriteTimeout\"\xc2\x01\n" +
+	"\rwrite_timeout\x18\x06 \x01(\v2\x19.google.protobuf.DurationR\fwriteTimeout\"\xdd\x01\n" +
 	"\x04Auth\x12\x16\n" +
 	"\x06issuer\x18\x01 \x01(\tR\x06issuer\x12\x1b\n" +
 	"\tclient_id\x18\x02 \x01(\tR\bclientId\x12\x1a\n" +
 	"\baudience\x18\x03 \x01(\tR\baudience\x12?\n" +
 	"\x0edict_cache_ttl\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\fdictCacheTtl\x12(\n" +
-	"\x10super_admin_role\x18\x05 \x01(\tR\x0esuperAdminRole\"\xa2\x01\n" +
+	"\x10super_admin_role\x18\x05 \x01(\tR\x0esuperAdminRole\x12\x19\n" +
+	"\bjwks_url\x18\x06 \x01(\tR\ajwksUrl\"\xa2\x01\n" +
 	"\rObservability\x12#\n" +
 	"\rotlp_endpoint\x18\x01 \x01(\tR\fotlpEndpoint\x12,\n" +
 	"\x12trace_sample_ratio\x18\x02 \x01(\x01R\x10traceSampleRatio\x12\x1b\n" +
