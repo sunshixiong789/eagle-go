@@ -11,7 +11,6 @@ init:
 	go install github.com/google/wire/cmd/wire@v0.7.0
 	go install github.com/bufbuild/buf/cmd/buf@latest
 	go install github.com/pressly/goose/v3/cmd/goose@v3.27.3
-	go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 
 .PHONY: api
@@ -30,16 +29,12 @@ lint-proto:
 	buf lint
 	buf breaking --against '.git#branch=main'
 
-.PHONY: sqlc
-# 由 db/query/*.sql 生成类型安全的数据访问代码
-sqlc:
-	cd db && sqlc generate
-
 .PHONY: wire
 # 生成依赖注入代码
 wire:
 	cd app/system/cmd/server && wire
-	cd app/auth/cmd/server && wire
+	# app/auth 服务开工后取消下一行注释
+	# cd app/auth/cmd/server && wire
 
 .PHONY: migrate-up
 # 执行数据库迁移
@@ -56,8 +51,8 @@ migrate-status:
 	goose -dir db/migrations postgres "$(EAGLE_DSN)" status
 
 .PHONY: generate
-# 全量生成：proto + 配置 + sqlc + wire
-generate: api config sqlc wire
+# 全量生成：proto + 配置 + wire
+generate: api config wire
 	go mod tidy
 
 .PHONY: build

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/go-kratos/kratos/v3/log"
@@ -29,6 +30,7 @@ var ProviderSet = wire.NewSet(
 	NewEntClient,
 	NewRedisClient,
 	NewEnforcer,
+	NewPolicyWatcher,
 	NewPolicyRepo,
 	NewPermissionRepo,
 	NewDictRepo,
@@ -100,6 +102,37 @@ func NewRedisClient(d *Data) *redis.Client { return d.rdb }
 // NewEnforcer 构造 Casbin 判定器，策略存储复用项目自身的 ent 客户端。
 func NewEnforcer(client *ent.Client) (*authz.Enforcer, error) {
 	return authz.NewEnforcer(authz.NewEntAdapter(client))
+}
+
+// NewPolicyWatcher 构造策略广播器，并在后台启动订阅循环，
+// 使多副本部署下各实例的内存 Casbin 模型保持同步。
+//
+// 没有这层同步，SetRolePermissions 只更新处理该次请求的那个副本：
+// 后台改角色权限只有命中的副本立即生效，其余副本要等进程重启才追上，
+// 且不会有任何报错——只会表现为「改了权限，一部分用户生效一部分不生效」。
+//
+// 返回的 cleanup 停止订阅循环并等它真正退出，由 wire 串进应用退出流程。
+//
+// 等待退出而不是取消了事：cleanup 之间是有序的（wire 按构造的反序执行），
+// cleanup 一返回，后续 cleanup 就可能去关数据库连接池。如果这里只是
+// cancel 而不等 goroutine 真正停下来，它手上可能还有一次正在跑的
+// ReloadPolicy，会撞上刚被关闭的连接——现象是退出时打一条无害但唬人的
+// 错误日志。等 goroutine 确认退出后再返回，就不存在这个时间窗口。
+func NewPolicyWatcher(rdb *redis.Client, enforcer *authz.Enforcer, logger *slog.Logger) (*authz.RedisWatcher, func(), error) {
+	w := authz.NewRedisWatcher(rdb, "", logger)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		w.Watch(ctx, enforcer)
+	}()
+
+	cleanup := func() {
+		cancel()
+		<-done
+	}
+	return w, cleanup, nil
 }
 
 func orDefault(v, def time.Duration) time.Duration {

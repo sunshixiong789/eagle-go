@@ -19,11 +19,14 @@ import (
 type policyRepo struct {
 	enforcer *authz.Enforcer
 	client   *ent.Client
+	// watcher 在策略变更后广播给其它副本，使它们重载内存中的 Casbin 模型。
+	// 允许为 nil（Notify 对 nil receiver 安全），单副本场景/部分测试不必装配它。
+	watcher *authz.RedisWatcher
 }
 
 // NewPolicyRepo 构造策略仓储。
-func NewPolicyRepo(enforcer *authz.Enforcer, client *ent.Client) domain.PolicyRepo {
-	return &policyRepo{enforcer: enforcer, client: client}
+func NewPolicyRepo(enforcer *authz.Enforcer, client *ent.Client, watcher *authz.RedisWatcher) domain.PolicyRepo {
+	return &policyRepo{enforcer: enforcer, client: client, watcher: watcher}
 }
 
 func (r *policyRepo) Allow(_ context.Context, roles []domain.Role, perm domain.PermissionCode) (bool, error) {
@@ -46,7 +49,11 @@ func (r *policyRepo) FindBinding(ctx context.Context, role domain.Role) (*domain
 }
 
 func (r *policyRepo) SaveBinding(ctx context.Context, b *domain.RoleBinding) error {
-	return r.enforcer.SetRolePermissions(ctx, b.Role().String(), b.CodeStrings())
+	if err := r.enforcer.SetRolePermissions(ctx, b.Role().String(), b.CodeStrings()); err != nil {
+		return err
+	}
+	r.watcher.Notify(ctx)
+	return nil
 }
 
 func (r *policyRepo) ResolveCodes(ctx context.Context, roles []domain.Role) ([]domain.PermissionCode, error) {
@@ -58,7 +65,11 @@ func (r *policyRepo) ResolveCodes(ctx context.Context, roles []domain.Role) ([]d
 }
 
 func (r *policyRepo) SaveInheritance(ctx context.Context, ri domain.RoleInheritance) error {
-	return r.enforcer.AddRoleInheritance(ctx, ri.Child.String(), ri.Parent.String())
+	if err := r.enforcer.AddRoleInheritance(ctx, ri.Child.String(), ri.Parent.String()); err != nil {
+		return err
+	}
+	r.watcher.Notify(ctx)
+	return nil
 }
 
 // ListBoundRoles 列出已配置过权限的角色。

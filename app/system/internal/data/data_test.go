@@ -212,7 +212,9 @@ func newTestPolicyStore(t *testing.T) domain.PolicyRepo {
 	if err != nil {
 		t.Fatalf("NewEnforcer: %v", err)
 	}
-	return NewPolicyRepo(enforcer, testData.client)
+	// 本用例只关心单副本内的策略仓储行为，不需要装配广播器；
+	// nil watcher 是合法值（Notify 对 nil receiver 安全）。
+	return NewPolicyRepo(enforcer, testData.client, nil)
 }
 
 // mustRoles 构造角色值对象切片。

@@ -200,8 +200,14 @@ func newTestEnv(t *testing.T) *testEnv {
 		t.Fatalf("构造中间件链: %v", err)
 	}
 
+	watcher, watcherCleanup, err := data.NewPolicyWatcher(rdb, enforcer, logger)
+	if err != nil {
+		t.Fatalf("构造策略广播器: %v", err)
+	}
+	t.Cleanup(watcherCleanup)
+
 	permRepo := data.NewPermissionRepo(d)
-	policyRepo := data.NewPolicyRepo(enforcer, entClient)
+	policyRepo := data.NewPolicyRepo(enforcer, entClient, watcher)
 	dictRepo := data.NewDictRepo(d)
 
 	permSvc := service.NewPermissionService(biz.NewPermissionUsecase(permRepo, policyRepo))

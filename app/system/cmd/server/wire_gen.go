@@ -42,7 +42,12 @@ func wireApp(confServer *conf.Server, confData *conf.Data, auth *conf.Auth, obse
 		return nil, nil, err
 	}
 	permissionRepo := data.NewPermissionRepo(dataData)
-	policyRepo := data.NewPolicyRepo(enforcer, entClient)
+	redisWatcher, cleanup2, err := data.NewPolicyWatcher(client, enforcer, logger)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	policyRepo := data.NewPolicyRepo(enforcer, entClient, redisWatcher)
 	permissionUsecase := biz.NewPermissionUsecase(permissionRepo, policyRepo)
 	permissionService := service.NewPermissionService(permissionUsecase)
 	dictRepo := data.NewDictRepo(dataData)
@@ -54,6 +59,7 @@ func wireApp(confServer *conf.Server, confData *conf.Data, auth *conf.Auth, obse
 	httpServer := server.NewHTTPServer(confServer, v, permissionService, dictService, roleBindingService)
 	app := newApp(logger, grpcServer, httpServer)
 	return app, func() {
+		cleanup2()
 		cleanup()
 	}, nil
 }
