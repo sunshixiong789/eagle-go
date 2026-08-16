@@ -28,12 +28,8 @@ type Tx struct {
 	PermissionTreeState *PermissionTreeStateClient
 	// PolicyAudit is the client for interacting with the PolicyAudit builders.
 	PolicyAudit *PolicyAuditClient
-	// PolicyOutbox is the client for interacting with the PolicyOutbox builders.
-	PolicyOutbox *PolicyOutboxClient
 	// PolicyState is the client for interacting with the PolicyState builders.
 	PolicyState *PolicyStateClient
-	// UserProfile is the client for interacting with the UserProfile builders.
-	UserProfile *UserProfileClient
 
 	// lazily loaded.
 	client     *Client
@@ -172,9 +168,7 @@ func (tx *Tx) init() {
 	tx.PermissionDefinition = NewPermissionDefinitionClient(tx.config)
 	tx.PermissionTreeState = NewPermissionTreeStateClient(tx.config)
 	tx.PolicyAudit = NewPolicyAuditClient(tx.config)
-	tx.PolicyOutbox = NewPolicyOutboxClient(tx.config)
 	tx.PolicyState = NewPolicyStateClient(tx.config)
-	tx.UserProfile = NewUserProfileClient(tx.config)
 }
 
 // txDriver wraps the given dialect.Tx with a nop dialect.Driver implementation.

@@ -21,9 +21,7 @@ import (
 	"github.com/eagle-go/eagle/ent/permissiondefinition"
 	"github.com/eagle-go/eagle/ent/permissiontreestate"
 	"github.com/eagle-go/eagle/ent/policyaudit"
-	"github.com/eagle-go/eagle/ent/policyoutbox"
 	"github.com/eagle-go/eagle/ent/policystate"
-	"github.com/eagle-go/eagle/ent/userprofile"
 
 	stdsql "database/sql"
 )
@@ -47,12 +45,8 @@ type Client struct {
 	PermissionTreeState *PermissionTreeStateClient
 	// PolicyAudit is the client for interacting with the PolicyAudit builders.
 	PolicyAudit *PolicyAuditClient
-	// PolicyOutbox is the client for interacting with the PolicyOutbox builders.
-	PolicyOutbox *PolicyOutboxClient
 	// PolicyState is the client for interacting with the PolicyState builders.
 	PolicyState *PolicyStateClient
-	// UserProfile is the client for interacting with the UserProfile builders.
-	UserProfile *UserProfileClient
 }
 
 // NewClient creates a new client configured with the given options.
@@ -71,9 +65,7 @@ func (c *Client) init() {
 	c.PermissionDefinition = NewPermissionDefinitionClient(c.config)
 	c.PermissionTreeState = NewPermissionTreeStateClient(c.config)
 	c.PolicyAudit = NewPolicyAuditClient(c.config)
-	c.PolicyOutbox = NewPolicyOutboxClient(c.config)
 	c.PolicyState = NewPolicyStateClient(c.config)
-	c.UserProfile = NewUserProfileClient(c.config)
 }
 
 type (
@@ -173,9 +165,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		PermissionDefinition: NewPermissionDefinitionClient(cfg),
 		PermissionTreeState:  NewPermissionTreeStateClient(cfg),
 		PolicyAudit:          NewPolicyAuditClient(cfg),
-		PolicyOutbox:         NewPolicyOutboxClient(cfg),
 		PolicyState:          NewPolicyStateClient(cfg),
-		UserProfile:          NewUserProfileClient(cfg),
 	}, nil
 }
 
@@ -202,9 +192,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		PermissionDefinition: NewPermissionDefinitionClient(cfg),
 		PermissionTreeState:  NewPermissionTreeStateClient(cfg),
 		PolicyAudit:          NewPolicyAuditClient(cfg),
-		PolicyOutbox:         NewPolicyOutboxClient(cfg),
 		PolicyState:          NewPolicyStateClient(cfg),
-		UserProfile:          NewUserProfileClient(cfg),
 	}, nil
 }
 
@@ -235,8 +223,7 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.CasbinRule, c.DictData, c.DictType, c.Permission, c.PermissionDefinition,
-		c.PermissionTreeState, c.PolicyAudit, c.PolicyOutbox, c.PolicyState,
-		c.UserProfile,
+		c.PermissionTreeState, c.PolicyAudit, c.PolicyState,
 	} {
 		n.Use(hooks...)
 	}
@@ -247,8 +234,7 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.CasbinRule, c.DictData, c.DictType, c.Permission, c.PermissionDefinition,
-		c.PermissionTreeState, c.PolicyAudit, c.PolicyOutbox, c.PolicyState,
-		c.UserProfile,
+		c.PermissionTreeState, c.PolicyAudit, c.PolicyState,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -271,12 +257,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.PermissionTreeState.mutate(ctx, m)
 	case *PolicyAuditMutation:
 		return c.PolicyAudit.mutate(ctx, m)
-	case *PolicyOutboxMutation:
-		return c.PolicyOutbox.mutate(ctx, m)
 	case *PolicyStateMutation:
 		return c.PolicyState.mutate(ctx, m)
-	case *UserProfileMutation:
-		return c.UserProfile.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
 	}
@@ -1213,139 +1195,6 @@ func (c *PolicyAuditClient) mutate(ctx context.Context, m *PolicyAuditMutation) 
 	}
 }
 
-// PolicyOutboxClient is a client for the PolicyOutbox schema.
-type PolicyOutboxClient struct {
-	config
-}
-
-// NewPolicyOutboxClient returns a client for the PolicyOutbox from the given config.
-func NewPolicyOutboxClient(c config) *PolicyOutboxClient {
-	return &PolicyOutboxClient{config: c}
-}
-
-// Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `policyoutbox.Hooks(f(g(h())))`.
-func (c *PolicyOutboxClient) Use(hooks ...Hook) {
-	c.hooks.PolicyOutbox = append(c.hooks.PolicyOutbox, hooks...)
-}
-
-// Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `policyoutbox.Intercept(f(g(h())))`.
-func (c *PolicyOutboxClient) Intercept(interceptors ...Interceptor) {
-	c.inters.PolicyOutbox = append(c.inters.PolicyOutbox, interceptors...)
-}
-
-// Create returns a builder for creating a PolicyOutbox entity.
-func (c *PolicyOutboxClient) Create() *PolicyOutboxCreate {
-	mutation := newPolicyOutboxMutation(c.config, OpCreate)
-	return &PolicyOutboxCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// CreateBulk returns a builder for creating a bulk of PolicyOutbox entities.
-func (c *PolicyOutboxClient) CreateBulk(builders ...*PolicyOutboxCreate) *PolicyOutboxCreateBulk {
-	return &PolicyOutboxCreateBulk{config: c.config, builders: builders}
-}
-
-// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
-// a builder and applies setFunc on it.
-func (c *PolicyOutboxClient) MapCreateBulk(slice any, setFunc func(*PolicyOutboxCreate, int)) *PolicyOutboxCreateBulk {
-	rv := reflect.ValueOf(slice)
-	if rv.Kind() != reflect.Slice {
-		return &PolicyOutboxCreateBulk{err: fmt.Errorf("calling to PolicyOutboxClient.MapCreateBulk with wrong type %T, need slice", slice)}
-	}
-	builders := make([]*PolicyOutboxCreate, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
-		builders[i] = c.Create()
-		setFunc(builders[i], i)
-	}
-	return &PolicyOutboxCreateBulk{config: c.config, builders: builders}
-}
-
-// Update returns an update builder for PolicyOutbox.
-func (c *PolicyOutboxClient) Update() *PolicyOutboxUpdate {
-	mutation := newPolicyOutboxMutation(c.config, OpUpdate)
-	return &PolicyOutboxUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOne returns an update builder for the given entity.
-func (c *PolicyOutboxClient) UpdateOne(_m *PolicyOutbox) *PolicyOutboxUpdateOne {
-	mutation := newPolicyOutboxMutation(c.config, OpUpdateOne, withPolicyOutbox(_m))
-	return &PolicyOutboxUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOneID returns an update builder for the given id.
-func (c *PolicyOutboxClient) UpdateOneID(id int64) *PolicyOutboxUpdateOne {
-	mutation := newPolicyOutboxMutation(c.config, OpUpdateOne, withPolicyOutboxID(id))
-	return &PolicyOutboxUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// Delete returns a delete builder for PolicyOutbox.
-func (c *PolicyOutboxClient) Delete() *PolicyOutboxDelete {
-	mutation := newPolicyOutboxMutation(c.config, OpDelete)
-	return &PolicyOutboxDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// DeleteOne returns a builder for deleting the given entity.
-func (c *PolicyOutboxClient) DeleteOne(_m *PolicyOutbox) *PolicyOutboxDeleteOne {
-	return c.DeleteOneID(_m.ID)
-}
-
-// DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *PolicyOutboxClient) DeleteOneID(id int64) *PolicyOutboxDeleteOne {
-	builder := c.Delete().Where(policyoutbox.ID(id))
-	builder.mutation.id = &id
-	builder.mutation.op = OpDeleteOne
-	return &PolicyOutboxDeleteOne{builder}
-}
-
-// Query returns a query builder for PolicyOutbox.
-func (c *PolicyOutboxClient) Query() *PolicyOutboxQuery {
-	return &PolicyOutboxQuery{
-		config: c.config,
-		ctx:    &QueryContext{Type: TypePolicyOutbox},
-		inters: c.Interceptors(),
-	}
-}
-
-// Get returns a PolicyOutbox entity by its id.
-func (c *PolicyOutboxClient) Get(ctx context.Context, id int64) (*PolicyOutbox, error) {
-	return c.Query().Where(policyoutbox.ID(id)).Only(ctx)
-}
-
-// GetX is like Get, but panics if an error occurs.
-func (c *PolicyOutboxClient) GetX(ctx context.Context, id int64) *PolicyOutbox {
-	obj, err := c.Get(ctx, id)
-	if err != nil {
-		panic(err)
-	}
-	return obj
-}
-
-// Hooks returns the client hooks.
-func (c *PolicyOutboxClient) Hooks() []Hook {
-	return c.hooks.PolicyOutbox
-}
-
-// Interceptors returns the client interceptors.
-func (c *PolicyOutboxClient) Interceptors() []Interceptor {
-	return c.inters.PolicyOutbox
-}
-
-func (c *PolicyOutboxClient) mutate(ctx context.Context, m *PolicyOutboxMutation) (Value, error) {
-	switch m.Op() {
-	case OpCreate:
-		return (&PolicyOutboxCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdate:
-		return (&PolicyOutboxUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdateOne:
-		return (&PolicyOutboxUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpDelete, OpDeleteOne:
-		return (&PolicyOutboxDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
-	default:
-		return nil, fmt.Errorf("ent: unknown PolicyOutbox mutation op: %q", m.Op())
-	}
-}
-
 // PolicyStateClient is a client for the PolicyState schema.
 type PolicyStateClient struct {
 	config
@@ -1479,150 +1328,15 @@ func (c *PolicyStateClient) mutate(ctx context.Context, m *PolicyStateMutation) 
 	}
 }
 
-// UserProfileClient is a client for the UserProfile schema.
-type UserProfileClient struct {
-	config
-}
-
-// NewUserProfileClient returns a client for the UserProfile from the given config.
-func NewUserProfileClient(c config) *UserProfileClient {
-	return &UserProfileClient{config: c}
-}
-
-// Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `userprofile.Hooks(f(g(h())))`.
-func (c *UserProfileClient) Use(hooks ...Hook) {
-	c.hooks.UserProfile = append(c.hooks.UserProfile, hooks...)
-}
-
-// Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `userprofile.Intercept(f(g(h())))`.
-func (c *UserProfileClient) Intercept(interceptors ...Interceptor) {
-	c.inters.UserProfile = append(c.inters.UserProfile, interceptors...)
-}
-
-// Create returns a builder for creating a UserProfile entity.
-func (c *UserProfileClient) Create() *UserProfileCreate {
-	mutation := newUserProfileMutation(c.config, OpCreate)
-	return &UserProfileCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// CreateBulk returns a builder for creating a bulk of UserProfile entities.
-func (c *UserProfileClient) CreateBulk(builders ...*UserProfileCreate) *UserProfileCreateBulk {
-	return &UserProfileCreateBulk{config: c.config, builders: builders}
-}
-
-// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
-// a builder and applies setFunc on it.
-func (c *UserProfileClient) MapCreateBulk(slice any, setFunc func(*UserProfileCreate, int)) *UserProfileCreateBulk {
-	rv := reflect.ValueOf(slice)
-	if rv.Kind() != reflect.Slice {
-		return &UserProfileCreateBulk{err: fmt.Errorf("calling to UserProfileClient.MapCreateBulk with wrong type %T, need slice", slice)}
-	}
-	builders := make([]*UserProfileCreate, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
-		builders[i] = c.Create()
-		setFunc(builders[i], i)
-	}
-	return &UserProfileCreateBulk{config: c.config, builders: builders}
-}
-
-// Update returns an update builder for UserProfile.
-func (c *UserProfileClient) Update() *UserProfileUpdate {
-	mutation := newUserProfileMutation(c.config, OpUpdate)
-	return &UserProfileUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOne returns an update builder for the given entity.
-func (c *UserProfileClient) UpdateOne(_m *UserProfile) *UserProfileUpdateOne {
-	mutation := newUserProfileMutation(c.config, OpUpdateOne, withUserProfile(_m))
-	return &UserProfileUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOneID returns an update builder for the given id.
-func (c *UserProfileClient) UpdateOneID(id int64) *UserProfileUpdateOne {
-	mutation := newUserProfileMutation(c.config, OpUpdateOne, withUserProfileID(id))
-	return &UserProfileUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// Delete returns a delete builder for UserProfile.
-func (c *UserProfileClient) Delete() *UserProfileDelete {
-	mutation := newUserProfileMutation(c.config, OpDelete)
-	return &UserProfileDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// DeleteOne returns a builder for deleting the given entity.
-func (c *UserProfileClient) DeleteOne(_m *UserProfile) *UserProfileDeleteOne {
-	return c.DeleteOneID(_m.ID)
-}
-
-// DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *UserProfileClient) DeleteOneID(id int64) *UserProfileDeleteOne {
-	builder := c.Delete().Where(userprofile.ID(id))
-	builder.mutation.id = &id
-	builder.mutation.op = OpDeleteOne
-	return &UserProfileDeleteOne{builder}
-}
-
-// Query returns a query builder for UserProfile.
-func (c *UserProfileClient) Query() *UserProfileQuery {
-	return &UserProfileQuery{
-		config: c.config,
-		ctx:    &QueryContext{Type: TypeUserProfile},
-		inters: c.Interceptors(),
-	}
-}
-
-// Get returns a UserProfile entity by its id.
-func (c *UserProfileClient) Get(ctx context.Context, id int64) (*UserProfile, error) {
-	return c.Query().Where(userprofile.ID(id)).Only(ctx)
-}
-
-// GetX is like Get, but panics if an error occurs.
-func (c *UserProfileClient) GetX(ctx context.Context, id int64) *UserProfile {
-	obj, err := c.Get(ctx, id)
-	if err != nil {
-		panic(err)
-	}
-	return obj
-}
-
-// Hooks returns the client hooks.
-func (c *UserProfileClient) Hooks() []Hook {
-	return c.hooks.UserProfile
-}
-
-// Interceptors returns the client interceptors.
-func (c *UserProfileClient) Interceptors() []Interceptor {
-	return c.inters.UserProfile
-}
-
-func (c *UserProfileClient) mutate(ctx context.Context, m *UserProfileMutation) (Value, error) {
-	switch m.Op() {
-	case OpCreate:
-		return (&UserProfileCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdate:
-		return (&UserProfileUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdateOne:
-		return (&UserProfileUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpDelete, OpDeleteOne:
-		return (&UserProfileDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
-	default:
-		return nil, fmt.Errorf("ent: unknown UserProfile mutation op: %q", m.Op())
-	}
-}
-
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
 		CasbinRule, DictData, DictType, Permission, PermissionDefinition,
-		PermissionTreeState, PolicyAudit, PolicyOutbox, PolicyState,
-		UserProfile []ent.Hook
+		PermissionTreeState, PolicyAudit, PolicyState []ent.Hook
 	}
 	inters struct {
 		CasbinRule, DictData, DictType, Permission, PermissionDefinition,
-		PermissionTreeState, PolicyAudit, PolicyOutbox, PolicyState,
-		UserProfile []ent.Interceptor
+		PermissionTreeState, PolicyAudit, PolicyState []ent.Interceptor
 	}
 )
 

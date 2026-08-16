@@ -12,10 +12,8 @@ import (
 	"github.com/eagle-go/eagle/ent/permissiondefinition"
 	"github.com/eagle-go/eagle/ent/permissiontreestate"
 	"github.com/eagle-go/eagle/ent/policyaudit"
-	"github.com/eagle-go/eagle/ent/policyoutbox"
 	"github.com/eagle-go/eagle/ent/policystate"
 	"github.com/eagle-go/eagle/ent/schema"
-	"github.com/eagle-go/eagle/ent/userprofile"
 )
 
 // The init function reads all schema descriptors with runtime code
@@ -338,30 +336,6 @@ func init() {
 	policyauditDescCreatedAt := policyauditFields[10].Descriptor()
 	// policyaudit.DefaultCreatedAt holds the default value on creation for the created_at field.
 	policyaudit.DefaultCreatedAt = policyauditDescCreatedAt.Default.(func() time.Time)
-	policyoutboxFields := schema.PolicyOutbox{}.Fields()
-	_ = policyoutboxFields
-	// policyoutboxDescPolicyVersion is the schema descriptor for policy_version field.
-	policyoutboxDescPolicyVersion := policyoutboxFields[1].Descriptor()
-	// policyoutbox.PolicyVersionValidator is a validator for the "policy_version" field. It is called by the builders before save.
-	policyoutbox.PolicyVersionValidator = policyoutboxDescPolicyVersion.Validators[0].(func(int64) error)
-	// policyoutboxDescEventType is the schema descriptor for event_type field.
-	policyoutboxDescEventType := policyoutboxFields[2].Descriptor()
-	// policyoutbox.EventTypeValidator is a validator for the "event_type" field. It is called by the builders before save.
-	policyoutbox.EventTypeValidator = policyoutboxDescEventType.Validators[0].(func(string) error)
-	// policyoutboxDescCreatedAt is the schema descriptor for created_at field.
-	policyoutboxDescCreatedAt := policyoutboxFields[4].Descriptor()
-	// policyoutbox.DefaultCreatedAt holds the default value on creation for the created_at field.
-	policyoutbox.DefaultCreatedAt = policyoutboxDescCreatedAt.Default.(func() time.Time)
-	// policyoutboxDescAttempts is the schema descriptor for attempts field.
-	policyoutboxDescAttempts := policyoutboxFields[6].Descriptor()
-	// policyoutbox.DefaultAttempts holds the default value on creation for the attempts field.
-	policyoutbox.DefaultAttempts = policyoutboxDescAttempts.Default.(int32)
-	// policyoutbox.AttemptsValidator is a validator for the "attempts" field. It is called by the builders before save.
-	policyoutbox.AttemptsValidator = policyoutboxDescAttempts.Validators[0].(func(int32) error)
-	// policyoutboxDescLastError is the schema descriptor for last_error field.
-	policyoutboxDescLastError := policyoutboxFields[7].Descriptor()
-	// policyoutbox.DefaultLastError holds the default value on creation for the last_error field.
-	policyoutbox.DefaultLastError = policyoutboxDescLastError.Default.(string)
 	policystateFields := schema.PolicyState{}.Fields()
 	_ = policystateFields
 	// policystateDescVersion is the schema descriptor for version field.
@@ -376,34 +350,4 @@ func init() {
 	policystate.DefaultUpdatedAt = policystateDescUpdatedAt.Default.(func() time.Time)
 	// policystate.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	policystate.UpdateDefaultUpdatedAt = policystateDescUpdatedAt.UpdateDefault.(func() time.Time)
-	userprofileFields := schema.UserProfile{}.Fields()
-	_ = userprofileFields
-	// userprofileDescSubject is the schema descriptor for subject field.
-	userprofileDescSubject := userprofileFields[1].Descriptor()
-	// userprofile.SubjectValidator is a validator for the "subject" field. It is called by the builders before save.
-	userprofile.SubjectValidator = userprofileDescSubject.Validators[0].(func(string) error)
-	// userprofileDescDeptID is the schema descriptor for dept_id field.
-	userprofileDescDeptID := userprofileFields[2].Descriptor()
-	// userprofile.DefaultDeptID holds the default value on creation for the dept_id field.
-	userprofile.DefaultDeptID = userprofileDescDeptID.Default.(int64)
-	// userprofileDescPosition is the schema descriptor for position field.
-	userprofileDescPosition := userprofileFields[3].Descriptor()
-	// userprofile.DefaultPosition holds the default value on creation for the position field.
-	userprofile.DefaultPosition = userprofileDescPosition.Default.(string)
-	// userprofile.PositionValidator is a validator for the "position" field. It is called by the builders before save.
-	userprofile.PositionValidator = userprofileDescPosition.Validators[0].(func(string) error)
-	// userprofileDescRemark is the schema descriptor for remark field.
-	userprofileDescRemark := userprofileFields[4].Descriptor()
-	// userprofile.DefaultRemark holds the default value on creation for the remark field.
-	userprofile.DefaultRemark = userprofileDescRemark.Default.(string)
-	// userprofileDescCreatedAt is the schema descriptor for created_at field.
-	userprofileDescCreatedAt := userprofileFields[6].Descriptor()
-	// userprofile.DefaultCreatedAt holds the default value on creation for the created_at field.
-	userprofile.DefaultCreatedAt = userprofileDescCreatedAt.Default.(func() time.Time)
-	// userprofileDescUpdatedAt is the schema descriptor for updated_at field.
-	userprofileDescUpdatedAt := userprofileFields[7].Descriptor()
-	// userprofile.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	userprofile.DefaultUpdatedAt = userprofileDescUpdatedAt.Default.(func() time.Time)
-	// userprofile.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	userprofile.UpdateDefaultUpdatedAt = userprofileDescUpdatedAt.UpdateDefault.(func() time.Time)
 }

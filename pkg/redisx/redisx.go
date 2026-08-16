@@ -3,6 +3,7 @@ package redisx
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -36,8 +37,7 @@ func New(ctx context.Context, cfg Config) (*redis.Client, func(), error) {
 }
 
 // NewClient 构造惰性 Redis 客户端但不做连通性探测。
-// 普通缓存和策略通知可以在 Redis 暂时不可用时降级运行；安全关键的
-// token 撤销存储仍应使用 New，在启动时确认可用。
+// 测试或可选缓存可以走这条路径；生产装配用 New，启动时确认 Redis 可用。
 func NewClient(cfg Config) (*redis.Client, func()) {
 	cli := redis.NewClient(&redis.Options{
 		Addr:         cfg.Addr,
@@ -76,6 +76,17 @@ type Cache[T any] struct {
 type Codec[T any] interface {
 	Marshal(T) ([]byte, error)
 	Unmarshal([]byte) (T, error)
+}
+
+// JSONCodec 用 encoding/json 编解码缓存值。
+type JSONCodec[T any] struct{}
+
+func (JSONCodec[T]) Marshal(v T) ([]byte, error) { return json.Marshal(v) }
+
+func (JSONCodec[T]) Unmarshal(b []byte) (T, error) {
+	var v T
+	err := json.Unmarshal(b, &v)
+	return v, err
 }
 
 // NewCache 构造一个带 TTL 的缓存包装。

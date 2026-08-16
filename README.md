@@ -4,8 +4,10 @@ Go 模块化单体底座：**认证 + RBAC 授权 + 字典**。业务域按 `app
 
 **Kratos v3** · **ent** · **Keycloak** · **Casbin** · PostgreSQL 17。
 
-第一次接触这个项目、想从零手把手跑起来的，看 [GETTING_STARTED.md](GETTING_STARTED.md)。
-边界和底座约定看 [docs/architecture.md](docs/architecture.md)。
+- 第一次跑起来：[GETTING_STARTED.md](GETTING_STARTED.md)
+- **刚转 Go、要在底座上加功能：[docs/usage.md](docs/usage.md)**
+- 分层和授权边界：[docs/architecture.md](docs/architecture.md)
+
 本文档默认你已经熟悉 Go / Kratos，讲的是"为什么这么设计"。
 
 ---
@@ -64,6 +66,7 @@ v3 是破坏性升级，网上的中文教程基本都是 v2 的，会误导。�
 ## 权限模型：契约声明，中间件判定
 
 权限写在 proto 方法上，不进 handler。`pkg/authz` 从方法描述符读出注解，交给内存里的 Casbin。
+权限码先进入 `permission_definition`（与 proto 对齐），导航节点只能引用已有码，不能在建菜单时发明新契约。
 
 在契约上声明所需权限：
 
@@ -251,8 +254,8 @@ server ──→ service ──→ biz(用例) ──→ domain
 | 层 | 职责 | 允许依赖 |
 |---|---|---|
 | `server` | HTTP/gRPC 装配、中间件链 | service, conf |
-| `service` | proto ↔ 领域对象互转，从 context 取调用者身份 | biz, domain |
-| `biz` | 用例编排 + 领域错误到状态码的映射 | domain |
+| `service` | proto ↔ 领域对象互转，领域错误映射为传输错误 | biz, domain |
+| `biz` | 用例编排 | domain |
 | **`domain`** | **实体（含不变量）· 值对象 · 仓储接口** | **无** |
 | `data` | 仓储实现：ent + Redis + Casbin 适配 | domain |
 

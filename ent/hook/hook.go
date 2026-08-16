@@ -93,18 +93,6 @@ func (f PolicyAuditFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value,
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PolicyAuditMutation", m)
 }
 
-// The PolicyOutboxFunc type is an adapter to allow the use of ordinary
-// function as PolicyOutbox mutator.
-type PolicyOutboxFunc func(context.Context, *ent.PolicyOutboxMutation) (ent.Value, error)
-
-// Mutate calls f(ctx, m).
-func (f PolicyOutboxFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.PolicyOutboxMutation); ok {
-		return f(ctx, mv)
-	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PolicyOutboxMutation", m)
-}
-
 // The PolicyStateFunc type is an adapter to allow the use of ordinary
 // function as PolicyState mutator.
 type PolicyStateFunc func(context.Context, *ent.PolicyStateMutation) (ent.Value, error)
@@ -115,18 +103,6 @@ func (f PolicyStateFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value,
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PolicyStateMutation", m)
-}
-
-// The UserProfileFunc type is an adapter to allow the use of ordinary
-// function as UserProfile mutator.
-type UserProfileFunc func(context.Context, *ent.UserProfileMutation) (ent.Value, error)
-
-// Mutate calls f(ctx, m).
-func (f UserProfileFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.UserProfileMutation); ok {
-		return f(ctx, mv)
-	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.UserProfileMutation", m)
 }
 
 // Condition is a hook condition function.

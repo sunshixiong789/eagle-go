@@ -14,7 +14,7 @@ import "errors"
 
 // 领域错误。刻意用标准库 error 而非 Kratos 的 errors：
 // HTTP/gRPC 状态码属于传输层关注点，领域层不该知道 404 和 409 的存在。
-// 状态码到错误的映射在 biz/service 边界上完成。
+// 状态码到错误的映射在 service 层的 ErrorMapping 中间件完成。
 var (
 	// ErrInvalidPermissionCode 表示权限码格式不合法。
 	ErrInvalidPermissionCode = errors.New("domain: 权限码格式不合法")
@@ -40,8 +40,8 @@ var (
 	ErrEmptyRole = errors.New("domain: 角色名不能为空")
 	// ErrRoleNotBound 表示角色尚未配置任何权限。
 	ErrRoleNotBound = errors.New("domain: 该角色尚未配置任何权限")
-	// ErrUnknownPermissionCode 表示授予了权限树中不存在的权限码。
-	ErrUnknownPermissionCode = errors.New("domain: 权限码在权限树中不存在")
+	// ErrUnknownPermissionCode 表示引用了权限目录中不存在的权限码。
+	ErrUnknownPermissionCode = errors.New("domain: 权限码不在权限目录中")
 	// ErrSelfInheritance 表示角色继承自身。
 	ErrSelfInheritance      = errors.New("domain: 角色不能继承自身")
 	ErrRoleInheritanceCycle = errors.New("domain: 角色继承关系不能形成环")

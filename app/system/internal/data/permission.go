@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	entsql "entgo.io/ent/dialect/sql"
-
 	"github.com/eagle-go/eagle/app/system/internal/domain"
 	"github.com/eagle-go/eagle/ent"
 	"github.com/eagle-go/eagle/ent/permission"
@@ -17,15 +15,10 @@ type permissionRepo struct {
 	data *Data
 }
 
-// NewPermissionRepo 构造权限仓储。
 func NewPermissionRepo(data *Data) domain.PermissionRepo {
 	return &permissionRepo{data: data}
 }
 
-// toDomainPermission 从持久化状态重建聚合根。
-//
-// 走 Rehydrate 而不是 NewPermission：库里可能有规则收紧之前写入的
-// 历史数据，用构造函数校验会让整张表读不出来。校验只在写入路径执行。
 func toDomainPermission(p *ent.Permission, revision int64) *domain.Permission {
 	if p == nil {
 		return nil
@@ -38,66 +31,77 @@ func toDomainPermission(p *ent.Permission, revision int64) *domain.Permission {
 	if p.Code != nil {
 		code = *p.Code
 	}
-	return domain.RehydratePermission(
-		p.ID, parentID, p.Name, code, p.Type, p.Status,
-		p.Path, p.Component, p.Icon, p.Sort, p.Visible,
-		p.CreatedAt, p.UpdatedAt, revision,
-	)
+	return domain.RehydratePermission(domain.PermissionSnapshot{
+		ID: p.ID, ParentID: parentID, Name: p.Name, Code: code,
+		Type: p.Type, Status: p.Status, Path: p.Path, Component: p.Component,
+		Icon: p.Icon, Sort: p.Sort, Visible: p.Visible,
+		CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt, Revision: revision,
+	})
+}
+
+func (r *permissionRepo) withTreeTx(ctx context.Context, expected *int64, fn func(*ent.Tx, *ent.PermissionTreeState) error) error {
+	tx, err := r.data.client.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("begin permission tx: %w", err)
+	}
+	defer rollbackPermissionTxOnPanic(tx)
+
+	state, err := lockPermissionTree(ctx, tx, expected)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	if err := fn(tx, state); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit permission tx: %w", err)
+	}
+	return nil
 }
 
 func (r *permissionRepo) Create(ctx context.Context, p *domain.Permission) (*domain.Permission, error) {
-	tx, err := r.data.client.Tx(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("begin create permission: %w", err)
-	}
-	defer rollbackPermissionTxOnPanic(tx)
-	state, err := lockPermissionTree(ctx, tx, nil)
-	if err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-	if !p.IsRoot() {
-		exists, err := tx.Permission.Query().Where(permission.IDEQ(p.ParentID())).Exist(ctx)
-		if err != nil || !exists {
-			_ = tx.Rollback()
+	var created *domain.Permission
+	err := r.withTreeTx(ctx, nil, func(tx *ent.Tx, state *ent.PermissionTreeState) error {
+		if !p.IsRoot() {
+			exists, err := tx.Permission.Query().Where(permission.IDEQ(p.ParentID())).Exist(ctx)
 			if err != nil {
-				return nil, fmt.Errorf("check permission parent: %w", err)
+				return fmt.Errorf("check permission parent: %w", err)
 			}
-			return nil, domain.ErrPermissionNotFound
+			if !exists {
+				return domain.ErrPermissionNotFound
+			}
 		}
-	}
-	if err := ensurePermissionDefinition(ctx, tx, p.Code()); err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-	created, err := tx.Permission.Create().
-		SetNillableParentID(permissionParentPtr(p.ParentID())).
-		SetName(p.Name()).
-		SetNillableCode(permissionCodePtr(p.Code())).
-		SetType(int32(p.Type())).
-		SetPath(p.Path()).
-		SetComponent(p.Component()).
-		SetIcon(p.Icon()).
-		SetSort(p.Sort()).
-		SetVisible(p.Visible()).
-		SetStatus(int32(p.Status())).
-		Save(ctx)
-	if err != nil {
-		_ = tx.Rollback()
-		if isUniqueViolation(err) {
-			return nil, domain.ErrPermissionCodeDuplicated
+		if err := requirePermissionDefinition(ctx, tx, p.Code()); err != nil {
+			return err
 		}
-		return nil, fmt.Errorf("create permission: %w", err)
-	}
-	next, err := bumpPermissionTreeRevision(ctx, tx, state.Revision)
-	if err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("commit create permission: %w", err)
-	}
-	return toDomainPermission(created, next), nil
+		row, err := tx.Permission.Create().
+			SetNillableParentID(permissionParentPtr(p.ParentID())).
+			SetName(p.Name()).
+			SetNillableCode(permissionCodePtr(p.Code())).
+			SetType(int32(p.Type())).
+			SetPath(p.Path()).
+			SetComponent(p.Component()).
+			SetIcon(p.Icon()).
+			SetSort(p.Sort()).
+			SetVisible(p.Visible()).
+			SetStatus(int32(p.Status())).
+			Save(ctx)
+		if err != nil {
+			if isUniqueViolation(err) {
+				return domain.ErrPermissionCodeDuplicated
+			}
+			return fmt.Errorf("create permission: %w", err)
+		}
+		next, err := bumpPermissionTreeRevision(ctx, tx, state.Revision)
+		if err != nil {
+			return err
+		}
+		created = toDomainPermission(row, next)
+		return nil
+	})
+	return created, err
 }
 
 func (r *permissionRepo) GetByID(ctx context.Context, id int64) (*domain.Permission, error) {
@@ -115,7 +119,7 @@ func (r *permissionRepo) GetByID(ctx context.Context, id int64) (*domain.Permiss
 	return toDomainPermission(p, revision), nil
 }
 
-// List 平铺返回权限。权限总量只有百级，一次全量取出比递归 CTE 更简单也更快。
+// List 平铺返回权限。总量只有百级，一次全量取出比递归 CTE 更简单也更快。
 func (r *permissionRepo) List(ctx context.Context, q domain.ListPermissionsQuery) ([]*domain.Permission, error) {
 	revision, err := r.currentRevision(ctx)
 	if err != nil {
@@ -144,101 +148,71 @@ func (r *permissionRepo) List(ctx context.Context, q domain.ListPermissionsQuery
 }
 
 func (r *permissionRepo) Update(ctx context.Context, p *domain.Permission, expectedRevision *int64) (*domain.Permission, error) {
-	tx, err := r.data.client.Tx(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("begin update permission: %w", err)
-	}
-	defer rollbackPermissionTxOnPanic(tx)
-	state, err := lockPermissionTree(ctx, tx, expectedRevision)
-	if err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-	rows, err := tx.Permission.Query().All(ctx)
-	if err != nil {
-		_ = tx.Rollback()
-		return nil, fmt.Errorf("load permission tree for update: %w", err)
-	}
-	perms := make([]*domain.Permission, 0, len(rows))
-	for _, row := range rows {
-		perms = append(perms, toDomainPermission(row, state.Revision))
-	}
-	if err := domain.NewPermissionTree(perms).EnsureNoCycle(p.ID(), p.ParentID()); err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-	if err := ensurePermissionDefinition(ctx, tx, p.Code()); err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-	updated, err := tx.Permission.UpdateOneID(p.ID()).
-		SetNillableParentID(permissionParentPtr(p.ParentID())).
-		SetName(p.Name()).
-		SetNillableCode(permissionCodePtr(p.Code())).
-		SetType(int32(p.Type())).
-		SetPath(p.Path()).
-		SetComponent(p.Component()).
-		SetIcon(p.Icon()).
-		SetSort(p.Sort()).
-		SetVisible(p.Visible()).
-		SetStatus(int32(p.Status())).
-		Save(ctx)
-	if err != nil {
-		_ = tx.Rollback()
-		if isNotFound(err) {
-			return nil, domain.ErrPermissionNotFound
+	var updated *domain.Permission
+	err := r.withTreeTx(ctx, expectedRevision, func(tx *ent.Tx, state *ent.PermissionTreeState) error {
+		rows, err := tx.Permission.Query().All(ctx)
+		if err != nil {
+			return fmt.Errorf("load permission tree for update: %w", err)
 		}
-		if isUniqueViolation(err) {
-			return nil, domain.ErrPermissionCodeDuplicated
+		perms := make([]*domain.Permission, 0, len(rows))
+		for _, row := range rows {
+			perms = append(perms, toDomainPermission(row, state.Revision))
 		}
-		return nil, fmt.Errorf("update permission %d: %w", p.ID(), err)
-	}
-	next, err := bumpPermissionTreeRevision(ctx, tx, state.Revision)
-	if err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("commit update permission: %w", err)
-	}
-	return toDomainPermission(updated, next), nil
+		if err := domain.NewPermissionTree(perms).EnsureNoCycle(p.ID(), p.ParentID()); err != nil {
+			return err
+		}
+		if err := requirePermissionDefinition(ctx, tx, p.Code()); err != nil {
+			return err
+		}
+		row, err := tx.Permission.UpdateOneID(p.ID()).
+			SetNillableParentID(permissionParentPtr(p.ParentID())).
+			SetName(p.Name()).
+			SetNillableCode(permissionCodePtr(p.Code())).
+			SetType(int32(p.Type())).
+			SetPath(p.Path()).
+			SetComponent(p.Component()).
+			SetIcon(p.Icon()).
+			SetSort(p.Sort()).
+			SetVisible(p.Visible()).
+			SetStatus(int32(p.Status())).
+			Save(ctx)
+		if err != nil {
+			if isNotFound(err) {
+				return domain.ErrPermissionNotFound
+			}
+			if isUniqueViolation(err) {
+				return domain.ErrPermissionCodeDuplicated
+			}
+			return fmt.Errorf("update permission %d: %w", p.ID(), err)
+		}
+		next, err := bumpPermissionTreeRevision(ctx, tx, state.Revision)
+		if err != nil {
+			return err
+		}
+		updated = toDomainPermission(row, next)
+		return nil
+	})
+	return updated, err
 }
 
 func (r *permissionRepo) Delete(ctx context.Context, id int64, expectedRevision *int64) error {
-	tx, err := r.data.client.Tx(ctx)
-	if err != nil {
-		return fmt.Errorf("begin delete permission: %w", err)
-	}
-	defer rollbackPermissionTxOnPanic(tx)
-	state, err := lockPermissionTree(ctx, tx, expectedRevision)
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	children, err := tx.Permission.Query().Where(permission.ParentIDEQ(id)).Count(ctx)
-	if err != nil {
-		_ = tx.Rollback()
-		return fmt.Errorf("count children of permission %d: %w", id, err)
-	}
-	if children > 0 {
-		_ = tx.Rollback()
-		return domain.ErrPermissionHasChildren
-	}
-	if err := tx.Permission.DeleteOneID(id).Exec(ctx); err != nil {
-		_ = tx.Rollback()
-		if isNotFound(err) {
-			return domain.ErrPermissionNotFound
+	return r.withTreeTx(ctx, expectedRevision, func(tx *ent.Tx, state *ent.PermissionTreeState) error {
+		children, err := tx.Permission.Query().Where(permission.ParentIDEQ(id)).Count(ctx)
+		if err != nil {
+			return fmt.Errorf("count children of permission %d: %w", id, err)
 		}
-		return fmt.Errorf("delete permission %d: %w", id, err)
-	}
-	if _, err := bumpPermissionTreeRevision(ctx, tx, state.Revision); err != nil {
-		_ = tx.Rollback()
+		if children > 0 {
+			return domain.ErrPermissionHasChildren
+		}
+		if err := tx.Permission.DeleteOneID(id).Exec(ctx); err != nil {
+			if isNotFound(err) {
+				return domain.ErrPermissionNotFound
+			}
+			return fmt.Errorf("delete permission %d: %w", id, err)
+		}
+		_, err = bumpPermissionTreeRevision(ctx, tx, state.Revision)
 		return err
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit delete permission: %w", err)
-	}
-	return nil
+	})
 }
 
 func permissionParentPtr(parentID int64) *int64 {
@@ -256,21 +230,23 @@ func permissionCodePtr(code domain.PermissionCode) *string {
 	return &value
 }
 
-func ensurePermissionDefinition(ctx context.Context, tx *ent.Tx, code domain.PermissionCode) error {
+// requirePermissionDefinition 要求导航节点引用的权限码已存在于目录。
+// 目录由迁移/种子写入，与 proto 注解对齐；创建菜单不能发明新契约。
+func requirePermissionDefinition(ctx context.Context, tx *ent.Tx, code domain.PermissionCode) error {
 	if code.IsZero() {
 		return nil
 	}
-	if err := tx.PermissionDefinition.Create().
-		SetCode(code.String()).
-		SetService(code.Domain()).
-		SetResource(code.Resource()).
-		SetAction(code.Action()).
-		SetStatus(1).
-		SetSource("navigation").
-		OnConflict(entsql.ConflictColumns(permissiondefinition.FieldCode)).
-		Ignore().
-		Exec(ctx); err != nil {
-		return fmt.Errorf("ensure permission definition %q: %w", code, err)
+	exists, err := tx.PermissionDefinition.Query().
+		Where(
+			permissiondefinition.CodeEQ(code.String()),
+			permissiondefinition.StatusEQ(1),
+		).
+		Exist(ctx)
+	if err != nil {
+		return fmt.Errorf("lookup permission definition %q: %w", code, err)
+	}
+	if !exists {
+		return fmt.Errorf("%w: %s", domain.ErrUnknownPermissionCode, code)
 	}
 	return nil
 }
@@ -322,14 +298,4 @@ func rollbackPermissionTxOnPanic(tx *ent.Tx) {
 		_ = tx.Rollback()
 		panic(p)
 	}
-}
-
-func (r *permissionRepo) CountChildren(ctx context.Context, id int64) (int64, error) {
-	n, err := r.data.client.Permission.Query().
-		Where(permission.ParentIDEQ(id)).
-		Count(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("count children of permission %d: %w", id, err)
-	}
-	return int64(n), nil
 }

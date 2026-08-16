@@ -138,28 +138,6 @@ func TestPermissionCodeCovers(t *testing.T) {
 	}
 }
 
-func TestPermissionCodeIsReadOnly(t *testing.T) {
-	readOnly := []string{
-		"system:user:query", "system:user:list",
-		"system:dict:get", "system:role:export",
-	}
-	for _, s := range readOnly {
-		if !MustPermissionCode(s).IsReadOnly() {
-			t.Errorf("%q 应被识别为只读", s)
-		}
-	}
-
-	mutating := []string{
-		"system:user:add", "system:user:edit",
-		"system:user:remove", "system:role:assign",
-	}
-	for _, s := range mutating {
-		if MustPermissionCode(s).IsReadOnly() {
-			t.Errorf("%q 不应被识别为只读", s)
-		}
-	}
-}
-
 func TestParsePermissionCodes(t *testing.T) {
 	got, err := ParsePermissionCodes([]string{"system:user:add", "", "system:user:query"})
 	if err != nil {

@@ -6,19 +6,22 @@ import (
 	"fmt"
 	"time"
 
-	entsql "entgo.io/ent/dialect/sql"
 	"github.com/casbin/casbin/v2/model"
 	"github.com/casbin/casbin/v2/persist"
 
 	"github.com/eagle-go/eagle/ent"
 	"github.com/eagle-go/eagle/ent/casbinrule"
 	"github.com/eagle-go/eagle/ent/permissiondefinition"
-	"github.com/eagle-go/eagle/ent/predicate"
 )
 
 // ErrRoleInheritanceCycle 表示新增的 g 规则会使角色继承图成环。
 var ErrRoleInheritanceCycle = errors.New("authz: role inheritance cycle")
 var ErrConcurrentModification = errors.New("authz: concurrent policy modification")
+
+// ErrAdapterReadOnly 表示 Casbin 适配器只允许加载策略。
+// 生产写入必须走 ReplaceRolePermissions / AddRoleInheritanceAtomic，
+// 以便同一事务里递增版本并写审计。
+var ErrAdapterReadOnly = errors.New("authz: casbin adapter is load-only")
 
 // EntAdapter 用项目自身的 ent client 持久化 Casbin 策略。
 //
@@ -369,182 +372,35 @@ type Filter struct {
 	V0    string
 }
 
-// SavePolicy 用内存中的策略整体覆盖存储。
-//
-// 全表删除后重建，因此整个过程必须在事务里完成——
-// 中途失败若留下空表，等同于所有人瞬间失去全部权限。
-func (a *EntAdapter) SavePolicy(m model.Model) error {
-	ctx := context.Background()
-
-	tx, err := a.client.Tx(ctx)
-	if err != nil {
-		return fmt.Errorf("authz: 开启事务: %w", err)
-	}
-	defer func() {
-		if p := recover(); p != nil {
-			_ = tx.Rollback()
-			panic(p)
-		}
-	}()
-
-	if _, err := tx.CasbinRule.Delete().Exec(ctx); err != nil {
-		_ = tx.Rollback()
-		return fmt.Errorf("authz: 清空旧策略: %w", err)
-	}
-
-	var builders []*ent.CasbinRuleCreate
-	for ptype, ast := range m["p"] {
-		for _, rule := range ast.Policy {
-			builders = append(builders, newRuleBuilder(tx.Client(), ptype, rule))
-		}
-	}
-	for ptype, ast := range m["g"] {
-		for _, rule := range ast.Policy {
-			builders = append(builders, newRuleBuilder(tx.Client(), ptype, rule))
-		}
-	}
-
-	if len(builders) > 0 {
-		if _, err := tx.CasbinRule.CreateBulk(builders...).Save(ctx); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("authz: 写入新策略: %w", err)
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("authz: 提交事务: %w", err)
-	}
-	return nil
+// SavePolicy 拒绝 Casbin 的全量覆盖写入。
+// 策略变更必须走 ReplaceRolePermissions*，否则不会递增版本、也不会写审计。
+func (a *EntAdapter) SavePolicy(model.Model) error {
+	return fmt.Errorf("authz: SavePolicy: %w", ErrAdapterReadOnly)
 }
 
-// AddPolicy 新增一条策略。
-func (a *EntAdapter) AddPolicy(_ string, ptype string, rule []string) error {
-	ctx := context.Background()
-
-	// 唯一索引会拦住重复写入；用 OnConflict 忽略而不是报错，
-	// 这样重复调用是幂等的
-	err := newRuleBuilder(a.client, ptype, rule).
-		OnConflict(conflictTarget()...).
-		Ignore().
-		Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("authz: 新增策略: %w", err)
-	}
-	return nil
+// AddPolicy 拒绝单条写入。
+func (a *EntAdapter) AddPolicy(string, string, []string) error {
+	return fmt.Errorf("authz: AddPolicy: %w", ErrAdapterReadOnly)
 }
 
-// conflictTarget 指定 ON CONFLICT 的推断列。
-//
-// PostgreSQL 要求 ON CONFLICT 必须给出冲突目标（列组合或约束名），
-// 不指定会直接报语法错误 42601。这里的列组合必须与迁移中
-// uk_casbin_rule 的定义完全一致，否则推断不到该索引。
-func conflictTarget() []entsql.ConflictOption {
-	return []entsql.ConflictOption{
-		entsql.ConflictColumns(
-			casbinrule.FieldPtype,
-			casbinrule.FieldV0,
-			casbinrule.FieldV1,
-			casbinrule.FieldV2,
-			casbinrule.FieldV3,
-			casbinrule.FieldV4,
-			casbinrule.FieldV5,
-		),
-	}
+// AddPolicies 拒绝批量写入。
+func (a *EntAdapter) AddPolicies(string, string, [][]string) error {
+	return fmt.Errorf("authz: AddPolicies: %w", ErrAdapterReadOnly)
 }
 
-// AddPolicies 批量新增策略。
-func (a *EntAdapter) AddPolicies(_ string, ptype string, rules [][]string) error {
-	if len(rules) == 0 {
-		return nil
-	}
-	ctx := context.Background()
-
-	builders := make([]*ent.CasbinRuleCreate, 0, len(rules))
-	for _, rule := range rules {
-		builders = append(builders, newRuleBuilder(a.client, ptype, rule))
-	}
-
-	err := a.client.CasbinRule.CreateBulk(builders...).
-		OnConflict(conflictTarget()...).
-		Ignore().
-		Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("authz: 批量新增策略: %w", err)
-	}
-	return nil
+// RemovePolicy 拒绝单条删除。
+func (a *EntAdapter) RemovePolicy(string, string, []string) error {
+	return fmt.Errorf("authz: RemovePolicy: %w", ErrAdapterReadOnly)
 }
 
-// RemovePolicy 删除一条策略。
-func (a *EntAdapter) RemovePolicy(_ string, ptype string, rule []string) error {
-	ctx := context.Background()
-
-	q := a.client.CasbinRule.Delete().Where(casbinrule.PtypeEQ(ptype))
-	for i, v := range rule {
-		q = q.Where(fieldEQ(i, v))
-	}
-
-	if _, err := q.Exec(ctx); err != nil {
-		return fmt.Errorf("authz: 删除策略: %w", err)
-	}
-	return nil
+// RemovePolicies 拒绝批量删除。
+func (a *EntAdapter) RemovePolicies(string, string, [][]string) error {
+	return fmt.Errorf("authz: RemovePolicies: %w", ErrAdapterReadOnly)
 }
 
-// RemovePolicies 批量删除策略。
-//
-// 逐条删除放在一个事务里：部分成功会让内存模型与存储不一致，
-// 而 Casbin 此时已经按「全部成功」更新了内存，重启后策略会莫名回退。
-func (a *EntAdapter) RemovePolicies(_ string, ptype string, rules [][]string) error {
-	if len(rules) == 0 {
-		return nil
-	}
-	ctx := context.Background()
-
-	tx, err := a.client.Tx(ctx)
-	if err != nil {
-		return fmt.Errorf("authz: 开启事务: %w", err)
-	}
-	defer func() {
-		if p := recover(); p != nil {
-			_ = tx.Rollback()
-			panic(p)
-		}
-	}()
-
-	for _, rule := range rules {
-		q := tx.CasbinRule.Delete().Where(casbinrule.PtypeEQ(ptype))
-		for i, v := range rule {
-			q = q.Where(fieldEQ(i, v))
-		}
-		if _, err := q.Exec(ctx); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("authz: 批量删除策略: %w", err)
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("authz: 提交事务: %w", err)
-	}
-	return nil
-}
-
-// RemoveFilteredPolicy 按字段位置删除策略。
-func (a *EntAdapter) RemoveFilteredPolicy(_ string, ptype string, fieldIndex int, fieldValues ...string) error {
-	ctx := context.Background()
-
-	q := a.client.CasbinRule.Delete().Where(casbinrule.PtypeEQ(ptype))
-	for i, v := range fieldValues {
-		if v == "" {
-			// 空串表示该位置不参与过滤，跳过而不是匹配空值——
-			// 这是 Casbin 对 RemoveFilteredPolicy 的既定语义
-			continue
-		}
-		q = q.Where(fieldEQ(fieldIndex+i, v))
-	}
-
-	if _, err := q.Exec(ctx); err != nil {
-		return fmt.Errorf("authz: 按条件删除策略: %w", err)
-	}
-	return nil
+// RemoveFilteredPolicy 拒绝按条件删除。
+func (a *EntAdapter) RemoveFilteredPolicy(string, string, int, ...string) error {
+	return fmt.Errorf("authz: RemoveFilteredPolicy: %w", ErrAdapterReadOnly)
 }
 
 // ── 内部辅助 ──────────────────────────────────────────────
@@ -564,30 +420,6 @@ func newRuleBuilder(client *ent.Client, ptype string, rule []string) *ent.Casbin
 		SetPtype(ptype).
 		SetV0(v[0]).SetV1(v[1]).SetV2(v[2]).
 		SetV3(v[3]).SetV4(v[4]).SetV5(v[5])
-}
-
-// fieldEQ 把 Casbin 的字段序号映射到对应的 ent 谓词。
-//
-// 序号越界时返回一个恒不匹配的谓词而不是 panic 或忽略：
-// 忽略会让本该受限的删除退化成全表删除，宁可删不到也不能误删。
-func fieldEQ(index int, value string) predicate.CasbinRule {
-	switch index {
-	case 0:
-		return casbinrule.V0EQ(value)
-	case 1:
-		return casbinrule.V1EQ(value)
-	case 2:
-		return casbinrule.V2EQ(value)
-	case 3:
-		return casbinrule.V3EQ(value)
-	case 4:
-		return casbinrule.V4EQ(value)
-	case 5:
-		return casbinrule.V5EQ(value)
-	default:
-		// 自增主键恒为正，该条件永不成立
-		return casbinrule.IDLT(0)
-	}
 }
 
 // trimTrailingEmpty 去掉尾部的空字段。

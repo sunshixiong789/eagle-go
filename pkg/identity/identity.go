@@ -13,8 +13,7 @@ type ctxKey struct{}
 type Principal struct {
 	// Subject 是 Keycloak token 的 sub，用户在本系统的唯一锚点。
 	//
-	// 注意它是 UUID 字符串而不是自增整数：用户主数据在 Keycloak，
-	// 本系统的 sys_user_profile 也以此为外部键关联。
+	// 注意它是 UUID 字符串而不是自增整数：用户主数据在 Keycloak。
 	Subject string
 
 	// Username 是 preferred_username。用于日志与审计，不参与鉴权判定。

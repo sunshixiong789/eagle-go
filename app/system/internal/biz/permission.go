@@ -6,95 +6,45 @@ import (
 	"github.com/eagle-go/eagle/app/system/internal/domain"
 )
 
-// PermissionUsecase 是权限模块的应用服务。
-//
-// 应用层只做编排：取聚合、调用领域行为、落库。
-// 业务规则（防环、按钮必须有权限码、菜单可见性）全部在 domain 里，
-// 这里不出现任何 if 判断业务条件的代码。
+// PermissionUsecase 编排权限用例：构造/变更实体后交给仓储落库。
+// 防环、父节点存在、无子节点才能删——这些检查在 data 的树锁里做，避免 TOCTOU。
 type PermissionUsecase struct {
 	repo   domain.PermissionRepo
 	policy domain.PolicyRepo
 }
 
-// NewPermissionUsecase 构造权限用例。
 func NewPermissionUsecase(repo domain.PermissionRepo, policy domain.PolicyRepo) *PermissionUsecase {
 	return &PermissionUsecase{repo: repo, policy: policy}
 }
 
-// CreatePermission 新建权限节点。
 func (uc *PermissionUsecase) CreatePermission(ctx context.Context, params domain.NewPermissionParams) (*domain.Permission, error) {
-	// 构造即校验：不变量在实体里，这里拿到的一定是合法节点
 	perm, err := domain.NewPermission(params)
 	if err != nil {
 		return nil, err
 	}
-
-	if !perm.IsRoot() {
-		if _, err := uc.repo.GetByID(ctx, perm.ParentID()); err != nil {
-			return nil, err
-		}
-	}
-
-	created, err := uc.repo.Create(ctx, perm)
-	return created, err
+	return uc.repo.Create(ctx, perm)
 }
 
-// GetPermission 按 ID 取权限节点。
 func (uc *PermissionUsecase) GetPermission(ctx context.Context, id int64) (*domain.Permission, error) {
-	p, err := uc.repo.GetByID(ctx, id)
-	return p, err
+	return uc.repo.GetByID(ctx, id)
 }
 
-// ListPermissions 返回平铺的权限列表。
 func (uc *PermissionUsecase) ListPermissions(ctx context.Context, q domain.ListPermissionsQuery) ([]*domain.Permission, error) {
-	perms, err := uc.repo.List(ctx, q)
-	return perms, err
+	return uc.repo.List(ctx, q)
 }
 
-// UpdatePermission 更新权限节点。
-//
-// 变更父节点时需要纵观全树才能判断是否成环，
-// 因此先把整棵树取出来交给 PermissionTree 判定——
-// 权限总量只有百级，一次全量查询的代价可以忽略。
 func (uc *PermissionUsecase) UpdatePermission(ctx context.Context, id int64, params domain.NewPermissionParams, expectedRevision *int64) (*domain.Permission, error) {
 	current, err := uc.repo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-
-	if params.ParentID != current.ParentID() {
-		tree, err := uc.loadTree(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if err := tree.EnsureNoCycle(id, params.ParentID); err != nil {
-			return nil, err
-		}
-	}
-
 	if err := current.Update(params); err != nil {
 		return nil, err
 	}
-
-	updated, err := uc.repo.Update(ctx, current, expectedRevision)
-	return updated, err
+	return uc.repo.Update(ctx, current, expectedRevision)
 }
 
-// DeletePermission 删除权限节点。
 func (uc *PermissionUsecase) DeletePermission(ctx context.Context, id int64, expectedRevision *int64) error {
-	perm, err := uc.repo.GetByID(ctx, id)
-	if err != nil {
-		return err
-	}
-
-	childCount, err := uc.repo.CountChildren(ctx, id)
-	if err != nil {
-		return err
-	}
-	if err := perm.EnsureDeletable(childCount); err != nil {
-		return err
-	}
-
 	return uc.repo.Delete(ctx, id, expectedRevision)
 }
 
@@ -113,23 +63,13 @@ func (uc *PermissionUsecase) GetMenusForRoles(ctx context.Context, roleNames []s
 		return nil, nil, err
 	}
 
-	tree, err := uc.loadTree(ctx)
+	perms, err := uc.repo.List(ctx, domain.ListPermissionsQuery{})
 	if err != nil {
 		return nil, nil, err
 	}
-
-	return tree.VisibleMenus(codes), codes, nil
+	return domain.NewPermissionTree(perms).VisibleMenus(codes), codes, nil
 }
 
-func (uc *PermissionUsecase) loadTree(ctx context.Context) (*domain.PermissionTree, error) {
-	perms, err := uc.repo.List(ctx, domain.ListPermissionsQuery{})
-	if err != nil {
-		return nil, err
-	}
-	return domain.NewPermissionTree(perms), nil
-}
-
-// toRoles 把字符串角色名批量转成值对象，跳过空串。
 func toRoles(names []string) ([]domain.Role, error) {
 	out := make([]domain.Role, 0, len(names))
 	for _, n := range names {

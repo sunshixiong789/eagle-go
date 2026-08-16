@@ -121,15 +121,23 @@ func TestPermissionEnsureDeletable(t *testing.T) {
 // ── 权限树 ────────────────────────────────────────────────
 
 // 构造一棵：1(目录) -> 100(菜单) -> 101(按钮)，另有 200(菜单) 挂在 1 下
-func buildTree() *PermissionTree {
+func snap(id, parent int64, name, code string, typ PermissionType, status, sort int32) PermissionSnapshot {
 	now := time.Now()
+	return PermissionSnapshot{
+		ID: id, ParentID: parent, Name: name, Code: code,
+		Type: int32(typ), Status: status, Sort: sort, Visible: true,
+		CreatedAt: now, UpdatedAt: now, Revision: 1,
+	}
+}
+
+func buildTree() *PermissionTree {
 	return NewPermissionTree([]*Permission{
-		RehydratePermission(1, 0, "系统管理", "", int32(PermissionTypeDir), 1, "", "", "", 1, true, now, now, 1),
-		RehydratePermission(100, 1, "用户管理", "system:user:list", int32(PermissionTypeMenu), 1, "", "", "", 1, true, now, now, 1),
-		RehydratePermission(101, 100, "用户新增", "system:user:add", int32(PermissionTypeButton), 1, "", "", "", 1, true, now, now, 1),
-		RehydratePermission(200, 1, "字典管理", "system:dict:list", int32(PermissionTypeMenu), 1, "", "", "", 2, true, now, now, 1),
-		RehydratePermission(201, 200, "字典停用项", "system:dict:add", int32(PermissionTypeButton), 0, "", "", "", 1, true, now, now, 1),
-		RehydratePermission(300, 1, "停用角色菜单", "system:role:list", int32(PermissionTypeMenu), 0, "", "", "", 3, true, now, now, 1),
+		RehydratePermission(snap(1, 0, "系统管理", "", PermissionTypeDir, 1, 1)),
+		RehydratePermission(snap(100, 1, "用户管理", "system:user:list", PermissionTypeMenu, 1, 1)),
+		RehydratePermission(snap(101, 100, "用户新增", "system:user:add", PermissionTypeButton, 1, 1)),
+		RehydratePermission(snap(200, 1, "字典管理", "system:dict:list", PermissionTypeMenu, 1, 2)),
+		RehydratePermission(snap(201, 200, "字典停用项", "system:dict:add", PermissionTypeButton, 0, 1)),
+		RehydratePermission(snap(300, 1, "停用角色菜单", "system:role:list", PermissionTypeMenu, 0, 3)),
 	})
 }
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/eagle-go/eagle/app/system/internal/domain"
 	"github.com/eagle-go/eagle/ent/casbinrule"
+	"github.com/eagle-go/eagle/ent/permissiondefinition"
 	"github.com/eagle-go/eagle/ent/policyaudit"
 	"github.com/eagle-go/eagle/pkg/authz"
 	"github.com/eagle-go/eagle/pkg/healthx"
@@ -28,6 +29,7 @@ func TestPermissionRepoCRUD(t *testing.T) {
 
 	ctx := context.Background()
 	repo := NewPermissionRepo(testData)
+	mustCatalogCode(t, "test:crud:root")
 
 	created, err := repo.Create(ctx, newPermission(t, domain.NewPermissionParams{
 		ParentID: domain.RootPermissionID,
@@ -87,6 +89,24 @@ func newPermission(t *testing.T, params domain.NewPermissionParams) *domain.Perm
 		t.Fatalf("构造 Permission: %v", err)
 	}
 	return p
+}
+
+func mustCatalogCode(t *testing.T, code string) {
+	t.Helper()
+	parsed := domain.MustPermissionCode(code)
+	err := testData.client.PermissionDefinition.Create().
+		SetCode(parsed.String()).
+		SetService(parsed.Domain()).
+		SetResource(parsed.Resource()).
+		SetAction(parsed.Action()).
+		SetStatus(1).
+		SetSource("test").
+		OnConflictColumns(permissiondefinition.FieldCode).
+		Ignore().
+		Exec(context.Background())
+	if err != nil {
+		t.Fatalf("写入权限目录 %s: %v", code, err)
+	}
 }
 
 // 权限码唯一由条件唯一索引保证，data 层要把它翻译成领域错误。
@@ -150,10 +170,26 @@ func TestPermissionRepoNotFound(t *testing.T) {
 	}
 }
 
+func TestPermissionRepoRejectsUnknownCatalogCode(t *testing.T) {
+	skipIfShort(t)
+	ctx := context.Background()
+	repo := NewPermissionRepo(testData)
+	_, err := repo.Create(ctx, newPermission(t, domain.NewPermissionParams{
+		Name:   "无目录码",
+		Code:   "test:unknown:code",
+		Type:   int32(domain.PermissionTypeButton),
+		Status: int32(domain.StatusEnabled),
+	}))
+	if !errors.Is(err, domain.ErrUnknownPermissionCode) {
+		t.Fatalf("未知目录码应返回 ErrUnknownPermissionCode, got %v", err)
+	}
+}
+
 func TestPermissionRepoRejectsStaleRevision(t *testing.T) {
 	skipIfShort(t)
 	ctx := context.Background()
 	repo := NewPermissionRepo(testData)
+	mustCatalogCode(t, "test:revision:edit")
 	created, err := repo.Create(ctx, newPermission(t, domain.NewPermissionParams{
 		Name: "revision-test", Code: "test:revision:edit", Type: int32(domain.PermissionTypeButton), Status: 1,
 	}))
@@ -167,28 +203,18 @@ func TestPermissionRepoRejectsStaleRevision(t *testing.T) {
 	}
 }
 
-func TestPermissionRepoCountChildren(t *testing.T) {
+func TestPermissionRepoDeleteRejectsNodeWithChildren(t *testing.T) {
 	skipIfShort(t)
 
 	ctx := context.Background()
 	repo := NewPermissionRepo(testData)
 
-	// 种子数据里 id=1 是「系统管理」目录，其下挂着若干菜单
-	n, err := repo.CountChildren(ctx, 1)
-	if err != nil {
-		t.Fatalf("CountChildren: %v", err)
+	// 种子数据里 id=1 是「系统管理」目录，其下挂着菜单
+	if err := repo.Delete(ctx, 1, nil); !errors.Is(err, domain.ErrPermissionHasChildren) {
+		t.Fatalf("Delete(parent) = %v, want ErrPermissionHasChildren", err)
 	}
-	if n == 0 {
-		t.Error("系统管理目录应有子节点")
-	}
-
-	// 叶子节点没有子节点
-	leaf, err := repo.CountChildren(ctx, 101)
-	if err != nil {
-		t.Fatalf("CountChildren(leaf): %v", err)
-	}
-	if leaf != 0 {
-		t.Errorf("按钮节点不应有子节点, got %d", leaf)
+	if _, err := repo.GetByID(ctx, 1); err != nil {
+		t.Fatalf("有子节点的目录删除失败后应仍存在: %v", err)
 	}
 }
 
@@ -278,21 +304,14 @@ func TestPolicyStoreLoadsSeededPolicies(t *testing.T) {
 	store := newTestPolicyStore(t)
 	user := mustRoles(t, "user")
 
-	// 迁移种入：p, user, system:dict:query
-	ok, err := store.Allow(ctx, user, domain.MustPermissionCode("system:dict:query"))
+	codes, err := store.ResolveCodes(ctx, user)
 	if err != nil {
-		t.Fatalf("Allow: %v", err)
+		t.Fatalf("ResolveCodes: %v", err)
 	}
-	if !ok {
+	if !codesCover(codes, "system:dict:query") {
 		t.Error("user 角色应拥有 system:dict:query")
 	}
-
-	// user 是只读角色，不应有写权限
-	ok, err = store.Allow(ctx, user, domain.MustPermissionCode("system:permission:remove"))
-	if err != nil {
-		t.Fatalf("Allow: %v", err)
-	}
-	if ok {
+	if codesCover(codes, "system:permission:remove") {
 		t.Error("user 角色不应拥有 system:permission:remove")
 	}
 }
@@ -305,14 +324,14 @@ func TestPolicyStoreWildcardFromSeed(t *testing.T) {
 	store := newTestPolicyStore(t)
 	admin := mustRoles(t, "admin")
 
+	codes, err := store.ResolveCodes(ctx, admin)
+	if err != nil {
+		t.Fatalf("ResolveCodes: %v", err)
+	}
 	for _, perm := range []string{
 		"system:permission:add", "system:dict:remove", "system:role:assign",
 	} {
-		ok, err := store.Allow(ctx, admin, domain.MustPermissionCode(perm))
-		if err != nil {
-			t.Fatalf("Allow(%s): %v", perm, err)
-		}
-		if !ok {
+		if !codesCover(codes, perm) {
 			t.Errorf("admin 应通过通配策略获得 %q", perm)
 		}
 	}
@@ -405,21 +424,14 @@ func TestPolicyStoreSetRolePermissionsReplaces(t *testing.T) {
 	}
 
 	fresh := newTestPolicyStore(t)
-	roles := mustRoles(t, role)
-
-	ok, err := fresh.Allow(ctx, roles, domain.MustPermissionCode("system:dict:add"))
+	codes, err := fresh.ResolveCodes(ctx, mustRoles(t, role))
 	if err != nil {
-		t.Fatalf("Allow: %v", err)
+		t.Fatalf("ResolveCodes: %v", err)
 	}
-	if ok {
+	if codesCover(codes, "system:dict:add") {
 		t.Error("被覆盖掉的权限不应残留")
 	}
-
-	ok, err = fresh.Allow(ctx, roles, domain.MustPermissionCode("system:dict:query"))
-	if err != nil {
-		t.Fatalf("Allow: %v", err)
-	}
-	if !ok {
+	if !codesCover(codes, "system:dict:query") {
 		t.Error("保留的权限应仍然有效")
 	}
 }
@@ -612,29 +624,38 @@ func TestRoleInheritanceLifecycle(t *testing.T) {
 	}
 }
 
-func TestPolicyStoreListBoundRoles(t *testing.T) {
+func TestPolicyStoreListBindings(t *testing.T) {
 	skipIfShort(t)
 
 	ctx := context.Background()
 	store := newTestPolicyStore(t)
 
-	roles, err := store.ListBoundRoles(ctx)
+	bindings, err := store.ListBindings(ctx)
 	if err != nil {
-		t.Fatalf("ListBoundRoles: %v", err)
+		t.Fatalf("ListBindings: %v", err)
 	}
 
-	names := make([]string, 0, len(roles))
-	for _, r := range roles {
-		names = append(names, r.String())
+	names := make([]string, 0, len(bindings))
+	for _, b := range bindings {
+		names = append(names, b.Role().String())
 	}
 
 	if !slices.Contains(names, "admin") || !slices.Contains(names, "user") {
 		t.Errorf("应包含种子角色 admin 与 user, got %v", names)
 	}
-	// 结果要进后台列表，顺序必须稳定
 	if !slices.IsSorted(names) {
 		t.Errorf("结果应有序, got %v", names)
 	}
+}
+
+func codesCover(codes []domain.PermissionCode, target string) bool {
+	want := domain.MustPermissionCode(target)
+	for _, c := range codes {
+		if c.Covers(want) {
+			return true
+		}
+	}
+	return false
 }
 
 // ── 字典 ──────────────────────────────────────────────────
@@ -769,5 +790,9 @@ func TestNewEnforcerLoadsFromDatabase(t *testing.T) {
 	}
 	if !ok {
 		t.Error("应从库中加载到种子策略")
+	}
+
+	if err := e.SetRolePermissions(context.Background(), "user", []string{"system:dict:list"}); !errors.Is(err, authz.ErrAdapterReadOnly) {
+		t.Fatalf("持久化判定器直接改内存策略: %v", err)
 	}
 }

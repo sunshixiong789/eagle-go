@@ -127,6 +127,5 @@ func (uc *RoleBindingUsecase) ResolveCodes(ctx context.Context, roleNames []stri
 	if err != nil {
 		return nil, err
 	}
-	codes, err := uc.policy.ResolveCodes(ctx, roles)
-	return codes, err
+	return uc.policy.ResolveCodes(ctx, roles)
 }

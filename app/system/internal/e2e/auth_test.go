@@ -110,7 +110,7 @@ func TestAuthorizationByRole(t *testing.T) {
 	t.Run("缺权限则 403", func(t *testing.T) {
 		token := env.kc.userToken(t, "vera", "viewer")
 		code, body := env.do(t, http.MethodPost, "/v1/system/permissions", token,
-			`{"name":"测试","type":3,"code":"test:x:y"}`)
+			`{"name":"测试","type":1}`)
 		if code != http.StatusForbidden {
 			t.Errorf("viewer 尝试新增 = %d (%s), want 403", code, body)
 		}
@@ -119,7 +119,7 @@ func TestAuthorizationByRole(t *testing.T) {
 	t.Run("换个有权限的角色就通过", func(t *testing.T) {
 		token := env.kc.userToken(t, "eddie", "editor")
 		code, body := env.do(t, http.MethodPost, "/v1/system/permissions", token,
-			`{"name":"E2E 测试节点","type":3,"code":"e2e:test:node"}`)
+			`{"name":"E2E 测试节点","type":1}`)
 		if code != http.StatusOK {
 			t.Errorf("editor 新增 = %d (%s), want 200", code, body)
 		}

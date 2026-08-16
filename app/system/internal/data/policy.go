@@ -1,10 +1,12 @@
 package data
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 
 	"github.com/eagle-go/eagle/app/system/internal/domain"
 	"github.com/eagle-go/eagle/ent"
@@ -38,10 +40,6 @@ func NewPolicyRepo(enforcer *authz.Enforcer, client *ent.Client, watcher *authz.
 	return &policyRepo{enforcer: enforcer, adapter: adapter, client: client, watcher: watcher}
 }
 
-func (r *policyRepo) Allow(_ context.Context, roles []domain.Role, perm domain.PermissionCode) (bool, error) {
-	return r.enforcer.Allow(roleNames(roles), perm.String())
-}
-
 func (r *policyRepo) FindBinding(ctx context.Context, role domain.Role) (*domain.RoleBinding, error) {
 	raw, err := r.enforcer.RolePermissions(ctx, role.String())
 	if err != nil {
@@ -67,17 +65,7 @@ func (r *policyRepo) FindBinding(ctx context.Context, role domain.Role) (*domain
 
 func (r *policyRepo) SaveBinding(ctx context.Context, b *domain.RoleBinding, expectedVersion *int64) (int64, error) {
 	version, err := r.adapter.ReplaceRolePermissionsIfVersion(ctx, b.Role().String(), b.CodeStrings(), expectedVersion, mutationMeta(ctx))
-	if err != nil {
-		if errors.Is(err, authz.ErrConcurrentModification) {
-			return 0, domain.ErrConcurrentModification
-		}
-		return 0, err
-	}
-	if err := r.enforcer.ReloadPolicy(ctx); err != nil {
-		return version, fmt.Errorf("策略已提交为版本 %d，但本实例重载失败: %w", version, err)
-	}
-	r.watcher.NotifyVersion(ctx, version)
-	return version, nil
+	return r.commitPolicy(ctx, version, err)
 }
 
 func (r *policyRepo) ResolveCodes(ctx context.Context, roles []domain.Role) ([]domain.PermissionCode, error) {
@@ -90,20 +78,7 @@ func (r *policyRepo) ResolveCodes(ctx context.Context, roles []domain.Role) ([]d
 
 func (r *policyRepo) SaveInheritance(ctx context.Context, ri domain.RoleInheritance, expectedVersion *int64) (int64, error) {
 	version, err := r.adapter.AddRoleInheritanceIfVersion(ctx, ri.Child.String(), ri.Parent.String(), expectedVersion, mutationMeta(ctx))
-	if err != nil {
-		if errors.Is(err, authz.ErrRoleInheritanceCycle) {
-			return 0, domain.ErrRoleInheritanceCycle
-		}
-		if errors.Is(err, authz.ErrConcurrentModification) {
-			return 0, domain.ErrConcurrentModification
-		}
-		return 0, err
-	}
-	if err := r.enforcer.ReloadPolicy(ctx); err != nil {
-		return version, fmt.Errorf("策略已提交为版本 %d，但本实例重载失败: %w", version, err)
-	}
-	r.watcher.NotifyVersion(ctx, version)
-	return version, nil
+	return r.commitPolicy(ctx, version, err)
 }
 
 func (r *policyRepo) PolicyVersion(ctx context.Context) (int64, error) {
@@ -115,11 +90,11 @@ func (r *policyRepo) ListInheritances(ctx context.Context) ([]domain.RoleInherit
 	if err != nil {
 		return nil, err
 	}
-	sort.Slice(pairs, func(i, j int) bool {
-		if pairs[i].Child == pairs[j].Child {
-			return pairs[i].Parent < pairs[j].Parent
+	slices.SortFunc(pairs, func(a, b authz.RoleInheritancePair) int {
+		if n := cmp.Compare(a.Child, b.Child); n != 0 {
+			return n
 		}
-		return pairs[i].Child < pairs[j].Child
+		return cmp.Compare(a.Parent, b.Parent)
 	})
 	out := make([]domain.RoleInheritance, 0, len(pairs))
 	for _, pair := range pairs {
@@ -141,10 +116,17 @@ func (r *policyRepo) ListInheritances(ctx context.Context) ([]domain.RoleInherit
 
 func (r *policyRepo) DeleteInheritance(ctx context.Context, ri domain.RoleInheritance, expectedVersion *int64) (int64, error) {
 	version, err := r.adapter.DeleteRoleInheritanceIfVersion(ctx, ri.Child.String(), ri.Parent.String(), expectedVersion, mutationMeta(ctx))
-	if errors.Is(err, authz.ErrConcurrentModification) {
-		return 0, domain.ErrConcurrentModification
-	}
+	return r.commitPolicy(ctx, version, err)
+}
+
+func (r *policyRepo) commitPolicy(ctx context.Context, version int64, err error) (int64, error) {
 	if err != nil {
+		if errors.Is(err, authz.ErrConcurrentModification) {
+			return 0, domain.ErrConcurrentModification
+		}
+		if errors.Is(err, authz.ErrRoleInheritanceCycle) {
+			return 0, domain.ErrRoleInheritanceCycle
+		}
 		return 0, err
 	}
 	if err := r.enforcer.ReloadPolicy(ctx); err != nil {
@@ -169,23 +151,6 @@ func mutationMeta(ctx context.Context) authz.PolicyMutationMeta {
 	return meta
 }
 
-// ListBoundRoles 列出已配置过权限的角色。
-//
-// 直接查库而不是问 Casbin：enforcer 的 GetAllSubjects 返回的是内存模型
-// 里的全部主体，包含 g 规则带出的角色，与「配置过 p 策略的角色」语义不同。
-// 后台列表要的是后者。
-func (r *policyRepo) ListBoundRoles(ctx context.Context) ([]domain.Role, error) {
-	bindings, err := r.ListBindings(ctx)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]domain.Role, 0, len(bindings))
-	for _, binding := range bindings {
-		out = append(out, binding.Role())
-	}
-	return out, nil
-}
-
 // ListBindings 用一次数据库查询完成全部角色及其直接权限的分组。
 func (r *policyRepo) ListBindings(ctx context.Context) ([]*domain.RoleBinding, error) {
 	version, err := r.adapter.PolicyVersion(ctx)
@@ -207,11 +172,7 @@ func (r *policyRepo) ListBindings(ctx context.Context) ([]*domain.RoleBinding, e
 		}
 		grouped[rule.V0] = append(grouped[rule.V0], rule.V1)
 	}
-	names := make([]string, 0, len(grouped))
-	for name := range grouped {
-		names = append(names, name)
-	}
-	sort.Strings(names)
+	names := slices.Sorted(maps.Keys(grouped))
 
 	out := make([]*domain.RoleBinding, 0, len(names))
 	for _, n := range names {

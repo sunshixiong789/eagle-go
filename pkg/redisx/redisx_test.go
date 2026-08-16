@@ -2,7 +2,6 @@ package redisx
 
 import (
 	"context"
-	"encoding/json"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -12,20 +11,11 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-type stringCodec struct{}
-
-func (stringCodec) Marshal(v string) ([]byte, error) { return json.Marshal(v) }
-func (stringCodec) Unmarshal(b []byte) (string, error) {
-	var v string
-	err := json.Unmarshal(b, &v)
-	return v, err
-}
-
 func TestCacheSingleflightIsSharedAcrossConcurrentGets(t *testing.T) {
 	mr := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = client.Close() })
-	cache := NewCache[string](client, time.Minute, stringCodec{})
+	cache := NewCache[string](client, time.Minute, JSONCodec[string]{})
 
 	var loads atomic.Int32
 	loader := func(context.Context) (string, error) {

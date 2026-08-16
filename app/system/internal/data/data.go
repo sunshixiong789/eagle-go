@@ -6,7 +6,6 @@ package data
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"time"
@@ -30,9 +29,8 @@ var ProviderSet = wire.NewSet(
 	NewData,
 	NewEntClient,
 	NewRedisClient,
-	NewPolicyRedis,
 	NewEnforcer,
-	NewPolicyWatcherWithRedis,
+	NewPolicyWatcher,
 	NewPolicyRepo,
 	NewPermissionRepo,
 	NewDictRepo,
@@ -41,16 +39,12 @@ var ProviderSet = wire.NewSet(
 // Data 持有所有外部资源句柄。
 type Data struct {
 	client *ent.Client
-	// rdb 是安全关键的 token 撤销连接，保留字段名以兼容测试辅助代码。
+	// rdb 同时服务 token 撤销、字典缓存和策略 pub/sub。
+	// go-redis 的 Subscribe 会从池里独占一条连接，不必再为通知单独建 Client。
 	rdb            *redis.Client
-	cacheRDB       *redis.Client
-	policyRDB      *redis.Client
 	dictCache      *redisx.Cache[[]*domain.DictData]
 	healthCleanups []func()
 }
-
-// PolicyRedis 是策略协调专用连接池的 wire 区分类型。
-type PolicyRedis struct{ Client *redis.Client }
 
 // NewData 建立数据库与 Redis 连接。
 // 返回的 cleanup 由 wire 串进应用退出流程。
@@ -82,17 +76,15 @@ func NewData(c *conf.Data, ac *conf.Auth) (*Data, func(), error) {
 		return nil, nil, err
 	}
 
-	cacheRDB, cacheCleanup := redisx.NewClient(redisCfg)
-	policyRDB, policyCleanup := redisx.NewClient(redisCfg)
 	dictTTL := orDefault(ac.GetDictCacheTtl().AsDuration(), 30*time.Minute)
-	d := &Data{client: client, rdb: rdb, cacheRDB: cacheRDB, policyRDB: policyRDB}
-	d.dictCache = redisx.NewCache[[]*domain.DictData](cacheRDB, dictTTL, jsonCodec[[]*domain.DictData]{})
+	d := &Data{client: client, rdb: rdb}
+	d.dictCache = redisx.NewCache[[]*domain.DictData](rdb, dictTTL, redisx.JSONCodec[[]*domain.DictData]{})
 	d.healthCleanups = append(d.healthCleanups,
 		healthx.Default.Register("postgres", func(ctx context.Context) error {
 			_, err := client.PolicyState.Query().Exist(ctx)
 			return err
 		}),
-		healthx.Default.Register("redis-revocations", func(ctx context.Context) error {
+		healthx.Default.Register("redis", func(ctx context.Context) error {
 			return rdb.Ping(ctx).Err()
 		}),
 	)
@@ -102,8 +94,6 @@ func NewData(c *conf.Data, ac *conf.Auth) (*Data, func(), error) {
 		for _, unregister := range d.healthCleanups {
 			unregister()
 		}
-		policyCleanup()
-		cacheCleanup()
 		redisCleanup()
 		dbCleanup()
 	}
@@ -113,12 +103,9 @@ func NewData(c *conf.Data, ac *conf.Auth) (*Data, func(), error) {
 // NewEntClient 暴露 ent 客户端，供 Casbin 适配器复用同一连接池。
 func NewEntClient(d *Data) *ent.Client { return d.client }
 
-// NewRedisClient 把 Redis 句柄暴露给 server 层构造 token 撤销存储。
-// 连接生命周期仍归 Data 管理，这里只共享同一个连接池。
+// NewRedisClient 把 Redis 句柄暴露给 server 层构造 token 撤销存储，
+// 以及策略 watcher。连接生命周期仍归 Data 管理。
 func NewRedisClient(d *Data) *redis.Client { return d.rdb }
-
-// NewPolicyRedis 暴露策略通知专用连接池。
-func NewPolicyRedis(d *Data) *PolicyRedis { return &PolicyRedis{Client: d.policyRDB} }
 
 // NewEnforcer 构造 Casbin 判定器，策略存储复用项目自身的 ent 客户端。
 func NewEnforcer(client *ent.Client) (*authz.Enforcer, error) {
@@ -154,7 +141,7 @@ func checkAuthzPolicyReady(ctx context.Context, adapter *authz.EntAdapter, enfor
 // NewPolicyWatcher 构造策略广播器，并在后台启动订阅循环，
 // 使多副本部署下各实例的内存 Casbin 模型保持同步。
 //
-// 没有这层同步，SetRolePermissions 只更新处理该次请求的那个副本：
+// 没有这层同步，策略写入只重载处理该次请求的那个副本：
 // 后台改角色权限只有命中的副本立即生效，其余副本要等进程重启才追上，
 // 且不会有任何报错——只会表现为「改了权限，一部分用户生效一部分不生效」。
 //
@@ -192,15 +179,6 @@ func NewPolicyWatcher(
 		<-done
 	}
 	return w, cleanup, nil
-}
-
-// NewPolicyWatcherWithRedis 是生产装配入口，使用策略协调专用连接池。
-func NewPolicyWatcherWithRedis(
-	policyRedis *PolicyRedis,
-	enforcer *authz.Enforcer,
-	logger *slog.Logger,
-) (*authz.RedisWatcher, func(), error) {
-	return NewPolicyWatcher(policyRedis.Client, enforcer, logger)
 }
 
 func orDefault(v, def time.Duration) time.Duration {
@@ -259,19 +237,4 @@ func isUniqueViolation(err error) bool {
 // isForeignKeyViolation 判断是否违反外键约束。
 func isForeignKeyViolation(err error) bool {
 	return pgErrorCode(err) == pgForeignKeyViolation
-}
-
-// ── 通用缓存原语 ──────────────────────────────────────────
-
-// jsonCodec 用 JSON 编解码缓存值。
-// 字典项是小结构，JSON 开销可忽略，换来缓存内容可以直接用
-// redis-cli 读懂，排障方便。
-type jsonCodec[T any] struct{}
-
-func (jsonCodec[T]) Marshal(v T) ([]byte, error) { return json.Marshal(v) }
-
-func (jsonCodec[T]) Unmarshal(b []byte) (T, error) {
-	var v T
-	err := json.Unmarshal(b, &v)
-	return v, err
 }

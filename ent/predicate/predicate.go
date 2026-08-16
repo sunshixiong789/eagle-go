@@ -27,11 +27,5 @@ type PermissionTreeState func(*sql.Selector)
 // PolicyAudit is the predicate function for policyaudit builders.
 type PolicyAudit func(*sql.Selector)
 
-// PolicyOutbox is the predicate function for policyoutbox builders.
-type PolicyOutbox func(*sql.Selector)
-
 // PolicyState is the predicate function for policystate builders.
 type PolicyState func(*sql.Selector)
-
-// UserProfile is the predicate function for userprofile builders.
-type UserProfile func(*sql.Selector)

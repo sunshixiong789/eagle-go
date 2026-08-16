@@ -194,35 +194,6 @@ var (
 			},
 		},
 	}
-	// AuthzPolicyOutboxColumns holds the columns for the "authz_policy_outbox" table.
-	AuthzPolicyOutboxColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt64, Increment: true},
-		{Name: "policy_version", Type: field.TypeInt64},
-		{Name: "event_type", Type: field.TypeString, Size: 64},
-		{Name: "payload", Type: field.TypeJSON},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "published_at", Type: field.TypeTime, Nullable: true},
-		{Name: "attempts", Type: field.TypeInt32, Default: 0},
-		{Name: "last_error", Type: field.TypeString, Default: ""},
-	}
-	// AuthzPolicyOutboxTable holds the schema information for the "authz_policy_outbox" table.
-	AuthzPolicyOutboxTable = &schema.Table{
-		Name:       "authz_policy_outbox",
-		Columns:    AuthzPolicyOutboxColumns,
-		PrimaryKey: []*schema.Column{AuthzPolicyOutboxColumns[0]},
-		Indexes: []*schema.Index{
-			{
-				Name:    "policyoutbox_published_at_id",
-				Unique:  false,
-				Columns: []*schema.Column{AuthzPolicyOutboxColumns[5], AuthzPolicyOutboxColumns[0]},
-			},
-			{
-				Name:    "policyoutbox_policy_version",
-				Unique:  true,
-				Columns: []*schema.Column{AuthzPolicyOutboxColumns[1]},
-			},
-		},
-	}
 	// AuthzPolicyStateColumns holds the columns for the "authz_policy_state" table.
 	AuthzPolicyStateColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -235,30 +206,6 @@ var (
 		Columns:    AuthzPolicyStateColumns,
 		PrimaryKey: []*schema.Column{AuthzPolicyStateColumns[0]},
 	}
-	// SysUserProfileColumns holds the columns for the "sys_user_profile" table.
-	SysUserProfileColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt64, Increment: true},
-		{Name: "subject", Type: field.TypeString, Unique: true, Size: 64},
-		{Name: "dept_id", Type: field.TypeInt64, Default: 0},
-		{Name: "position", Type: field.TypeString, Size: 64, Default: ""},
-		{Name: "remark", Type: field.TypeString, Default: ""},
-		{Name: "last_seen_at", Type: field.TypeTime, Nullable: true},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
-	}
-	// SysUserProfileTable holds the schema information for the "sys_user_profile" table.
-	SysUserProfileTable = &schema.Table{
-		Name:       "sys_user_profile",
-		Columns:    SysUserProfileColumns,
-		PrimaryKey: []*schema.Column{SysUserProfileColumns[0]},
-		Indexes: []*schema.Index{
-			{
-				Name:    "userprofile_dept_id",
-				Unique:  false,
-				Columns: []*schema.Column{SysUserProfileColumns[2]},
-			},
-		},
-	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		CasbinRuleTable,
@@ -268,9 +215,7 @@ var (
 		PermissionDefinitionTable,
 		PermissionTreeStateTable,
 		AuthzPolicyAuditTable,
-		AuthzPolicyOutboxTable,
 		AuthzPolicyStateTable,
-		SysUserProfileTable,
 	}
 )
 
@@ -296,13 +241,7 @@ func init() {
 	AuthzPolicyAuditTable.Annotation = &entsql.Annotation{
 		Table: "authz_policy_audit",
 	}
-	AuthzPolicyOutboxTable.Annotation = &entsql.Annotation{
-		Table: "authz_policy_outbox",
-	}
 	AuthzPolicyStateTable.Annotation = &entsql.Annotation{
 		Table: "authz_policy_state",
-	}
-	SysUserProfileTable.Annotation = &entsql.Annotation{
-		Table: "sys_user_profile",
 	}
 }

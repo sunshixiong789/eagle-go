@@ -33,8 +33,6 @@ lint-proto:
 # 生成依赖注入代码
 wire:
 	cd app/system/cmd/server && wire
-	# app/auth 服务开工后取消下一行注释
-	# cd app/auth/cmd/server && wire
 
 .PHONY: migrate-up
 # 执行数据库迁移
@@ -66,7 +64,7 @@ lint:
 	golangci-lint run ./...
 
 .PHONY: test
-# 单测（biz 层）+ 集成测试（testcontainers 起真 PG）
+# 单测 + 集成测试（embedded-postgres + miniredis，不需要 Docker）
 test:
 	go test -race -cover ./...
 

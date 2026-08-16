@@ -152,19 +152,6 @@ func (c PermissionCode) HasWildcard() bool {
 	return strings.Contains(c.value, permCodeWildcard)
 }
 
-// IsReadOnly 判断这是不是只读动作。
-//
-// 用于守护「普通角色不得被授予写权限」这类不变量——
-// 种子数据或后台误配一旦放过，新用户默认就能删库。
-func (c PermissionCode) IsReadOnly() bool {
-	switch c.Action() {
-	case "query", "list", "get", "export":
-		return true
-	default:
-		return false
-	}
-}
-
 // Covers 判断本权限码（作为策略）是否覆盖 target（作为请求）。
 //
 // 实现必须与 Casbin 模型里的 keyMatch 逐字节一致，否则会出现

@@ -159,6 +159,24 @@ func assertSeedData(t *testing.T, db *sql.DB) {
 		t.Error("user 角色没有任何权限策略")
 	}
 
+	var outboxExists bool
+	err = db.QueryRow(`SELECT to_regclass('authz_policy_outbox') IS NOT NULL`).Scan(&outboxExists)
+	if err != nil {
+		t.Fatalf("检查 outbox 表: %v", err)
+	}
+	if outboxExists {
+		t.Error("authz_policy_outbox 应为遗留表并已被后续迁移删除")
+	}
+
+	var profileExists bool
+	err = db.QueryRow(`SELECT to_regclass('sys_user_profile') IS NOT NULL`).Scan(&profileExists)
+	if err != nil {
+		t.Fatalf("检查 user_profile 表: %v", err)
+	}
+	if profileExists {
+		t.Error("sys_user_profile 没有调用方，应为后续迁移删除")
+	}
+
 	// 字典项必须挂在已存在的字典类型下（外键之外再确认一次数据自洽）
 	var orphanDictData int
 	err = db.QueryRow(`

@@ -74,6 +74,9 @@ func buildCasbinEnforcer(ctx context.Context, adapter persist.Adapter) (*casbin.
 			return nil, fmt.Errorf("authz: 加载策略: %w", err)
 		}
 		e.SetAdapter(adapter)
+		// 持久化写入只允许走 Replace* / *IfVersion，避免 Casbin AutoSave
+		// 绕过版本号和审计。
+		e.EnableAutoSave(false)
 		if err := e.BuildRoleLinks(); err != nil {
 			return nil, fmt.Errorf("authz: 构建角色继承: %w", err)
 		}
@@ -146,10 +149,12 @@ func (en *Enforcer) EntAdapter() (*EntAdapter, bool) {
 	return adapter, ok
 }
 
-// SetRolePermissions 全量覆盖某个角色的权限码集合。
-//
-// 先删后加放在一次调用里完成，避免中间态下该角色短暂没有任何权限。
+// SetRolePermissions 只允许改内存模型，供无持久化适配器的测试使用。
+// 生产写入必须走 EntAdapter.ReplaceRolePermissions*。
 func (en *Enforcer) SetRolePermissions(_ context.Context, role string, perms []string) error {
+	if err := en.guardMemoryOnly(); err != nil {
+		return err
+	}
 	en.mu.Lock()
 	defer en.mu.Unlock()
 
@@ -219,13 +224,23 @@ func (en *Enforcer) PermissionsOf(_ context.Context, roles []string) ([]string, 
 	return out, nil
 }
 
-// AddRoleInheritance 建立角色继承：child 继承 parent 的全部权限。
+// AddRoleInheritance 只允许改内存模型，供无持久化适配器的测试使用。
 func (en *Enforcer) AddRoleInheritance(_ context.Context, child, parent string) error {
+	if err := en.guardMemoryOnly(); err != nil {
+		return err
+	}
 	en.mu.Lock()
 	defer en.mu.Unlock()
 
 	if _, err := en.e.AddGroupingPolicy(child, parent); err != nil {
 		return fmt.Errorf("authz: 建立 %q -> %q 的继承: %w", child, parent, err)
+	}
+	return nil
+}
+
+func (en *Enforcer) guardMemoryOnly() error {
+	if en.adapter != nil {
+		return fmt.Errorf("authz: 持久化判定器禁止直接改内存策略: %w", ErrAdapterReadOnly)
 	}
 	return nil
 }

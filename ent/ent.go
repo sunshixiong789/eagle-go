@@ -19,9 +19,7 @@ import (
 	"github.com/eagle-go/eagle/ent/permissiondefinition"
 	"github.com/eagle-go/eagle/ent/permissiontreestate"
 	"github.com/eagle-go/eagle/ent/policyaudit"
-	"github.com/eagle-go/eagle/ent/policyoutbox"
 	"github.com/eagle-go/eagle/ent/policystate"
-	"github.com/eagle-go/eagle/ent/userprofile"
 )
 
 // ent aliases to avoid import conflicts in user's code.
@@ -89,9 +87,7 @@ func checkColumn(t, c string) error {
 			permissiondefinition.Table: permissiondefinition.ValidColumn,
 			permissiontreestate.Table:  permissiontreestate.ValidColumn,
 			policyaudit.Table:          policyaudit.ValidColumn,
-			policyoutbox.Table:         policyoutbox.ValidColumn,
 			policystate.Table:          policystate.ValidColumn,
-			userprofile.Table:          userprofile.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

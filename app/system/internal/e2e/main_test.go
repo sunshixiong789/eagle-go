@@ -228,7 +228,14 @@ func newTestEnv(t *testing.T) *testEnv {
 // grantRole 给角色授予权限码，并让判定器立即生效。
 func (e *testEnv) grantRole(t *testing.T, role string, perms ...string) {
 	t.Helper()
-	if err := e.enforcer.SetRolePermissions(context.Background(), role, perms); err != nil {
+	adapter, ok := e.enforcer.EntAdapter()
+	if !ok {
+		t.Fatal("e2e 判定器必须使用 EntAdapter")
+	}
+	if _, err := adapter.ReplaceRolePermissions(context.Background(), role, perms, authz.PolicyMutationMeta{}); err != nil {
 		t.Fatalf("授予角色 %s 权限: %v", role, err)
+	}
+	if err := e.enforcer.ReloadPolicy(context.Background()); err != nil {
+		t.Fatalf("重载角色 %s 权限: %v", role, err)
 	}
 }
