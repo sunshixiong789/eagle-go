@@ -304,11 +304,6 @@ func (t *PermissionTree) EnsureNoCycle(id, newParentID int64) error {
 // 除了直接命中的节点，还会补全它们的祖先链：
 // 少了父目录，子菜单在前端就挂不上树，表现为「有权限却看不到入口」。
 func (t *PermissionTree) VisibleMenus(granted []PermissionCode) []*Permission {
-	grantedSet := make(map[string]struct{}, len(granted))
-	for _, c := range granted {
-		grantedSet[c.String()] = struct{}{}
-	}
-
 	visible := make(map[int64]struct{}, len(t.all))
 	for _, p := range t.all {
 		if p.code.IsZero() {
@@ -318,7 +313,7 @@ func (t *PermissionTree) VisibleMenus(granted []PermissionCode) []*Permission {
 		if !p.status.Enabled() {
 			continue
 		}
-		if _, ok := grantedSet[p.code.String()]; ok {
+		if grantedCovers(granted, p.code) {
 			visible[p.id] = struct{}{}
 		}
 	}
@@ -348,6 +343,18 @@ func (t *PermissionTree) VisibleMenus(granted []PermissionCode) []*Permission {
 		}
 	}
 	return out
+}
+
+// grantedCovers 判断任一已授予的策略是否覆盖目标权限码。
+// 与鉴权判定共用 PermissionCode.Covers，因此 system:* 这类末段通配
+// 会让对应菜单可见，而不会只匹配字面量相等。
+func grantedCovers(granted []PermissionCode, target PermissionCode) bool {
+	for _, g := range granted {
+		if g.Covers(target) {
+			return true
+		}
+	}
+	return false
 }
 
 // KnownCodes 返回树中全部非空权限码，用于校验授权时引用的权限码是否存在。

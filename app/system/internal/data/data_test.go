@@ -10,8 +10,8 @@ import (
 	"github.com/eagle-go/eagle/app/system/internal/domain"
 	"github.com/eagle-go/eagle/ent/casbinrule"
 	"github.com/eagle-go/eagle/ent/policyaudit"
-	"github.com/eagle-go/eagle/ent/policyoutbox"
 	"github.com/eagle-go/eagle/pkg/authz"
+	"github.com/eagle-go/eagle/pkg/healthx"
 )
 
 func skipIfShort(t *testing.T) {
@@ -463,11 +463,15 @@ func TestPolicyStoreReplaceIsAtomicOnInsertFailure(t *testing.T) {
 	}
 }
 
-func TestPolicyMutationWritesVersionAuditAndOutbox(t *testing.T) {
+func TestPolicyMutationWritesVersionAndAudit(t *testing.T) {
 	skipIfShort(t)
 
 	ctx := context.Background()
 	adapter := authz.NewEntAdapter(testData.client)
+	before, err := adapter.PolicyVersion(ctx)
+	if err != nil {
+		t.Fatalf("PolicyVersion: %v", err)
+	}
 	version, err := adapter.ReplaceRolePermissions(ctx, "test-audit-role", []string{"system:dict:list"}, authz.PolicyMutationMeta{
 		ActorSubject:  "subject-1",
 		ActorClientID: "console",
@@ -477,6 +481,9 @@ func TestPolicyMutationWritesVersionAuditAndOutbox(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReplaceRolePermissions: %v", err)
 	}
+	if version <= before {
+		t.Fatalf("policy version did not advance: before=%d after=%d", before, version)
+	}
 
 	audit, err := testData.client.PolicyAudit.Query().Where(policyaudit.PolicyVersionEQ(version)).Only(ctx)
 	if err != nil {
@@ -485,12 +492,42 @@ func TestPolicyMutationWritesVersionAuditAndOutbox(t *testing.T) {
 	if audit.PolicyVersion != version || audit.ActorSubject != "subject-1" || audit.After[0] != "system:dict:list" {
 		t.Fatalf("unexpected audit: %#v", audit)
 	}
-	event, err := testData.client.PolicyOutbox.Query().Where(policyoutbox.PolicyVersionEQ(version)).Only(ctx)
+}
+
+func TestAuthzPolicyReadyIgnoresVersionLag(t *testing.T) {
+	skipIfShort(t)
+
+	ctx := context.Background()
+	enforcer, err := NewEnforcer(testData.client)
 	if err != nil {
-		t.Fatalf("query policy outbox: %v", err)
+		t.Fatalf("NewEnforcer: %v", err)
 	}
-	if event.PolicyVersion != version || event.PublishedAt != nil {
-		t.Fatalf("unexpected outbox event: %#v", event)
+	adapter, ok := enforcer.EntAdapter()
+	if !ok {
+		t.Fatal("NewEnforcer did not expose EntAdapter")
+	}
+
+	loaded := enforcer.LoadedPolicyVersion()
+	version, err := adapter.ReplaceRolePermissions(ctx, "test-ready-lag-role", []string{"system:dict:query"}, authz.PolicyMutationMeta{})
+	if err != nil {
+		t.Fatalf("ReplaceRolePermissions: %v", err)
+	}
+	if version == loaded {
+		t.Fatalf("expected database version to diverge from loaded version, both=%d", version)
+	}
+	if got := enforcer.LoadedPolicyVersion(); got != loaded {
+		t.Fatalf("loaded version changed without reload: %d -> %d", loaded, got)
+	}
+
+	healthx.Default.MarkInitialized()
+	if err := healthx.Default.Ready(ctx); err != nil {
+		t.Fatalf("Ready with policy version lag = %v", err)
+	}
+
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	if err := checkAuthzPolicyReady(canceled, adapter, enforcer); err == nil {
+		t.Fatal("unable to read policy version should still fail readiness")
 	}
 }
 

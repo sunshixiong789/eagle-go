@@ -64,9 +64,8 @@ func (w *RedisWatcher) NotifyVersion(ctx context.Context, version int64) {
 	}
 }
 
-// PublishVersion 广播策略版本并把投递错误返回给 Outbox 发布器。
-// 普通请求路径可继续使用 NotifyVersion 的尽力而为语义；可靠发布路径则
-// 必须在 Redis 真正接受消息后才能把事件标为已发布。
+// PublishVersion 广播策略版本。请求路径用 NotifyVersion 忽略投递错误；
+// 需要区分成功/失败的调用方可以直接使用本方法。
 func (w *RedisWatcher) PublishVersion(ctx context.Context, version int64) error {
 	if w == nil || w.rdb == nil {
 		return errors.New("authz: policy watcher is not configured")

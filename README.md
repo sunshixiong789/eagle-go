@@ -1,11 +1,12 @@
 # eagle-go
 
-Go 微服务基础架子，对标 eagle cloud（Java 版）的系统底座：**认证 + 权限（RBAC）+ 字典**。
+Go 模块化单体底座：**认证 + RBAC 授权 + 字典**。业务域按 `app/<service>` 增量添加，默认同进程部署。
 
 **Kratos v3** · **ent** · **Keycloak** · **Casbin** · PostgreSQL 17。
 
 第一次接触这个项目、想从零手把手跑起来的，看 [GETTING_STARTED.md](GETTING_STARTED.md)。
-本文档默认你已经熟悉 Go / Kratos / DDD，讲的是"为什么这么设计"。
+边界和底座约定看 [docs/architecture.md](docs/architecture.md)。
+本文档默认你已经熟悉 Go / Kratos，讲的是"为什么这么设计"。
 
 ---
 
@@ -60,9 +61,9 @@ v3 是破坏性升级，网上的中文教程基本都是 v2 的，会误导。�
 
 ---
 
-## 权限模型：Spring Security `@PreAuthorize` 的等价物
+## 权限模型：契约声明，中间件判定
 
-Go 里没有 Spring Security 的对等物。本项目用 **proto 自定义注解 + 中间件 + Casbin** 复刻其声明式体验。
+权限写在 proto 方法上，不进 handler。`pkg/authz` 从方法描述符读出注解，交给内存里的 Casbin。
 
 在契约上声明所需权限：
 

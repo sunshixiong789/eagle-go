@@ -15,10 +15,10 @@ enum AccessLevel {
   ACCESS_LEVEL_PERMISSION_REQUIRED = 3;
 }
 
-// 方法级权限声明，对标 Spring Security 的 @PreAuthorize。
+// 方法级权限声明。
 //
-// 权限要求写在契约里而不是散在代码中：pkg/authz 中间件在运行时
-// 从方法描述符读出这些扩展，调用方无需在每个 handler 里手写鉴权。
+// 权限要求写在契约里而不是散在 handler 中：pkg/authz 中间件在运行时
+// 从方法描述符读出这些扩展，业务代码不出现鉴权分支。
 //
 //   rpc CreateUser (CreateUserRequest) returns (CreateUserResponse) {
 //     option (eagle.annotations.v1.perm) = "system:user:add";

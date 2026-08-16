@@ -10,7 +10,8 @@ import (
 	"entgo.io/ent/schema/index"
 )
 
-// PolicyOutbox 保存与策略事务一同提交、等待发布的变更事件。
+// PolicyOutbox 是历史遗留表。运行时策略同步已改为版本号 + Redis 通知 +
+// 周期对账，不再写入或消费本表；物理删除留给后续迁移。
 type PolicyOutbox struct{ ent.Schema }
 
 func (PolicyOutbox) Annotations() []schema.Annotation {

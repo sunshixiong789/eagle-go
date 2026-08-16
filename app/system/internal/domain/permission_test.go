@@ -129,6 +129,7 @@ func buildTree() *PermissionTree {
 		RehydratePermission(101, 100, "用户新增", "system:user:add", int32(PermissionTypeButton), 1, "", "", "", 1, true, now, now, 1),
 		RehydratePermission(200, 1, "字典管理", "system:dict:list", int32(PermissionTypeMenu), 1, "", "", "", 2, true, now, now, 1),
 		RehydratePermission(201, 200, "字典停用项", "system:dict:add", int32(PermissionTypeButton), 0, "", "", "", 1, true, now, now, 1),
+		RehydratePermission(300, 1, "停用角色菜单", "system:role:list", int32(PermissionTypeMenu), 0, "", "", "", 3, true, now, now, 1),
 	})
 }
 
@@ -190,6 +191,58 @@ func TestPermissionTreeVisibleMenusIncludesAncestors(t *testing.T) {
 	// 无权限的分支不应出现
 	if ids[200] {
 		t.Error("未授权的分支 200 不应出现")
+	}
+}
+
+func visibleMenuIDs(menus []*Permission) map[int64]bool {
+	ids := make(map[int64]bool, len(menus))
+	for _, m := range menus {
+		ids[m.ID()] = true
+	}
+	return ids
+}
+
+// 末段通配授权必须与鉴权判定一致：system:* 让匹配的启用菜单及其祖先可见。
+func TestPermissionTreeVisibleMenusWildcardGrant(t *testing.T) {
+	tree := buildTree()
+
+	menus := tree.VisibleMenus([]PermissionCode{MustPermissionCode("system:*")})
+	ids := visibleMenuIDs(menus)
+
+	if !ids[1] {
+		t.Error("祖先目录 1 应被补全")
+	}
+	if !ids[100] {
+		t.Error("system:* 应覆盖启用菜单 system:user:list")
+	}
+	if !ids[200] {
+		t.Error("system:* 应覆盖启用菜单 system:dict:list")
+	}
+	if ids[101] {
+		t.Error("按钮节点不应出现在菜单树中")
+	}
+	if ids[201] {
+		t.Error("停用按钮即使被通配覆盖也不应出现")
+	}
+	if ids[300] {
+		t.Error("停用菜单即使被通配覆盖也不应出现")
+	}
+}
+
+func TestPermissionTreeVisibleMenusResourceWildcardExcludesOtherBranch(t *testing.T) {
+	tree := buildTree()
+
+	menus := tree.VisibleMenus([]PermissionCode{MustPermissionCode("system:user:*")})
+	ids := visibleMenuIDs(menus)
+
+	if !ids[1] || !ids[100] {
+		t.Error("system:user:* 应带出用户菜单及其祖先")
+	}
+	if ids[200] {
+		t.Error("system:user:* 不应带出字典分支")
+	}
+	if ids[300] {
+		t.Error("停用菜单不应出现")
 	}
 }
 

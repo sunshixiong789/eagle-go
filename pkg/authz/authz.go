@@ -1,4 +1,4 @@
-// Package authz 提供方法级鉴权中间件，对标 Spring Security 的 @PreAuthorize。
+// Package authz 提供方法级鉴权中间件。
 //
 // 权限要求声明在 proto 上（eagle.annotations.v1.perm），中间件在运行时
 // 从方法描述符读出并交给 Casbin 判定，业务 handler 里不出现任何鉴权代码。

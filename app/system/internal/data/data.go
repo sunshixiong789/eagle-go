@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"time"
 
@@ -136,16 +135,20 @@ func NewEnforcer(client *ent.Client) (*authz.Enforcer, error) {
 		return nil, err
 	}
 	healthx.Default.Register("authz-policy", func(ctx context.Context) error {
-		version, err := adapter.PolicyVersion(ctx)
-		if err != nil {
-			return err
-		}
-		if loaded := enforcer.LoadedPolicyVersion(); loaded != version {
-			return fmt.Errorf("loaded policy version %d, database version %d", loaded, version)
-		}
-		return nil
+		return checkAuthzPolicyReady(ctx, adapter, enforcer)
 	})
 	return enforcer, nil
+}
+
+// checkAuthzPolicyReady 是服务就绪检查里注册的策略探活。
+// 读不到数据库版本视为不健康；内存版本落后只记指标，不挡流量。
+func checkAuthzPolicyReady(ctx context.Context, adapter *authz.EntAdapter, enforcer *authz.Enforcer) error {
+	version, err := adapter.PolicyVersion(ctx)
+	if err != nil {
+		return err
+	}
+	recordPolicyVersionLag(ctx, version, enforcer.LoadedPolicyVersion())
+	return nil
 }
 
 // NewPolicyWatcher 构造策略广播器，并在后台启动订阅循环，
@@ -180,7 +183,7 @@ func NewPolicyWatcher(
 	}()
 	go func() {
 		defer func() { done <- struct{}{} }()
-		runPolicyReconciler(ctx, enforcer, w, logger)
+		runPolicyReconciler(ctx, enforcer, logger)
 	}()
 
 	cleanup := func() {

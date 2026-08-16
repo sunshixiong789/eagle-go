@@ -13,7 +13,6 @@ import (
 	"github.com/eagle-go/eagle/ent"
 	"github.com/eagle-go/eagle/ent/casbinrule"
 	"github.com/eagle-go/eagle/ent/permissiondefinition"
-	"github.com/eagle-go/eagle/ent/policyoutbox"
 	"github.com/eagle-go/eagle/ent/predicate"
 )
 
@@ -74,61 +73,6 @@ type PolicyMutationMeta struct {
 	TraceID       string
 }
 
-// PendingPolicyEvent 是待投递 Outbox 的最小投影视图。
-type PendingPolicyEvent struct {
-	ID            int64
-	PolicyVersion int64
-}
-
-// PendingPolicyEvents 返回按创建顺序排列的待发布策略事件。
-func (a *EntAdapter) PendingPolicyEvents(ctx context.Context, limit int) ([]PendingPolicyEvent, error) {
-	if limit <= 0 {
-		limit = 100
-	}
-	rows, err := a.client.PolicyOutbox.Query().
-		Where(policyoutbox.PublishedAtIsNil()).
-		Order(ent.Asc(policyoutbox.FieldID)).
-		Limit(limit).
-		All(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("authz: 查询待发布 Outbox: %w", err)
-	}
-	out := make([]PendingPolicyEvent, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, PendingPolicyEvent{ID: row.ID, PolicyVersion: row.PolicyVersion})
-	}
-	return out, nil
-}
-
-// MarkPolicyEventPublished 标记 Outbox 已成功发布。重复调用是幂等的。
-func (a *EntAdapter) MarkPolicyEventPublished(ctx context.Context, id int64, publishedAt time.Time) error {
-	_, err := a.client.PolicyOutbox.UpdateOneID(id).
-		SetPublishedAt(publishedAt).
-		AddAttempts(1).
-		SetLastError("").
-		Save(ctx)
-	if err != nil {
-		return fmt.Errorf("authz: 标记 Outbox %d 已发布: %w", id, err)
-	}
-	return nil
-}
-
-// MarkPolicyEventFailed 记录一次未成功投递，事件保持未发布以便下轮重试。
-func (a *EntAdapter) MarkPolicyEventFailed(ctx context.Context, id int64, publishErr error) error {
-	message := "unknown publish error"
-	if publishErr != nil {
-		message = publishErr.Error()
-	}
-	_, err := a.client.PolicyOutbox.UpdateOneID(id).
-		AddAttempts(1).
-		SetLastError(message).
-		Save(ctx)
-	if err != nil {
-		return fmt.Errorf("authz: 记录 Outbox %d 投递失败: %w", id, err)
-	}
-	return nil
-}
-
 // PolicyVersion 返回数据库中权威策略的单调递增版本。
 func (a *EntAdapter) PolicyVersion(ctx context.Context) (int64, error) {
 	state, err := a.client.PolicyState.Get(ctx, 1)
@@ -155,7 +99,7 @@ func (a *EntAdapter) PermissionCatalogCodes(ctx context.Context) ([]string, erro
 }
 
 // ReplaceRolePermissions 在一个事务内全量替换角色权限、递增版本并写入
-// 审计与 Outbox。调用成功后数据库永远处于完整的新版本，不存在先删后加
+// 审计。调用成功后数据库永远处于完整的新版本，不存在先删后加
 // 失败导致角色权限被清空的中间状态。
 func (a *EntAdapter) ReplaceRolePermissions(ctx context.Context, role string, perms []string, meta PolicyMutationMeta) (int64, error) {
 	return a.ReplaceRolePermissionsIfVersion(ctx, role, perms, nil, meta)
@@ -213,7 +157,7 @@ func (a *EntAdapter) ReplaceRolePermissionsIfVersion(ctx context.Context, role s
 	return version, nil
 }
 
-// AddRoleInheritanceAtomic 原子地增加角色继承并记录版本、审计和 Outbox。
+// AddRoleInheritanceAtomic 原子地增加角色继承并记录版本和审计。
 func (a *EntAdapter) AddRoleInheritanceAtomic(ctx context.Context, child, parent string, meta PolicyMutationMeta) (int64, error) {
 	return a.AddRoleInheritanceIfVersion(ctx, child, parent, nil, meta)
 }
@@ -373,14 +317,6 @@ func recordPolicyMutation(ctx context.Context, tx *ent.Tx, action, target string
 		SetAfter(after).
 		Save(ctx); err != nil {
 		return 0, fmt.Errorf("authz: 写入策略审计: %w", err)
-	}
-	payload := map[string]any{"action": action, "target": target, "version": state.Version}
-	if _, err := tx.PolicyOutbox.Create().
-		SetPolicyVersion(state.Version).
-		SetEventType("authz.policy.changed").
-		SetPayload(payload).
-		Save(ctx); err != nil {
-		return 0, fmt.Errorf("authz: 写入策略 Outbox: %w", err)
 	}
 	return state.Version, nil
 }

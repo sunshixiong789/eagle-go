@@ -1,6 +1,5 @@
-// Package identity 在 context 中承载已认证主体，
-// 相当于 Spring Security 的 SecurityContextHolder，
-// 只是这里用 context.Context 而非 ThreadLocal。
+// Package identity 用 context.Context 承载已认证主体。
+// 认证中间件写入，业务与鉴权中间件只从这里读取。
 package identity
 
 import "context"
