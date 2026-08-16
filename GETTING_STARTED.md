@@ -407,6 +407,7 @@ A: 完整步骤见 [docs/usage.md](docs/usage.md) 第 4 节。短答案：
 ## 9. 想深入了解，看这里
 
 - [docs/usage.md](docs/usage.md)：底座怎么用——加接口、配权限、拿当前用户
+- [docs/conventions.md](docs/conventions.md)：编码规范与工程规范；AI 硬约束见 [AGENTS.md](AGENTS.md)
 - [README.md](README.md)：这个项目"为什么这么设计"——分层架构的取舍、
   权限模型的设计、Kratos v3 相对 v2 的坑、服务间认证怎么做等等
 - [Kratos 官方文档](https://go-kratos.dev/)：框架本身怎么用

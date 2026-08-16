@@ -5,6 +5,7 @@
 
 还没把服务跑起来的，先走 [GETTING_STARTED.md](../GETTING_STARTED.md)。
 想知道「为什么这样分层」再看 [README.md](../README.md) 和 [architecture.md](architecture.md)。
+写代码时遵守 [conventions.md](conventions.md)；AI 会话还会读仓库根目录的 [AGENTS.md](../AGENTS.md)。
 
 ---
 

@@ -1,6 +1,8 @@
 # Eagle 架构边界
 
 怎么在这个底座上加接口、配权限：先看 [usage.md](usage.md)。
+怎么写 Go、代码落到哪一层、禁止造什么轮子：看 [conventions.md](conventions.md)。
+AI 的硬约束在仓库根目录 [AGENTS.md](../AGENTS.md)。
 本文只约定边界，不教操作步骤。
 
 本仓库是 Go 模块化单体：当前一个进程、一个 `system` 服务，按业务域保留可拆边界。不移植其它语言的框架分层或 starter 体系。
