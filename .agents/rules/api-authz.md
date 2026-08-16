@@ -1,6 +1,6 @@
 # 契约、权限、身份
 
-加后端接口的顺序见 [usage.md](usage.md) 第 4 节，不可颠倒：proto（`access` + 需要时 `perm`）→ 新码写入 `permission_definition` → 生成 → domain/data/biz/service → 新错误挂 `ErrorMapping` → 需要时 `make wire`。
+加后端接口的顺序见 [docs/usage.md](../../docs/usage.md) 第 4 节，不可颠倒：proto（`access` + 需要时 `perm`）→ 新码写入 `permission_definition` → 生成 → domain/data/biz/service → 新错误挂 `ErrorMapping` → 需要时 `make wire`。
 
 - 每个 RPC 必须有 `access`。handler 里禁止写鉴权 if。
 - 权限码：具体码严格三段 `domain:resource:action`；通配只能末段 `*`。禁止 `system:*:add`、`sys*:x:y`、Casbin `keyMatch2`（会把 `:xxx` 当路径参数，只读变全体写）。

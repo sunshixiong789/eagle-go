@@ -2,22 +2,24 @@
 
 本文件每次会话都会加载，只放**常驻硬约束**。细则按需读 `.agents/rules/`，不要一上来通读。
 
+给人看的教程和架构说明在 `docs/`，不要把它们和规则混在一起。
+
 不要从 Java / Spring 搬分层、starter、DTO 体系。CRUD 抄字典，有不变量抄权限/角色绑定。只改任务需要的文件。
 
 ## 按需读哪份
 
 | 在做什么 | 先读 |
 |---|---|
-| 加一个接口 | [.agents/rules/usage.md](.agents/rules/usage.md) **第 4 节** |
-| 加一整块 CRUD | [.agents/rules/usage.md](.agents/rules/usage.md) **第 7 节** |
-| 要不要拆服务、东西进 pkg 还是 app | [.agents/rules/architecture.md](.agents/rules/architecture.md) |
+| 加一个接口 | [docs/usage.md](docs/usage.md) **第 4 节** |
+| 加一整块 CRUD | [docs/usage.md](docs/usage.md) **第 7 节** |
+| 要不要拆服务、东西进 pkg 还是 app | [docs/architecture.md](docs/architecture.md) |
 | 加/改分层、仓储接口 | [.agents/rules/layers.md](.agents/rules/layers.md) |
 | 改 proto、权限码、鉴权、当前用户 | [.agents/rules/api-authz.md](.agents/rules/api-authz.md) |
 | 改表、迁移、Ent、Redis、策略写入收尾 | [.agents/rules/data.md](.agents/rules/data.md) |
 | 新写 Go、引入依赖、错误/注释 | [.agents/rules/style.md](.agents/rules/style.md) |
 | 补测试 | [.agents/rules/testing.md](.agents/rules/testing.md) |
 
-不要为了写代码通读 architecture 或 conventions。完整目录见 [conventions.md](.agents/rules/conventions.md)。
+不要为了写代码通读 `docs/architecture.md`。
 
 ## 不可破
 
