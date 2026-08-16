@@ -5,9 +5,9 @@ Go 模块化单体底座：**认证 + RBAC 授权 + 字典**。业务域按 `app
 **Kratos v3** · **ent** · **Keycloak** · **Casbin** · PostgreSQL 17。
 
 - 第一次跑起来：[GETTING_STARTED.md](GETTING_STARTED.md)
-- **刚转 Go、要在底座上加功能：[docs/usage.md](docs/usage.md)**
-- 分层和授权边界：[docs/architecture.md](docs/architecture.md)
-- **编码与工程规范（约束人工和 AI）：[docs/conventions.md](docs/conventions.md)**，硬约束见 [AGENTS.md](AGENTS.md)
+- **刚转 Go、要在底座上加功能：[.agents/rules/usage.md](.agents/rules/usage.md)**
+- 分层和授权边界：[.agents/rules/architecture.md](.agents/rules/architecture.md)
+- **编码与工程规范（按需）：[`.agents/rules/`](.agents/rules/)**，常驻硬约束见 [AGENTS.md](AGENTS.md)
 
 本文档默认你已经熟悉 Go / Kratos，讲的是"为什么这么设计"。
 

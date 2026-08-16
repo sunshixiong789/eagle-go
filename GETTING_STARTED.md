@@ -4,7 +4,7 @@
 目标是让你能把服务跑起来、成功调通一个接口。
 
 服务跑通之后，日常怎么加接口、配权限、拿当前登录人，看
-[docs/usage.md](docs/usage.md)（按刚转到 Go 的人写的）。
+[.agents/rules/usage.md](.agents/rules/usage.md)（按刚转到 Go 的人写的）。
 已经熟悉 Go / Kratos、想看设计取舍，再读 [README.md](README.md)。
 
 ---
@@ -340,7 +340,7 @@ eagle-go/
 
 ## 7. 接下来：怎么用这个底座
 
-服务能调通之后，去 [docs/usage.md](docs/usage.md)。那里用刚转 Go 的人能看懂的话，
+服务能调通之后，去 [.agents/rules/usage.md](.agents/rules/usage.md)。那里用刚转 Go 的人能看懂的话，
 按任务写了：
 
 - 加一个需要权限的接口（改 proto → 写入权限目录 → 生成代码 → 补分层）
@@ -396,7 +396,7 @@ A: 常见原因有两个：一是这个角色确实没在 Casbin 里配对应的
 
 **Q: 加一个新接口需要什么权限码，要改哪里？**
 
-A: 完整步骤见 [docs/usage.md](docs/usage.md) 第 4 节。短答案：
+A: 完整步骤见 [.agents/rules/usage.md](.agents/rules/usage.md) 第 4 节。短答案：
 1. 在 proto 方法上声明 `access` 和 `(eagle.annotations.v1.perm) = "system:foo:add"`；
 2. 把同一条码写入 `permission_definition`（改种子或加一条 goose 迁移）；
 3. 启动时会校验 proto 与目录一致，对不上服务起不来；
@@ -406,8 +406,9 @@ A: 完整步骤见 [docs/usage.md](docs/usage.md) 第 4 节。短答案：
 
 ## 9. 想深入了解，看这里
 
-- [docs/usage.md](docs/usage.md)：底座怎么用——加接口、配权限、拿当前用户
-- [docs/conventions.md](docs/conventions.md)：编码规范与工程规范；AI 硬约束见 [AGENTS.md](AGENTS.md)
+- [.agents/rules/usage.md](.agents/rules/usage.md)：底座怎么用——加接口、配权限、拿当前用户
+- [.agents/rules/architecture.md](.agents/rules/architecture.md)：分层和授权边界
+- [`.agents/rules/`](.agents/rules/)：编码与工程规范；AI 常驻约束见 [AGENTS.md](AGENTS.md)
 - [README.md](README.md)：这个项目"为什么这么设计"——分层架构的取舍、
   权限模型的设计、Kratos v3 相对 v2 的坑、服务间认证怎么做等等
 - [Kratos 官方文档](https://go-kratos.dev/)：框架本身怎么用

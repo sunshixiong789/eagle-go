@@ -132,7 +132,7 @@ func TestBannedDependencies(t *testing.T) {
 	for _, mod := range strings.Fields(string(out)) {
 		for _, prefix := range bannedModulePrefixes {
 			if mod == prefix || strings.HasPrefix(mod, prefix+"/") {
-				t.Errorf("forbidden module %s (matched %s); use the standard library or existing pkg/ instead, see docs/conventions.md", mod, prefix)
+				t.Errorf("forbidden module %s (matched %s); use the standard library or existing pkg/ instead, see .agents/rules/style.md", mod, prefix)
 			}
 		}
 	}
