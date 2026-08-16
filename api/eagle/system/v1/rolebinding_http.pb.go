@@ -18,20 +18,24 @@ var _ = new(context.Context)
 const _ = http.SupportPackageIsVersion3
 
 const OperationRoleBindingServiceAddRoleInheritance = "/eagle.system.v1.RoleBindingService/AddRoleInheritance"
+const OperationRoleBindingServiceDeleteRoleInheritance = "/eagle.system.v1.RoleBindingService/DeleteRoleInheritance"
 const OperationRoleBindingServiceGetMyPermissions = "/eagle.system.v1.RoleBindingService/GetMyPermissions"
 const OperationRoleBindingServiceGetRolePermissions = "/eagle.system.v1.RoleBindingService/GetRolePermissions"
 const OperationRoleBindingServiceListBoundRoles = "/eagle.system.v1.RoleBindingService/ListBoundRoles"
+const OperationRoleBindingServiceListRoleInheritances = "/eagle.system.v1.RoleBindingService/ListRoleInheritances"
 const OperationRoleBindingServiceSetRolePermissions = "/eagle.system.v1.RoleBindingService/SetRolePermissions"
 
 type RoleBindingServiceHTTPServer interface {
 	// AddRoleInheritance 建立角色继承：child 自动获得 parent 的全部权限。
 	AddRoleInheritance(context.Context, *AddRoleInheritanceRequest) (*AddRoleInheritanceResponse, error)
+	DeleteRoleInheritance(context.Context, *DeleteRoleInheritanceRequest) (*DeleteRoleInheritanceResponse, error)
 	// GetMyPermissions 当前登录者自己的权限码，供前端做按钮级显隐。只需登录。
 	GetMyPermissions(context.Context, *GetMyPermissionsRequest) (*GetMyPermissionsResponse, error)
 	GetRolePermissions(context.Context, *GetRolePermissionsRequest) (*GetRolePermissionsResponse, error)
 	// ListBoundRoles 列出本库中已配置过权限的角色。
 	// 注意这不是 Keycloak 的角色全集——从未分配过权限的角色不会出现。
 	ListBoundRoles(context.Context, *ListBoundRolesRequest) (*ListBoundRolesResponse, error)
+	ListRoleInheritances(context.Context, *ListRoleInheritancesRequest) (*ListRoleInheritancesResponse, error)
 	// SetRolePermissions 全量覆盖某个角色的权限码集合，变更立即生效。
 	SetRolePermissions(context.Context, *SetRolePermissionsRequest) (*SetRolePermissionsResponse, error)
 }
@@ -42,6 +46,8 @@ func RegisterRoleBindingServiceHTTPServer(s *http.Server, srv RoleBindingService
 	r.Handle("GET", "/v1/system/role-bindings/{role}", _RoleBindingService_GetRolePermissions0_HTTP_Handler(srv))
 	r.Handle("PUT", "/v1/system/role-bindings/{role}", _RoleBindingService_SetRolePermissions0_HTTP_Handler(srv))
 	r.Handle("POST", "/v1/system/role-bindings/inheritance", _RoleBindingService_AddRoleInheritance0_HTTP_Handler(srv))
+	r.Handle("GET", "/v1/system/role-inheritances", _RoleBindingService_ListRoleInheritances0_HTTP_Handler(srv))
+	r.Handle("DELETE", "/v1/system/role-inheritances/{child}/{parent}", _RoleBindingService_DeleteRoleInheritance0_HTTP_Handler(srv))
 	r.Handle("GET", "/v1/system/role-bindings/me/permissions", _RoleBindingService_GetMyPermissions0_HTTP_Handler(srv))
 }
 
@@ -127,6 +133,47 @@ func _RoleBindingService_AddRoleInheritance0_HTTP_Handler(srv RoleBindingService
 	}
 }
 
+func _RoleBindingService_ListRoleInheritances0_HTTP_Handler(srv RoleBindingServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in ListRoleInheritancesRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationRoleBindingServiceListRoleInheritances)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.ListRoleInheritances(ctx, req.(*ListRoleInheritancesRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*ListRoleInheritancesResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _RoleBindingService_DeleteRoleInheritance0_HTTP_Handler(srv RoleBindingServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in DeleteRoleInheritanceRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindVars(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationRoleBindingServiceDeleteRoleInheritance)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.DeleteRoleInheritance(ctx, req.(*DeleteRoleInheritanceRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*DeleteRoleInheritanceResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
 func _RoleBindingService_GetMyPermissions0_HTTP_Handler(srv RoleBindingServiceHTTPServer) func(ctx http.Context) error {
 	return func(ctx http.Context) error {
 		var in GetMyPermissionsRequest
@@ -149,12 +196,14 @@ func _RoleBindingService_GetMyPermissions0_HTTP_Handler(srv RoleBindingServiceHT
 type RoleBindingServiceHTTPClient interface {
 	// AddRoleInheritance 建立角色继承：child 自动获得 parent 的全部权限。
 	AddRoleInheritance(ctx context.Context, req *AddRoleInheritanceRequest, opts ...http.CallOption) (rsp *AddRoleInheritanceResponse, err error)
+	DeleteRoleInheritance(ctx context.Context, req *DeleteRoleInheritanceRequest, opts ...http.CallOption) (rsp *DeleteRoleInheritanceResponse, err error)
 	// GetMyPermissions 当前登录者自己的权限码，供前端做按钮级显隐。只需登录。
 	GetMyPermissions(ctx context.Context, req *GetMyPermissionsRequest, opts ...http.CallOption) (rsp *GetMyPermissionsResponse, err error)
 	GetRolePermissions(ctx context.Context, req *GetRolePermissionsRequest, opts ...http.CallOption) (rsp *GetRolePermissionsResponse, err error)
 	// ListBoundRoles 列出本库中已配置过权限的角色。
 	// 注意这不是 Keycloak 的角色全集——从未分配过权限的角色不会出现。
 	ListBoundRoles(ctx context.Context, req *ListBoundRolesRequest, opts ...http.CallOption) (rsp *ListBoundRolesResponse, err error)
+	ListRoleInheritances(ctx context.Context, req *ListRoleInheritancesRequest, opts ...http.CallOption) (rsp *ListRoleInheritancesResponse, err error)
 	// SetRolePermissions 全量覆盖某个角色的权限码集合，变更立即生效。
 	SetRolePermissions(ctx context.Context, req *SetRolePermissionsRequest, opts ...http.CallOption) (rsp *SetRolePermissionsResponse, err error)
 }
@@ -179,6 +228,22 @@ func (c *RoleBindingServiceHTTPClientImpl) AddRoleInheritance(ctx context.Contex
 		http.PathTemplate(pattern),
 	}, opts...)
 	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *RoleBindingServiceHTTPClientImpl) DeleteRoleInheritance(ctx context.Context, in *DeleteRoleInheritanceRequest, opts ...http.CallOption) (*DeleteRoleInheritanceResponse, error) {
+	var out DeleteRoleInheritanceResponse
+	pattern := "/v1/system/role-inheritances/{child}/{parent}"
+	path := http.BuildPath(pattern, in, http.WithQueryParams())
+	opts = append([]http.CallOption{
+		http.Accept("application/protojson"),
+		http.Operation(OperationRoleBindingServiceDeleteRoleInheritance),
+		http.PathTemplate(pattern),
+	}, opts...)
+	err := c.cc.Invoke(ctx, "DELETE", path, nil, &out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -227,6 +292,22 @@ func (c *RoleBindingServiceHTTPClientImpl) ListBoundRoles(ctx context.Context, i
 	opts = append([]http.CallOption{
 		http.Accept("application/protojson"),
 		http.Operation(OperationRoleBindingServiceListBoundRoles),
+		http.PathTemplate(pattern),
+	}, opts...)
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *RoleBindingServiceHTTPClientImpl) ListRoleInheritances(ctx context.Context, in *ListRoleInheritancesRequest, opts ...http.CallOption) (*ListRoleInheritancesResponse, error) {
+	var out ListRoleInheritancesResponse
+	pattern := "/v1/system/role-inheritances"
+	path := http.BuildPath(pattern, in, http.WithQueryParams())
+	opts = append([]http.CallOption{
+		http.Accept("application/protojson"),
+		http.Operation(OperationRoleBindingServiceListRoleInheritances),
 		http.PathTemplate(pattern),
 	}, opts...)
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)

@@ -18,7 +18,7 @@ const (
 	// FieldName holds the string denoting the name field in the database.
 	FieldName = "name"
 	// FieldCode holds the string denoting the code field in the database.
-	FieldCode = "code"
+	FieldCode = "permission_code"
 	// FieldType holds the string denoting the type field in the database.
 	FieldType = "type"
 	// FieldPath holds the string denoting the path field in the database.
@@ -38,7 +38,7 @@ const (
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
 	FieldUpdatedAt = "updated_at"
 	// Table holds the table name of the permission in the database.
-	Table = "sys_permission"
+	Table = "navigation_node"
 )
 
 // Columns holds all SQL columns for permission fields.
@@ -69,12 +69,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
-	// DefaultParentID holds the default value on creation for the "parent_id" field.
-	DefaultParentID int64
 	// NameValidator is a validator for the "name" field. It is called by the builders before save.
 	NameValidator func(string) error
-	// DefaultCode holds the default value on creation for the "code" field.
-	DefaultCode string
 	// CodeValidator is a validator for the "code" field. It is called by the builders before save.
 	CodeValidator func(string) error
 	// DefaultPath holds the default value on creation for the "path" field.

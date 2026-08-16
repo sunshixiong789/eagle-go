@@ -142,7 +142,13 @@ func TestSuperAdminBypassesPolicy(t *testing.T) {
 	// 刻意不给 admin 配任何策略
 	env.grantRole(t, adminRole)
 
-	token := env.kc.userToken(t, "root", adminRole)
+	token := env.kc.mint(t, tokenOpts{
+		subject:  "sub-root",
+		username: "root",
+		clientRoles: map[string][]string{
+			clientID: {adminRole},
+		},
+	})
 	code, body := env.get(t, "/v1/system/permissions", token)
 	if code != http.StatusOK {
 		t.Errorf("超管读取 = %d (%s), want 200", code, body)

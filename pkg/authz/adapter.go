@@ -2,7 +2,9 @@ package authz
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"time"
 
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/casbin/casbin/v2/model"
@@ -10,8 +12,14 @@ import (
 
 	"github.com/eagle-go/eagle/ent"
 	"github.com/eagle-go/eagle/ent/casbinrule"
+	"github.com/eagle-go/eagle/ent/permissiondefinition"
+	"github.com/eagle-go/eagle/ent/policyoutbox"
 	"github.com/eagle-go/eagle/ent/predicate"
 )
+
+// ErrRoleInheritanceCycle 表示新增的 g 规则会使角色继承图成环。
+var ErrRoleInheritanceCycle = errors.New("authz: role inheritance cycle")
+var ErrConcurrentModification = errors.New("authz: concurrent policy modification")
 
 // EntAdapter 用项目自身的 ent client 持久化 Casbin 策略。
 //
@@ -40,7 +48,11 @@ func NewEntAdapter(client *ent.Client) *EntAdapter {
 
 // LoadPolicy 加载全部策略到内存模型。
 func (a *EntAdapter) LoadPolicy(m model.Model) error {
-	ctx := context.Background()
+	return a.LoadPolicyContext(context.Background(), m)
+}
+
+// LoadPolicyContext 是带取消与截止时间的策略加载入口。
+func (a *EntAdapter) LoadPolicyContext(ctx context.Context, m model.Model) error {
 
 	rules, err := a.client.CasbinRule.Query().All(ctx)
 	if err != nil {
@@ -52,6 +64,332 @@ func (a *EntAdapter) LoadPolicy(m model.Model) error {
 		}
 	}
 	return nil
+}
+
+// PolicyMutationMeta 描述一次策略写入的调用者和关联信息。
+type PolicyMutationMeta struct {
+	ActorSubject  string
+	ActorClientID string
+	RequestID     string
+	TraceID       string
+}
+
+// PendingPolicyEvent 是待投递 Outbox 的最小投影视图。
+type PendingPolicyEvent struct {
+	ID            int64
+	PolicyVersion int64
+}
+
+// PendingPolicyEvents 返回按创建顺序排列的待发布策略事件。
+func (a *EntAdapter) PendingPolicyEvents(ctx context.Context, limit int) ([]PendingPolicyEvent, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := a.client.PolicyOutbox.Query().
+		Where(policyoutbox.PublishedAtIsNil()).
+		Order(ent.Asc(policyoutbox.FieldID)).
+		Limit(limit).
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("authz: 查询待发布 Outbox: %w", err)
+	}
+	out := make([]PendingPolicyEvent, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, PendingPolicyEvent{ID: row.ID, PolicyVersion: row.PolicyVersion})
+	}
+	return out, nil
+}
+
+// MarkPolicyEventPublished 标记 Outbox 已成功发布。重复调用是幂等的。
+func (a *EntAdapter) MarkPolicyEventPublished(ctx context.Context, id int64, publishedAt time.Time) error {
+	_, err := a.client.PolicyOutbox.UpdateOneID(id).
+		SetPublishedAt(publishedAt).
+		AddAttempts(1).
+		SetLastError("").
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("authz: 标记 Outbox %d 已发布: %w", id, err)
+	}
+	return nil
+}
+
+// MarkPolicyEventFailed 记录一次未成功投递，事件保持未发布以便下轮重试。
+func (a *EntAdapter) MarkPolicyEventFailed(ctx context.Context, id int64, publishErr error) error {
+	message := "unknown publish error"
+	if publishErr != nil {
+		message = publishErr.Error()
+	}
+	_, err := a.client.PolicyOutbox.UpdateOneID(id).
+		AddAttempts(1).
+		SetLastError(message).
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("authz: 记录 Outbox %d 投递失败: %w", id, err)
+	}
+	return nil
+}
+
+// PolicyVersion 返回数据库中权威策略的单调递增版本。
+func (a *EntAdapter) PolicyVersion(ctx context.Context) (int64, error) {
+	state, err := a.client.PolicyState.Get(ctx, 1)
+	if err != nil {
+		return 0, fmt.Errorf("authz: 读取策略版本: %w", err)
+	}
+	return state.Version, nil
+}
+
+// PermissionCatalogCodes 返回权限目录中的全部非空权限码。
+func (a *EntAdapter) PermissionCatalogCodes(ctx context.Context) ([]string, error) {
+	rows, err := a.client.PermissionDefinition.Query().
+		Where(permissiondefinition.StatusEQ(1)).
+		Select(permissiondefinition.FieldCode).
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("authz: 读取权限目录: %w", err)
+	}
+	out := make([]string, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, row.Code)
+	}
+	return out, nil
+}
+
+// ReplaceRolePermissions 在一个事务内全量替换角色权限、递增版本并写入
+// 审计与 Outbox。调用成功后数据库永远处于完整的新版本，不存在先删后加
+// 失败导致角色权限被清空的中间状态。
+func (a *EntAdapter) ReplaceRolePermissions(ctx context.Context, role string, perms []string, meta PolicyMutationMeta) (int64, error) {
+	return a.ReplaceRolePermissionsIfVersion(ctx, role, perms, nil, meta)
+}
+
+func (a *EntAdapter) ReplaceRolePermissionsIfVersion(ctx context.Context, role string, perms []string, expected *int64, meta PolicyMutationMeta) (int64, error) {
+	tx, err := a.client.Tx(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("authz: 开启角色权限替换事务: %w", err)
+	}
+	defer rollbackOnPanic(tx)
+	if _, err := lockPolicyState(ctx, tx, expected); err != nil {
+		_ = tx.Rollback()
+		return 0, err
+	}
+
+	oldRows, err := tx.CasbinRule.Query().
+		Where(casbinrule.PtypeEQ("p"), casbinrule.V0EQ(role)).
+		All(ctx)
+	if err != nil {
+		_ = tx.Rollback()
+		return 0, fmt.Errorf("authz: 读取角色 %q 的旧策略: %w", role, err)
+	}
+	before := make([]string, 0, len(oldRows))
+	for _, row := range oldRows {
+		before = append(before, row.V1)
+	}
+
+	if _, err := tx.CasbinRule.Delete().
+		Where(casbinrule.PtypeEQ("p"), casbinrule.V0EQ(role)).
+		Exec(ctx); err != nil {
+		_ = tx.Rollback()
+		return 0, fmt.Errorf("authz: 清除角色 %q 的旧策略: %w", role, err)
+	}
+
+	if len(perms) > 0 {
+		builders := make([]*ent.CasbinRuleCreate, 0, len(perms))
+		for _, perm := range perms {
+			builders = append(builders, newRuleBuilder(tx.Client(), "p", []string{role, perm}))
+		}
+		if _, err := tx.CasbinRule.CreateBulk(builders...).Save(ctx); err != nil {
+			_ = tx.Rollback()
+			return 0, fmt.Errorf("authz: 写入角色 %q 的新策略: %w", role, err)
+		}
+	}
+
+	version, err := recordPolicyMutation(ctx, tx, "replace_role_permissions", role, before, perms, meta)
+	if err != nil {
+		_ = tx.Rollback()
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("authz: 提交角色权限替换事务: %w", err)
+	}
+	return version, nil
+}
+
+// AddRoleInheritanceAtomic 原子地增加角色继承并记录版本、审计和 Outbox。
+func (a *EntAdapter) AddRoleInheritanceAtomic(ctx context.Context, child, parent string, meta PolicyMutationMeta) (int64, error) {
+	return a.AddRoleInheritanceIfVersion(ctx, child, parent, nil, meta)
+}
+
+func (a *EntAdapter) AddRoleInheritanceIfVersion(ctx context.Context, child, parent string, expected *int64, meta PolicyMutationMeta) (int64, error) {
+	tx, err := a.client.Tx(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("authz: 开启角色继承事务: %w", err)
+	}
+	defer rollbackOnPanic(tx)
+	// 先更新单例状态行取得排他锁，使并发的继承图修改串行化。
+	state, err := lockPolicyState(ctx, tx, expected)
+	if err != nil {
+		_ = tx.Rollback()
+		return 0, err
+	}
+	grouping, err := tx.CasbinRule.Query().Where(casbinrule.PtypeEQ("g")).All(ctx)
+	if err != nil {
+		_ = tx.Rollback()
+		return 0, fmt.Errorf("authz: 读取角色继承图: %w", err)
+	}
+	graph := make(map[string][]string)
+	for _, rule := range grouping {
+		graph[rule.V0] = append(graph[rule.V0], rule.V1)
+	}
+	if rolePathExists(graph, parent, child) {
+		_ = tx.Rollback()
+		return 0, ErrRoleInheritanceCycle
+	}
+
+	exists, err := tx.CasbinRule.Query().Where(
+		casbinrule.PtypeEQ("g"), casbinrule.V0EQ(child), casbinrule.V1EQ(parent),
+	).Exist(ctx)
+	if err != nil {
+		_ = tx.Rollback()
+		return 0, fmt.Errorf("authz: 查询角色继承: %w", err)
+	}
+	if !exists {
+		if err := newRuleBuilder(tx.Client(), "g", []string{child, parent}).Exec(ctx); err != nil {
+			_ = tx.Rollback()
+			return 0, fmt.Errorf("authz: 写入角色继承: %w", err)
+		}
+	}
+	if exists {
+		if err := tx.Commit(); err != nil {
+			return 0, fmt.Errorf("authz: 提交幂等角色继承事务: %w", err)
+		}
+		return state.Version, nil
+	}
+
+	after := []string{parent}
+	version, err := recordPolicyMutation(ctx, tx, "add_role_inheritance", child, nil, after, meta)
+	if err != nil {
+		_ = tx.Rollback()
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("authz: 提交角色继承事务: %w", err)
+	}
+	return version, nil
+}
+
+// DeleteRoleInheritanceIfVersion 原子删除一条继承关系。
+func (a *EntAdapter) DeleteRoleInheritanceIfVersion(ctx context.Context, child, parent string, expected *int64, meta PolicyMutationMeta) (int64, error) {
+	tx, err := a.client.Tx(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("authz: 开启删除角色继承事务: %w", err)
+	}
+	defer rollbackOnPanic(tx)
+	state, err := lockPolicyState(ctx, tx, expected)
+	if err != nil {
+		_ = tx.Rollback()
+		return 0, err
+	}
+	deleted, err := tx.CasbinRule.Delete().Where(
+		casbinrule.PtypeEQ("g"), casbinrule.V0EQ(child), casbinrule.V1EQ(parent),
+	).Exec(ctx)
+	if err != nil {
+		_ = tx.Rollback()
+		return 0, fmt.Errorf("authz: 删除角色继承: %w", err)
+	}
+	if deleted == 0 {
+		if err := tx.Commit(); err != nil {
+			return 0, fmt.Errorf("authz: 提交幂等删除继承事务: %w", err)
+		}
+		return state.Version, nil
+	}
+	version, err := recordPolicyMutation(ctx, tx, "delete_role_inheritance", child, []string{parent}, nil, meta)
+	if err != nil {
+		_ = tx.Rollback()
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("authz: 提交删除角色继承事务: %w", err)
+	}
+	return version, nil
+}
+
+type RoleInheritancePair struct{ Child, Parent string }
+
+func (a *EntAdapter) RoleInheritances(ctx context.Context) ([]RoleInheritancePair, error) {
+	rows, err := a.client.CasbinRule.Query().Where(casbinrule.PtypeEQ("g")).All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("authz: 读取角色继承: %w", err)
+	}
+	out := make([]RoleInheritancePair, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, RoleInheritancePair{Child: row.V0, Parent: row.V1})
+	}
+	return out, nil
+}
+
+func lockPolicyState(ctx context.Context, tx *ent.Tx, expected *int64) (*ent.PolicyState, error) {
+	state, err := tx.PolicyState.UpdateOneID(1).SetUpdatedAt(time.Now()).Save(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("authz: 锁定策略状态: %w", err)
+	}
+	if expected != nil && *expected != state.Version {
+		return nil, ErrConcurrentModification
+	}
+	return state, nil
+}
+
+func rolePathExists(graph map[string][]string, from, target string) bool {
+	seen := make(map[string]struct{})
+	stack := []string{from}
+	for len(stack) > 0 {
+		last := len(stack) - 1
+		current := stack[last]
+		stack = stack[:last]
+		if current == target {
+			return true
+		}
+		if _, ok := seen[current]; ok {
+			continue
+		}
+		seen[current] = struct{}{}
+		stack = append(stack, graph[current]...)
+	}
+	return false
+}
+
+func recordPolicyMutation(ctx context.Context, tx *ent.Tx, action, target string, before, after []string, meta PolicyMutationMeta) (int64, error) {
+	state, err := tx.PolicyState.UpdateOneID(1).AddVersion(1).SetUpdatedAt(time.Now()).Save(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("authz: 递增策略版本: %w", err)
+	}
+	if _, err := tx.PolicyAudit.Create().
+		SetPolicyVersion(state.Version).
+		SetAction(action).
+		SetTarget(target).
+		SetActorSubject(meta.ActorSubject).
+		SetActorClientID(meta.ActorClientID).
+		SetRequestID(meta.RequestID).
+		SetTraceID(meta.TraceID).
+		SetBefore(before).
+		SetAfter(after).
+		Save(ctx); err != nil {
+		return 0, fmt.Errorf("authz: 写入策略审计: %w", err)
+	}
+	payload := map[string]any{"action": action, "target": target, "version": state.Version}
+	if _, err := tx.PolicyOutbox.Create().
+		SetPolicyVersion(state.Version).
+		SetEventType("authz.policy.changed").
+		SetPayload(payload).
+		Save(ctx); err != nil {
+		return 0, fmt.Errorf("authz: 写入策略 Outbox: %w", err)
+	}
+	return state.Version, nil
+}
+
+func rollbackOnPanic(tx *ent.Tx) {
+	if p := recover(); p != nil {
+		_ = tx.Rollback()
+		panic(p)
+	}
 }
 
 // LoadFilteredPolicy 按条件加载策略。

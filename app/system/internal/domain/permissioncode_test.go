@@ -47,6 +47,14 @@ func TestNewPermissionCode(t *testing.T) {
 	}
 }
 
+func TestNewPermissionCodeRejectsNonContractCharacters(t *testing.T) {
+	for _, code := range []string{"system:user:read all", "system:user:read-all", "系统:user:list", "1system:user:list"} {
+		if _, err := NewPermissionCode(code); err == nil {
+			t.Errorf("NewPermissionCode(%q) should fail", code)
+		}
+	}
+}
+
 func TestPermissionCodeSegments(t *testing.T) {
 	c := MustPermissionCode("system:user:add")
 

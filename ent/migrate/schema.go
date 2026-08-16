@@ -86,12 +86,12 @@ var (
 		Columns:    SysDictTypeColumns,
 		PrimaryKey: []*schema.Column{SysDictTypeColumns[0]},
 	}
-	// SysPermissionColumns holds the columns for the "sys_permission" table.
-	SysPermissionColumns = []*schema.Column{
+	// NavigationNodeColumns holds the columns for the "navigation_node" table.
+	NavigationNodeColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
-		{Name: "parent_id", Type: field.TypeInt64, Default: 0},
+		{Name: "parent_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "name", Type: field.TypeString, Size: 64},
-		{Name: "code", Type: field.TypeString, Size: 128, Default: ""},
+		{Name: "permission_code", Type: field.TypeString, Nullable: true, Size: 128},
 		{Name: "type", Type: field.TypeInt32},
 		{Name: "path", Type: field.TypeString, Size: 255, Default: ""},
 		{Name: "component", Type: field.TypeString, Size: 255, Default: ""},
@@ -102,26 +102,138 @@ var (
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 	}
-	// SysPermissionTable holds the schema information for the "sys_permission" table.
-	SysPermissionTable = &schema.Table{
-		Name:       "sys_permission",
-		Columns:    SysPermissionColumns,
-		PrimaryKey: []*schema.Column{SysPermissionColumns[0]},
+	// NavigationNodeTable holds the schema information for the "navigation_node" table.
+	NavigationNodeTable = &schema.Table{
+		Name:       "navigation_node",
+		Columns:    NavigationNodeColumns,
+		PrimaryKey: []*schema.Column{NavigationNodeColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "permission_code",
+				Name:    "permission_permission_code",
 				Unique:  true,
-				Columns: []*schema.Column{SysPermissionColumns[3]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "code <> ''",
-				},
+				Columns: []*schema.Column{NavigationNodeColumns[3]},
 			},
 			{
 				Name:    "permission_parent_id",
 				Unique:  false,
-				Columns: []*schema.Column{SysPermissionColumns[1]},
+				Columns: []*schema.Column{NavigationNodeColumns[1]},
 			},
 		},
+	}
+	// PermissionDefinitionColumns holds the columns for the "permission_definition" table.
+	PermissionDefinitionColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "code", Type: field.TypeString, Unique: true, Size: 128},
+		{Name: "service", Type: field.TypeString, Size: 64},
+		{Name: "resource", Type: field.TypeString, Size: 64},
+		{Name: "action", Type: field.TypeString, Size: 64},
+		{Name: "status", Type: field.TypeInt32, Default: 1},
+		{Name: "source", Type: field.TypeString, Size: 32, Default: "manual"},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// PermissionDefinitionTable holds the schema information for the "permission_definition" table.
+	PermissionDefinitionTable = &schema.Table{
+		Name:       "permission_definition",
+		Columns:    PermissionDefinitionColumns,
+		PrimaryKey: []*schema.Column{PermissionDefinitionColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "permissiondefinition_service_resource_action",
+				Unique:  false,
+				Columns: []*schema.Column{PermissionDefinitionColumns[2], PermissionDefinitionColumns[3], PermissionDefinitionColumns[4]},
+			},
+		},
+	}
+	// PermissionTreeStateColumns holds the columns for the "permission_tree_state" table.
+	PermissionTreeStateColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "revision", Type: field.TypeInt64, Default: 1},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// PermissionTreeStateTable holds the schema information for the "permission_tree_state" table.
+	PermissionTreeStateTable = &schema.Table{
+		Name:       "permission_tree_state",
+		Columns:    PermissionTreeStateColumns,
+		PrimaryKey: []*schema.Column{PermissionTreeStateColumns[0]},
+	}
+	// AuthzPolicyAuditColumns holds the columns for the "authz_policy_audit" table.
+	AuthzPolicyAuditColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "policy_version", Type: field.TypeInt64},
+		{Name: "action", Type: field.TypeString, Size: 64},
+		{Name: "target", Type: field.TypeString, Size: 256},
+		{Name: "actor_subject", Type: field.TypeString, Size: 128, Default: ""},
+		{Name: "actor_client_id", Type: field.TypeString, Size: 128, Default: ""},
+		{Name: "request_id", Type: field.TypeString, Size: 128, Default: ""},
+		{Name: "trace_id", Type: field.TypeString, Size: 64, Default: ""},
+		{Name: "before", Type: field.TypeJSON},
+		{Name: "after", Type: field.TypeJSON},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// AuthzPolicyAuditTable holds the schema information for the "authz_policy_audit" table.
+	AuthzPolicyAuditTable = &schema.Table{
+		Name:       "authz_policy_audit",
+		Columns:    AuthzPolicyAuditColumns,
+		PrimaryKey: []*schema.Column{AuthzPolicyAuditColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "policyaudit_policy_version",
+				Unique:  false,
+				Columns: []*schema.Column{AuthzPolicyAuditColumns[1]},
+			},
+			{
+				Name:    "policyaudit_target_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{AuthzPolicyAuditColumns[3], AuthzPolicyAuditColumns[10]},
+			},
+			{
+				Name:    "policyaudit_actor_subject_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{AuthzPolicyAuditColumns[4], AuthzPolicyAuditColumns[10]},
+			},
+		},
+	}
+	// AuthzPolicyOutboxColumns holds the columns for the "authz_policy_outbox" table.
+	AuthzPolicyOutboxColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "policy_version", Type: field.TypeInt64},
+		{Name: "event_type", Type: field.TypeString, Size: 64},
+		{Name: "payload", Type: field.TypeJSON},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "published_at", Type: field.TypeTime, Nullable: true},
+		{Name: "attempts", Type: field.TypeInt32, Default: 0},
+		{Name: "last_error", Type: field.TypeString, Default: ""},
+	}
+	// AuthzPolicyOutboxTable holds the schema information for the "authz_policy_outbox" table.
+	AuthzPolicyOutboxTable = &schema.Table{
+		Name:       "authz_policy_outbox",
+		Columns:    AuthzPolicyOutboxColumns,
+		PrimaryKey: []*schema.Column{AuthzPolicyOutboxColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "policyoutbox_published_at_id",
+				Unique:  false,
+				Columns: []*schema.Column{AuthzPolicyOutboxColumns[5], AuthzPolicyOutboxColumns[0]},
+			},
+			{
+				Name:    "policyoutbox_policy_version",
+				Unique:  true,
+				Columns: []*schema.Column{AuthzPolicyOutboxColumns[1]},
+			},
+		},
+	}
+	// AuthzPolicyStateColumns holds the columns for the "authz_policy_state" table.
+	AuthzPolicyStateColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "version", Type: field.TypeInt64, Default: 0},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// AuthzPolicyStateTable holds the schema information for the "authz_policy_state" table.
+	AuthzPolicyStateTable = &schema.Table{
+		Name:       "authz_policy_state",
+		Columns:    AuthzPolicyStateColumns,
+		PrimaryKey: []*schema.Column{AuthzPolicyStateColumns[0]},
 	}
 	// SysUserProfileColumns holds the columns for the "sys_user_profile" table.
 	SysUserProfileColumns = []*schema.Column{
@@ -152,7 +264,12 @@ var (
 		CasbinRuleTable,
 		SysDictDataTable,
 		SysDictTypeTable,
-		SysPermissionTable,
+		NavigationNodeTable,
+		PermissionDefinitionTable,
+		PermissionTreeStateTable,
+		AuthzPolicyAuditTable,
+		AuthzPolicyOutboxTable,
+		AuthzPolicyStateTable,
 		SysUserProfileTable,
 	}
 )
@@ -167,8 +284,23 @@ func init() {
 	SysDictTypeTable.Annotation = &entsql.Annotation{
 		Table: "sys_dict_type",
 	}
-	SysPermissionTable.Annotation = &entsql.Annotation{
-		Table: "sys_permission",
+	NavigationNodeTable.Annotation = &entsql.Annotation{
+		Table: "navigation_node",
+	}
+	PermissionDefinitionTable.Annotation = &entsql.Annotation{
+		Table: "permission_definition",
+	}
+	PermissionTreeStateTable.Annotation = &entsql.Annotation{
+		Table: "permission_tree_state",
+	}
+	AuthzPolicyAuditTable.Annotation = &entsql.Annotation{
+		Table: "authz_policy_audit",
+	}
+	AuthzPolicyOutboxTable.Annotation = &entsql.Annotation{
+		Table: "authz_policy_outbox",
+	}
+	AuthzPolicyStateTable.Annotation = &entsql.Annotation{
+		Table: "authz_policy_state",
 	}
 	SysUserProfileTable.Annotation = &entsql.Annotation{
 		Table: "sys_user_profile",

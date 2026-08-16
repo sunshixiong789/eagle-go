@@ -1,6 +1,9 @@
 package authz
 
 import (
+	"fmt"
+	"regexp"
+	"sort"
 	"strings"
 	"sync"
 
@@ -22,8 +25,10 @@ type Policy struct {
 	// Known 表示成功解析到了方法描述符。
 	//
 	// 解析不到时（比如 gRPC 反射、健康检查这类非本项目定义的方法）
-	// 按"需要登录但不需要具体权限"处理——失败方向选择拒绝而非放行。
+	// 中间件直接拒绝——失败方向选择关闭而非放行。
 	Known bool
+	// Access 是 RPC 显式声明的访问级别。
+	Access annotationsv1.AccessLevel
 }
 
 // 描述符查找要走全局注册表并做接口断言，开销不小，
@@ -72,7 +77,66 @@ func lookupPolicy(operation string) Policy {
 	if v, ok := proto.GetExtension(opts, annotationsv1.E_Public).(bool); ok {
 		p.Public = v
 	}
+	if v, ok := proto.GetExtension(opts, annotationsv1.E_Access).(annotationsv1.AccessLevel); ok {
+		p.Access = v
+	}
+	// 兼容旧契约；新契约必须使用 access。
+	if p.Access == annotationsv1.AccessLevel_ACCESS_LEVEL_PUBLIC {
+		p.Public = true
+	}
 	return p
+}
+
+var concretePermissionPattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9]*:[a-zA-Z][a-zA-Z0-9]*:[a-zA-Z][a-zA-Z0-9]*$`)
+
+// ValidateRegisteredPolicies 扫描所有 eagle RPC 的访问声明，并可选地校验
+// 所需权限码是否存在于数据库权限目录。服务启动时执行，避免漏注解的接口
+// 带着不安全的默认语义运行。
+func ValidateRegisteredPolicies(catalogCodes []string) error {
+	catalog := make(map[string]struct{}, len(catalogCodes))
+	for _, code := range catalogCodes {
+		catalog[code] = struct{}{}
+	}
+
+	var violations []string
+	protoregistry.GlobalFiles.RangeFiles(func(fd protoreflect.FileDescriptor) bool {
+		if !strings.HasPrefix(string(fd.Package()), "eagle.") {
+			return true
+		}
+		services := fd.Services()
+		for i := 0; i < services.Len(); i++ {
+			svc := services.Get(i)
+			methods := svc.Methods()
+			for j := 0; j < methods.Len(); j++ {
+				method := methods.Get(j)
+				op := "/" + string(svc.FullName()) + "/" + string(method.Name())
+				policy := lookupPolicy(op)
+				switch policy.Access {
+				case annotationsv1.AccessLevel_ACCESS_LEVEL_PUBLIC,
+					annotationsv1.AccessLevel_ACCESS_LEVEL_AUTHENTICATED:
+					if policy.Perm != "" {
+						violations = append(violations, op+": 非权限访问级别不能同时声明 perm")
+					}
+				case annotationsv1.AccessLevel_ACCESS_LEVEL_PERMISSION_REQUIRED:
+					if !concretePermissionPattern.MatchString(policy.Perm) {
+						violations = append(violations, fmt.Sprintf("%s: 权限码 %q 不是严格三段格式", op, policy.Perm))
+					} else if len(catalog) > 0 {
+						if _, ok := catalog[policy.Perm]; !ok {
+							violations = append(violations, fmt.Sprintf("%s: 权限码 %q 不在权限目录中", op, policy.Perm))
+						}
+					}
+				default:
+					violations = append(violations, op+": 未显式声明 access")
+				}
+			}
+		}
+		return true
+	})
+	if len(violations) == 0 {
+		return nil
+	}
+	sort.Strings(violations)
+	return fmt.Errorf("authz: RPC 访问契约无效:\n  - %s", strings.Join(violations, "\n  - "))
 }
 
 // splitOperation 把 "/pkg.Service/Method" 拆成服务全名和方法名。

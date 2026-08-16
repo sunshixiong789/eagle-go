@@ -73,6 +73,20 @@ func (c *Claims) Roles(clientID string) []string {
 	return roles
 }
 
+// ClientRoles 只返回指定资源服务器命名空间内的角色。
+// 超级管理员之类的高影响短路只能基于这份集合，避免同名 realm 角色
+// 意外获得所有服务的全局管理能力。
+func (c *Claims) ClientRoles(clientID string) []string {
+	if clientID == "" {
+		return nil
+	}
+	ra, ok := c.ResourceAccess[clientID]
+	if !ok {
+		return nil
+	}
+	return append([]string(nil), ra.Roles...)
+}
+
 // IsServiceToken 判断这是不是 client_credentials 签发的服务令牌。
 //
 // Keycloak 下不能用「sub == client_id」判断：服务账号有自己的用户 UUID，

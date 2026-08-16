@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-kratos/kratos/v3/config"
+	configenv "github.com/go-kratos/kratos/v3/config/env"
 	"github.com/go-kratos/kratos/v3/config/file"
 
 	"github.com/eagle-go/eagle/app/system/internal/conf"
@@ -37,8 +38,36 @@ func loadConfig(t *testing.T) *conf.Bootstrap {
 	return &bc
 }
 
+func TestEnvironmentOverridesSensitiveDefaults(t *testing.T) {
+	path, err := filepath.Abs(filepath.Join("..", "..", "configs"))
+	if err != nil {
+		t.Fatalf("解析配置目录: %v", err)
+	}
+	t.Setenv("EAGLE_DATABASE_DSN", "postgres://runtime:secret@db.internal:5432/eagle?sslmode=require")
+	t.Setenv("EAGLE_REDIS_PASSWORD", "runtime-redis-secret")
+
+	c := config.New(config.WithSource(file.NewSource(path), configenv.NewSource("EAGLE")))
+	t.Cleanup(func() { _ = c.Close() })
+	if err := c.Load(); err != nil {
+		t.Fatalf("加载配置: %v", err)
+	}
+	var bc conf.Bootstrap
+	if err := c.Scan(&bc); err != nil {
+		t.Fatalf("解析配置: %v", err)
+	}
+	if got := bc.GetData().GetDatabase().GetDsn(); !strings.Contains(got, "runtime:secret@db.internal") {
+		t.Fatalf("DATABASE_DSN override not applied: %q", got)
+	}
+	if got := bc.GetData().GetRedis().GetPassword(); got != "runtime-redis-secret" {
+		t.Fatalf("REDIS_PASSWORD override = %q", got)
+	}
+}
+
 func TestConfigParses(t *testing.T) {
 	bc := loadConfig(t)
+	if err := conf.Validate(bc); err != nil {
+		t.Fatalf("配置校验失败: %v", err)
+	}
 
 	if bc.GetServer().GetHttp().GetAddr() == "" {
 		t.Error("server.http.addr 未解析出来")

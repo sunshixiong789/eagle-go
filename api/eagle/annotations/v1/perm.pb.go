@@ -11,6 +11,7 @@ import (
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	descriptorpb "google.golang.org/protobuf/types/descriptorpb"
 	reflect "reflect"
+	sync "sync"
 	unsafe "unsafe"
 )
 
@@ -20,6 +21,60 @@ const (
 	// Verify that runtime/protoimpl is sufficiently up-to-date.
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
+
+// AccessLevel 强制每个 RPC 显式选择访问语义，避免“忘记写权限注解”与
+// “有意只要求登录”都表现成空值而无法区分。
+type AccessLevel int32
+
+const (
+	AccessLevel_ACCESS_LEVEL_UNSPECIFIED         AccessLevel = 0
+	AccessLevel_ACCESS_LEVEL_PUBLIC              AccessLevel = 1
+	AccessLevel_ACCESS_LEVEL_AUTHENTICATED       AccessLevel = 2
+	AccessLevel_ACCESS_LEVEL_PERMISSION_REQUIRED AccessLevel = 3
+)
+
+// Enum value maps for AccessLevel.
+var (
+	AccessLevel_name = map[int32]string{
+		0: "ACCESS_LEVEL_UNSPECIFIED",
+		1: "ACCESS_LEVEL_PUBLIC",
+		2: "ACCESS_LEVEL_AUTHENTICATED",
+		3: "ACCESS_LEVEL_PERMISSION_REQUIRED",
+	}
+	AccessLevel_value = map[string]int32{
+		"ACCESS_LEVEL_UNSPECIFIED":         0,
+		"ACCESS_LEVEL_PUBLIC":              1,
+		"ACCESS_LEVEL_AUTHENTICATED":       2,
+		"ACCESS_LEVEL_PERMISSION_REQUIRED": 3,
+	}
+)
+
+func (x AccessLevel) Enum() *AccessLevel {
+	p := new(AccessLevel)
+	*p = x
+	return p
+}
+
+func (x AccessLevel) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AccessLevel) Descriptor() protoreflect.EnumDescriptor {
+	return file_eagle_annotations_v1_perm_proto_enumTypes[0].Descriptor()
+}
+
+func (AccessLevel) Type() protoreflect.EnumType {
+	return &file_eagle_annotations_v1_perm_proto_enumTypes[0]
+}
+
+func (x AccessLevel) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AccessLevel.Descriptor instead.
+func (AccessLevel) EnumDescriptor() ([]byte, []int) {
+	return file_eagle_annotations_v1_perm_proto_rawDescGZIP(), []int{0}
+}
 
 var file_eagle_annotations_v1_perm_proto_extTypes = []protoimpl.ExtensionInfo{
 	{
@@ -38,6 +93,14 @@ var file_eagle_annotations_v1_perm_proto_extTypes = []protoimpl.ExtensionInfo{
 		Tag:           "varint,50002,opt,name=public",
 		Filename:      "eagle/annotations/v1/perm.proto",
 	},
+	{
+		ExtendedType:  (*descriptorpb.MethodOptions)(nil),
+		ExtensionType: (*AccessLevel)(nil),
+		Field:         50003,
+		Name:          "eagle.annotations.v1.access",
+		Tag:           "varint,50003,opt,name=access,enum=eagle.annotations.v1.AccessLevel",
+		Filename:      "eagle/annotations/v1/perm.proto",
+	},
 }
 
 // Extension fields to descriptorpb.MethodOptions.
@@ -52,26 +115,52 @@ var (
 	//
 	// optional bool public = 50002;
 	E_Public = &file_eagle_annotations_v1_perm_proto_extTypes[1]
+	// RPC 的显式访问级别。新接口必须填写；public 仅为旧契约兼容保留。
+	//
+	// optional eagle.annotations.v1.AccessLevel access = 50003;
+	E_Access = &file_eagle_annotations_v1_perm_proto_extTypes[2]
 )
 
 var File_eagle_annotations_v1_perm_proto protoreflect.FileDescriptor
 
 const file_eagle_annotations_v1_perm_proto_rawDesc = "" +
 	"\n" +
-	"\x1feagle/annotations/v1/perm.proto\x12\x14eagle.annotations.v1\x1a google/protobuf/descriptor.proto:4\n" +
+	"\x1feagle/annotations/v1/perm.proto\x12\x14eagle.annotations.v1\x1a google/protobuf/descriptor.proto*\x8a\x01\n" +
+	"\vAccessLevel\x12\x1c\n" +
+	"\x18ACCESS_LEVEL_UNSPECIFIED\x10\x00\x12\x17\n" +
+	"\x13ACCESS_LEVEL_PUBLIC\x10\x01\x12\x1e\n" +
+	"\x1aACCESS_LEVEL_AUTHENTICATED\x10\x02\x12$\n" +
+	" ACCESS_LEVEL_PERMISSION_REQUIRED\x10\x03:4\n" +
 	"\x04perm\x12\x1e.google.protobuf.MethodOptions\x18ц\x03 \x01(\tR\x04perm:8\n" +
-	"\x06public\x12\x1e.google.protobuf.MethodOptions\x18҆\x03 \x01(\bR\x06publicBBZ@github.com/eagle-go/eagle/api/eagle/annotations/v1;annotationsv1b\x06proto3"
+	"\x06public\x12\x1e.google.protobuf.MethodOptions\x18҆\x03 \x01(\bR\x06public:[\n" +
+	"\x06access\x12\x1e.google.protobuf.MethodOptions\x18ӆ\x03 \x01(\x0e2!.eagle.annotations.v1.AccessLevelR\x06accessBBZ@github.com/eagle-go/eagle/api/eagle/annotations/v1;annotationsv1b\x06proto3"
 
+var (
+	file_eagle_annotations_v1_perm_proto_rawDescOnce sync.Once
+	file_eagle_annotations_v1_perm_proto_rawDescData []byte
+)
+
+func file_eagle_annotations_v1_perm_proto_rawDescGZIP() []byte {
+	file_eagle_annotations_v1_perm_proto_rawDescOnce.Do(func() {
+		file_eagle_annotations_v1_perm_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_eagle_annotations_v1_perm_proto_rawDesc), len(file_eagle_annotations_v1_perm_proto_rawDesc)))
+	})
+	return file_eagle_annotations_v1_perm_proto_rawDescData
+}
+
+var file_eagle_annotations_v1_perm_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_eagle_annotations_v1_perm_proto_goTypes = []any{
-	(*descriptorpb.MethodOptions)(nil), // 0: google.protobuf.MethodOptions
+	(AccessLevel)(0),                   // 0: eagle.annotations.v1.AccessLevel
+	(*descriptorpb.MethodOptions)(nil), // 1: google.protobuf.MethodOptions
 }
 var file_eagle_annotations_v1_perm_proto_depIdxs = []int32{
-	0, // 0: eagle.annotations.v1.perm:extendee -> google.protobuf.MethodOptions
-	0, // 1: eagle.annotations.v1.public:extendee -> google.protobuf.MethodOptions
-	2, // [2:2] is the sub-list for method output_type
-	2, // [2:2] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	0, // [0:2] is the sub-list for extension extendee
+	1, // 0: eagle.annotations.v1.perm:extendee -> google.protobuf.MethodOptions
+	1, // 1: eagle.annotations.v1.public:extendee -> google.protobuf.MethodOptions
+	1, // 2: eagle.annotations.v1.access:extendee -> google.protobuf.MethodOptions
+	0, // 3: eagle.annotations.v1.access:type_name -> eagle.annotations.v1.AccessLevel
+	4, // [4:4] is the sub-list for method output_type
+	4, // [4:4] is the sub-list for method input_type
+	3, // [3:4] is the sub-list for extension type_name
+	0, // [0:3] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
 }
 
@@ -85,13 +174,14 @@ func file_eagle_annotations_v1_perm_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_eagle_annotations_v1_perm_proto_rawDesc), len(file_eagle_annotations_v1_perm_proto_rawDesc)),
-			NumEnums:      0,
+			NumEnums:      1,
 			NumMessages:   0,
-			NumExtensions: 2,
+			NumExtensions: 3,
 			NumServices:   0,
 		},
 		GoTypes:           file_eagle_annotations_v1_perm_proto_goTypes,
 		DependencyIndexes: file_eagle_annotations_v1_perm_proto_depIdxs,
+		EnumInfos:         file_eagle_annotations_v1_perm_proto_enumTypes,
 		ExtensionInfos:    file_eagle_annotations_v1_perm_proto_extTypes,
 	}.Build()
 	File_eagle_annotations_v1_perm_proto = out.File

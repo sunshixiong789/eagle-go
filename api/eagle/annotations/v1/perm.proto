@@ -6,6 +6,15 @@ import "google/protobuf/descriptor.proto";
 
 option go_package = "github.com/eagle-go/eagle/api/eagle/annotations/v1;annotationsv1";
 
+// AccessLevel 强制每个 RPC 显式选择访问语义，避免“忘记写权限注解”与
+// “有意只要求登录”都表现成空值而无法区分。
+enum AccessLevel {
+  ACCESS_LEVEL_UNSPECIFIED = 0;
+  ACCESS_LEVEL_PUBLIC = 1;
+  ACCESS_LEVEL_AUTHENTICATED = 2;
+  ACCESS_LEVEL_PERMISSION_REQUIRED = 3;
+}
+
 // 方法级权限声明，对标 Spring Security 的 @PreAuthorize。
 //
 // 权限要求写在契约里而不是散在代码中：pkg/authz 中间件在运行时
@@ -24,4 +33,7 @@ extend google.protobuf.MethodOptions {
   // 标记为公开方法，跳过登录态校验（如登录、健康检查、OIDC discovery）。
   // 显式声明而非靠路径前缀匹配，避免新增接口时漏配导致意外裸奔。
   bool public = 50002;
+
+  // RPC 的显式访问级别。新接口必须填写；public 仅为旧契约兼容保留。
+  AccessLevel access = 50003;
 }

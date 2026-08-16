@@ -23,6 +23,22 @@ type Config struct {
 
 // New 建立客户端并做一次 PING 探测。
 func New(ctx context.Context, cfg Config) (*redis.Client, func(), error) {
+	cli, cleanup := NewClient(cfg)
+
+	pingCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	if err := cli.Ping(pingCtx).Err(); err != nil {
+		cleanup()
+		return nil, nil, fmt.Errorf("ping redis: %w", err)
+	}
+
+	return cli, cleanup, nil
+}
+
+// NewClient 构造惰性 Redis 客户端但不做连通性探测。
+// 普通缓存和策略通知可以在 Redis 暂时不可用时降级运行；安全关键的
+// token 撤销存储仍应使用 New，在启动时确认可用。
+func NewClient(cfg Config) (*redis.Client, func()) {
 	cli := redis.NewClient(&redis.Options{
 		Addr:         cfg.Addr,
 		Password:     cfg.Password,
@@ -32,14 +48,7 @@ func New(ctx context.Context, cfg Config) (*redis.Client, func(), error) {
 		WriteTimeout: orDefault(cfg.WriteTimeout, 500*time.Millisecond),
 	})
 
-	pingCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	defer cancel()
-	if err := cli.Ping(pingCtx).Err(); err != nil {
-		_ = cli.Close()
-		return nil, nil, fmt.Errorf("ping redis: %w", err)
-	}
-
-	return cli, func() { _ = cli.Close() }, nil
+	return cli, func() { _ = cli.Close() }
 }
 
 func orDefault(v, def time.Duration) time.Duration {
@@ -86,15 +95,19 @@ func (c *Cache[T]) Get(ctx context.Context, key string, load Loader[T]) (T, erro
 	switch {
 	case err == nil:
 		if v, decErr := c.codec.Unmarshal(raw); decErr == nil {
+			recordCache(ctx, "hit")
 			return v, nil
 		}
+		recordCache(ctx, "decode_error")
 		// 解码失败说明缓存里是脏数据（多为版本升级导致的格式变更），
 		// 删掉并按未命中处理
 		_ = c.cli.Del(ctx, key).Err()
 	case errors.Is(err, redis.Nil):
+		recordCache(ctx, "miss")
 		// 未命中，走下面的回源
 	default:
 		// Redis 不可用：降级直连数据源
+		recordCache(ctx, "redis_fallback")
 		return load(ctx)
 	}
 
@@ -106,6 +119,7 @@ func (c *Cache[T]) Get(ctx context.Context, key string, load Loader[T]) (T, erro
 		if b, encErr := c.codec.Marshal(loaded); encErr == nil {
 			_ = c.cli.Set(ctx, key, b, c.ttl).Err()
 		}
+		recordCache(ctx, "loaded")
 		return loaded, nil
 	})
 	if err != nil {

@@ -3,6 +3,7 @@ package authz
 import (
 	"testing"
 
+	annotationsv1 "github.com/eagle-go/eagle/api/eagle/annotations/v1"
 	// 空导入以触发 init()，把 system 的文件描述符注册进全局 registry。
 	// 没有它，PolicyFor 一律解析不到方法——这正是本测试要守住的前提。
 	_ "github.com/eagle-go/eagle/api/eagle/system/v1"
@@ -15,36 +16,42 @@ func TestPolicyFor(t *testing.T) {
 		wantPerm   string
 		wantPublic bool
 		wantKnown  bool
+		wantAccess annotationsv1.AccessLevel
 	}{
 		{
-			name:      "声明了权限码的方法",
-			operation: "/eagle.system.v1.PermissionService/CreatePermission",
-			wantPerm:  "system:permission:add",
-			wantKnown: true,
+			name:       "声明了权限码的方法",
+			operation:  "/eagle.system.v1.PermissionService/CreatePermission",
+			wantPerm:   "system:permission:add",
+			wantKnown:  true,
+			wantAccess: annotationsv1.AccessLevel_ACCESS_LEVEL_PERMISSION_REQUIRED,
 		},
 		{
-			name:      "只需登录、未声明权限码的方法",
-			operation: "/eagle.system.v1.PermissionService/GetMyMenus",
-			wantPerm:  "",
-			wantKnown: true,
+			name:       "只需登录、未声明权限码的方法",
+			operation:  "/eagle.system.v1.PermissionService/GetMyMenus",
+			wantPerm:   "",
+			wantKnown:  true,
+			wantAccess: annotationsv1.AccessLevel_ACCESS_LEVEL_AUTHENTICATED,
 		},
 		{
-			name:      "角色权限分配",
-			operation: "/eagle.system.v1.RoleBindingService/SetRolePermissions",
-			wantPerm:  "system:role:assign",
-			wantKnown: true,
+			name:       "角色权限分配",
+			operation:  "/eagle.system.v1.RoleBindingService/SetRolePermissions",
+			wantPerm:   "system:role:assign",
+			wantKnown:  true,
+			wantAccess: annotationsv1.AccessLevel_ACCESS_LEVEL_PERMISSION_REQUIRED,
 		},
 		{
-			name:      "查自己的权限只需登录",
-			operation: "/eagle.system.v1.RoleBindingService/GetMyPermissions",
-			wantPerm:  "",
-			wantKnown: true,
+			name:       "查自己的权限只需登录",
+			operation:  "/eagle.system.v1.RoleBindingService/GetMyPermissions",
+			wantPerm:   "",
+			wantKnown:  true,
+			wantAccess: annotationsv1.AccessLevel_ACCESS_LEVEL_AUTHENTICATED,
 		},
 		{
-			name:      "字典按类型查询只需登录",
-			operation: "/eagle.system.v1.DictService/GetDictDataByType",
-			wantPerm:  "",
-			wantKnown: true,
+			name:       "字典按类型查询只需登录",
+			operation:  "/eagle.system.v1.DictService/GetDictDataByType",
+			wantPerm:   "",
+			wantKnown:  true,
+			wantAccess: annotationsv1.AccessLevel_ACCESS_LEVEL_AUTHENTICATED,
 		},
 		{
 			// gRPC 反射、健康检查等不在本项目契约里的方法，
@@ -72,7 +79,16 @@ func TestPolicyFor(t *testing.T) {
 			if got.Known != tt.wantKnown {
 				t.Errorf("Known = %v, want %v", got.Known, tt.wantKnown)
 			}
+			if got.Access != tt.wantAccess {
+				t.Errorf("Access = %v, want %v", got.Access, tt.wantAccess)
+			}
 		})
+	}
+}
+
+func TestRegisteredPoliciesAreExplicit(t *testing.T) {
+	if err := ValidateRegisteredPolicies(nil); err != nil {
+		t.Fatal(err)
 	}
 }
 

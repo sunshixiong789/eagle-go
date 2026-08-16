@@ -22,6 +22,16 @@ type Tx struct {
 	DictType *DictTypeClient
 	// Permission is the client for interacting with the Permission builders.
 	Permission *PermissionClient
+	// PermissionDefinition is the client for interacting with the PermissionDefinition builders.
+	PermissionDefinition *PermissionDefinitionClient
+	// PermissionTreeState is the client for interacting with the PermissionTreeState builders.
+	PermissionTreeState *PermissionTreeStateClient
+	// PolicyAudit is the client for interacting with the PolicyAudit builders.
+	PolicyAudit *PolicyAuditClient
+	// PolicyOutbox is the client for interacting with the PolicyOutbox builders.
+	PolicyOutbox *PolicyOutboxClient
+	// PolicyState is the client for interacting with the PolicyState builders.
+	PolicyState *PolicyStateClient
 	// UserProfile is the client for interacting with the UserProfile builders.
 	UserProfile *UserProfileClient
 
@@ -159,6 +169,11 @@ func (tx *Tx) init() {
 	tx.DictData = NewDictDataClient(tx.config)
 	tx.DictType = NewDictTypeClient(tx.config)
 	tx.Permission = NewPermissionClient(tx.config)
+	tx.PermissionDefinition = NewPermissionDefinitionClient(tx.config)
+	tx.PermissionTreeState = NewPermissionTreeStateClient(tx.config)
+	tx.PolicyAudit = NewPolicyAuditClient(tx.config)
+	tx.PolicyOutbox = NewPolicyOutboxClient(tx.config)
+	tx.PolicyState = NewPolicyStateClient(tx.config)
 	tx.UserProfile = NewUserProfileClient(tx.config)
 }
 

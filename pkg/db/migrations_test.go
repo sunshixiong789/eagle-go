@@ -112,7 +112,7 @@ func assertSeedData(t *testing.T, db *sql.DB) {
 		"system:role:assign", "system:dict:query",
 	} {
 		var exists bool
-		err := db.QueryRow(`SELECT EXISTS(SELECT 1 FROM sys_permission WHERE code = $1)`, code).Scan(&exists)
+		err := db.QueryRow(`SELECT EXISTS(SELECT 1 FROM permission_definition WHERE code = $1)`, code).Scan(&exists)
 		if err != nil {
 			t.Fatalf("查询权限码 %s: %v", code, err)
 		}
@@ -174,10 +174,10 @@ func assertSeedData(t *testing.T, db *sql.DB) {
 	// 显式指定过 id 的表，序列必须被推到最大值之后，
 	// 否则后续 INSERT 会撞主键
 	var nextID, maxID int64
-	if err := db.QueryRow(`SELECT max(id) FROM sys_permission`).Scan(&maxID); err != nil {
+	if err := db.QueryRow(`SELECT max(id) FROM navigation_node`).Scan(&maxID); err != nil {
 		t.Fatalf("读取权限最大 id: %v", err)
 	}
-	err = db.QueryRow(`SELECT nextval(pg_get_serial_sequence('sys_permission','id'))`).Scan(&nextID)
+	err = db.QueryRow(`SELECT nextval(pg_get_serial_sequence('navigation_node','id'))`).Scan(&nextID)
 	if err != nil {
 		t.Fatalf("读取权限序列: %v", err)
 	}
@@ -190,7 +190,7 @@ func assertTablesDropped(t *testing.T, db *sql.DB) {
 	t.Helper()
 
 	for _, table := range []string{
-		"sys_user_profile", "sys_permission",
+		"sys_user_profile", "navigation_node", "permission_definition",
 		"sys_dict_type", "sys_dict_data", "casbin_rule",
 	} {
 		var exists bool

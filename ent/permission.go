@@ -17,12 +17,12 @@ type Permission struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int64 `json:"id,omitempty"`
-	// 顶级节点为 0
-	ParentID int64 `json:"parent_id,omitempty"`
+	// 顶级节点在数据库中为 NULL，领域层映射为 0
+	ParentID *int64 `json:"parent_id,omitempty"`
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
 	// 权限码，如 system:user:add。目录/菜单可为空，按钮必填
-	Code string `json:"code,omitempty"`
+	Code *string `json:"code,omitempty"`
 	// 1=目录 2=菜单 3=按钮
 	Type int32 `json:"type,omitempty"`
 	// Path holds the value of the "path" field.
@@ -82,7 +82,8 @@ func (_m *Permission) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field parent_id", values[i])
 			} else if value.Valid {
-				_m.ParentID = value.Int64
+				_m.ParentID = new(int64)
+				*_m.ParentID = value.Int64
 			}
 		case permission.FieldName:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -94,7 +95,8 @@ func (_m *Permission) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field code", values[i])
 			} else if value.Valid {
-				_m.Code = value.String
+				_m.Code = new(string)
+				*_m.Code = value.String
 			}
 		case permission.FieldType:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -186,14 +188,18 @@ func (_m *Permission) String() string {
 	var builder strings.Builder
 	builder.WriteString("Permission(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
-	builder.WriteString("parent_id=")
-	builder.WriteString(fmt.Sprintf("%v", _m.ParentID))
+	if v := _m.ParentID; v != nil {
+		builder.WriteString("parent_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("name=")
 	builder.WriteString(_m.Name)
 	builder.WriteString(", ")
-	builder.WriteString("code=")
-	builder.WriteString(_m.Code)
+	if v := _m.Code; v != nil {
+		builder.WriteString("code=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	builder.WriteString("type=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Type))

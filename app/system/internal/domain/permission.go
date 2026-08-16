@@ -64,6 +64,7 @@ type Permission struct {
 	status    Status
 	createdAt time.Time
 	updatedAt time.Time
+	revision  int64
 }
 
 // NewPermissionParams 是创建权限节点的入参。
@@ -112,7 +113,7 @@ func NewPermission(p NewPermissionParams) (*Permission, error) {
 func RehydratePermission(
 	id, parentID int64, name, code string, typ, status int32,
 	path, component, icon string, sort int32, visible bool,
-	createdAt, updatedAt time.Time,
+	createdAt, updatedAt time.Time, revision int64,
 ) *Permission {
 	return &Permission{
 		id:        id,
@@ -128,6 +129,7 @@ func RehydratePermission(
 		status:    Status(status),
 		createdAt: createdAt,
 		updatedAt: updatedAt,
+		revision:  revision,
 	}
 }
 
@@ -137,6 +139,11 @@ func (p *Permission) validate() error {
 	}
 	if !p.typ.Valid() {
 		return fmt.Errorf("%w: %d", ErrInvalidPermissionType, p.typ)
+	}
+	// 导航节点引用的是一个具体后端能力；通配符只允许出现在角色策略中。
+	// 把 system:* 之类的覆盖性策略登记成一个按钮，会让目录与授权边界混淆。
+	if p.code.HasWildcard() {
+		return fmt.Errorf("%w: 导航节点只能引用具体权限码", ErrInvalidPermissionCode)
 	}
 	// 按钮不挂权限码就永远无法被授权，等于一个点不动的死按钮。
 	// 这类配置错误在运行时表现为「有按钮但一直 403」，很难查。
@@ -186,6 +193,9 @@ func (p *Permission) CreatedAt() time.Time { return p.createdAt }
 
 // UpdatedAt 返回更新时间。
 func (p *Permission) UpdatedAt() time.Time { return p.updatedAt }
+
+// Revision 返回读取该节点时整棵权限树的版本。
+func (p *Permission) Revision() int64 { return p.revision }
 
 // IsRoot 表示这是顶级节点。
 func (p *Permission) IsRoot() bool { return p.parentID == RootPermissionID }
@@ -362,7 +372,8 @@ type PermissionRepo interface {
 	Create(ctx context.Context, p *Permission) (*Permission, error)
 	GetByID(ctx context.Context, id int64) (*Permission, error)
 	List(ctx context.Context, q ListPermissionsQuery) ([]*Permission, error)
-	Update(ctx context.Context, p *Permission) (*Permission, error)
-	Delete(ctx context.Context, id int64) error
+	Update(ctx context.Context, p *Permission, expectedRevision *int64) (*Permission, error)
+	Delete(ctx context.Context, id int64, expectedRevision *int64) error
 	CountChildren(ctx context.Context, id int64) (int64, error)
+	KnownCodes(ctx context.Context) (map[string]struct{}, error)
 }

@@ -69,6 +69,4 @@ type DictRepo interface {
 	ListDataByType(ctx context.Context, dictType string) ([]*DictData, error)
 	UpdateData(ctx context.Context, d *DictData) (*DictData, error)
 	DeleteData(ctx context.Context, id int64) error
-
-	InvalidateCache(ctx context.Context, dictTypes ...string) error
 }

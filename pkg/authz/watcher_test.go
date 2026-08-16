@@ -99,3 +99,10 @@ func TestRedisWatcherNotifyNilReceiverIsNoop(t *testing.T) {
 	var w *RedisWatcher
 	w.Notify(context.Background()) // 不应 panic
 }
+
+func TestRedisWatcherPublishNilReceiverReturnsError(t *testing.T) {
+	var w *RedisWatcher
+	if err := w.PublishVersion(context.Background(), 1); err == nil {
+		t.Fatal("reliable publish without watcher should fail")
+	}
+}

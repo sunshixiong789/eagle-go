@@ -11,7 +11,7 @@
 //  1. public 方法直接放行
 //  2. 无主体 -> 401
 //  3. 未声明权限码 -> 已登录即可
-//  4. 超管角色 -> 短路放行
+//  4. 本服务命名空间内的超管 client 角色 -> 短路放行
 //  5. 其余 -> 交 Casbin 按角色判定
 package authz
 
@@ -22,6 +22,7 @@ import (
 	"github.com/go-kratos/kratos/v3/middleware"
 	"github.com/go-kratos/kratos/v3/transport"
 
+	annotationsv1 "github.com/eagle-go/eagle/api/eagle/annotations/v1"
 	"github.com/eagle-go/eagle/pkg/identity"
 )
 
@@ -70,7 +71,10 @@ func Server(opts ...Option) middleware.Middleware {
 			}
 
 			policy := PolicyFor(tr.Operation())
-			if policy.Public {
+			if !policy.Known || policy.Access == annotationsv1.AccessLevel_ACCESS_LEVEL_UNSPECIFIED {
+				return nil, errors.Forbidden(ReasonForbidden, "RPC 未声明有效的访问策略")
+			}
+			if policy.Access == annotationsv1.AccessLevel_ACCESS_LEVEL_PUBLIC {
 				return handler(ctx, req)
 			}
 
@@ -79,9 +83,11 @@ func Server(opts ...Option) middleware.Middleware {
 				return nil, errors.Unauthorized(ReasonUnauthenticated, "未登录或凭证已失效")
 			}
 
-			// 未声明权限码：登录即可访问（如查自己的菜单）
-			if policy.Perm == "" {
+			if policy.Access == annotationsv1.AccessLevel_ACCESS_LEVEL_AUTHENTICATED {
 				return handler(ctx, req)
+			}
+			if policy.Access != annotationsv1.AccessLevel_ACCESS_LEVEL_PERMISSION_REQUIRED || policy.Perm == "" {
+				return nil, errors.Forbidden(ReasonForbidden, "RPC 访问策略配置错误")
 			}
 
 			if err := o.check(ctx, p, policy.Perm); err != nil {
@@ -92,8 +98,9 @@ func Server(opts ...Option) middleware.Middleware {
 	}
 }
 
-func (o *options) check(_ context.Context, p *identity.Principal, perm string) error {
-	if o.superAdminRole != "" && p.HasRole(o.superAdminRole) {
+func (o *options) check(ctx context.Context, p *identity.Principal, perm string) error {
+	if o.superAdminRole != "" && p.HasClientRole(o.superAdminRole) {
+		recordDecision(ctx, "super_admin_bypass", perm)
 		return nil
 	}
 
@@ -106,7 +113,7 @@ func (o *options) check(_ context.Context, p *identity.Principal, perm string) e
 	// 服务账号与终端用户走同一套判定：两者的角色都由 Keycloak 下发，
 	// 在 Casbin 眼里没有区别。为服务账号单开一条 scope 判定分支
 	// 会形成第二套授权语义，日后必然出现两边配置不一致。
-	allowed, err := o.enforcer.Allow(p.Roles, perm)
+	allowed, err := o.enforcer.AllowContext(ctx, p.Roles, perm)
 	if err != nil {
 		// 判定失败时拒绝。放行会让策略存储抖动直接变成越权。
 		return errors.Forbidden(ReasonForbidden, "权限校验失败")

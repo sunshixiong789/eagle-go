@@ -33,15 +33,17 @@ type Permission struct {
 	// 权限码，如 system:user:add。目录/菜单可为空，按钮必填
 	Code string `protobuf:"bytes,4,opt,name=code,proto3" json:"code,omitempty"`
 	// 1=目录 2=菜单 3=按钮
-	Type          int32                  `protobuf:"varint,5,opt,name=type,proto3" json:"type,omitempty"`
-	Path          string                 `protobuf:"bytes,6,opt,name=path,proto3" json:"path,omitempty"`
-	Component     string                 `protobuf:"bytes,7,opt,name=component,proto3" json:"component,omitempty"`
-	Icon          string                 `protobuf:"bytes,8,opt,name=icon,proto3" json:"icon,omitempty"`
-	Sort          int32                  `protobuf:"varint,9,opt,name=sort,proto3" json:"sort,omitempty"`
-	Visible       bool                   `protobuf:"varint,10,opt,name=visible,proto3" json:"visible,omitempty"`
-	Status        int32                  `protobuf:"varint,11,opt,name=status,proto3" json:"status,omitempty"`
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Type      int32                  `protobuf:"varint,5,opt,name=type,proto3" json:"type,omitempty"`
+	Path      string                 `protobuf:"bytes,6,opt,name=path,proto3" json:"path,omitempty"`
+	Component string                 `protobuf:"bytes,7,opt,name=component,proto3" json:"component,omitempty"`
+	Icon      string                 `protobuf:"bytes,8,opt,name=icon,proto3" json:"icon,omitempty"`
+	Sort      int32                  `protobuf:"varint,9,opt,name=sort,proto3" json:"sort,omitempty"`
+	Visible   bool                   `protobuf:"varint,10,opt,name=visible,proto3" json:"visible,omitempty"`
+	Status    int32                  `protobuf:"varint,11,opt,name=status,proto3" json:"status,omitempty"`
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	// 整棵权限树的版本，用于管理端乐观并发控制。
+	Revision      int64 `protobuf:"varint,14,opt,name=revision,proto3" json:"revision,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -165,6 +167,13 @@ func (x *Permission) GetUpdatedAt() *timestamppb.Timestamp {
 		return x.UpdatedAt
 	}
 	return nil
+}
+
+func (x *Permission) GetRevision() int64 {
+	if x != nil {
+		return x.Revision
+	}
+	return 0
 }
 
 type CreatePermissionRequest struct {
@@ -512,20 +521,21 @@ func (x *ListPermissionsResponse) GetPermissions() []*Permission {
 }
 
 type UpdatePermissionRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	ParentId      int64                  `protobuf:"varint,2,opt,name=parent_id,json=parentId,proto3" json:"parent_id,omitempty"`
-	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	Code          string                 `protobuf:"bytes,4,opt,name=code,proto3" json:"code,omitempty"`
-	Type          int32                  `protobuf:"varint,5,opt,name=type,proto3" json:"type,omitempty"`
-	Path          string                 `protobuf:"bytes,6,opt,name=path,proto3" json:"path,omitempty"`
-	Component     string                 `protobuf:"bytes,7,opt,name=component,proto3" json:"component,omitempty"`
-	Icon          string                 `protobuf:"bytes,8,opt,name=icon,proto3" json:"icon,omitempty"`
-	Sort          int32                  `protobuf:"varint,9,opt,name=sort,proto3" json:"sort,omitempty"`
-	Visible       bool                   `protobuf:"varint,10,opt,name=visible,proto3" json:"visible,omitempty"`
-	Status        int32                  `protobuf:"varint,11,opt,name=status,proto3" json:"status,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Id               int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	ParentId         int64                  `protobuf:"varint,2,opt,name=parent_id,json=parentId,proto3" json:"parent_id,omitempty"`
+	Name             string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Code             string                 `protobuf:"bytes,4,opt,name=code,proto3" json:"code,omitempty"`
+	Type             int32                  `protobuf:"varint,5,opt,name=type,proto3" json:"type,omitempty"`
+	Path             string                 `protobuf:"bytes,6,opt,name=path,proto3" json:"path,omitempty"`
+	Component        string                 `protobuf:"bytes,7,opt,name=component,proto3" json:"component,omitempty"`
+	Icon             string                 `protobuf:"bytes,8,opt,name=icon,proto3" json:"icon,omitempty"`
+	Sort             int32                  `protobuf:"varint,9,opt,name=sort,proto3" json:"sort,omitempty"`
+	Visible          bool                   `protobuf:"varint,10,opt,name=visible,proto3" json:"visible,omitempty"`
+	Status           int32                  `protobuf:"varint,11,opt,name=status,proto3" json:"status,omitempty"`
+	ExpectedRevision *int64                 `protobuf:"varint,12,opt,name=expected_revision,json=expectedRevision,proto3,oneof" json:"expected_revision,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *UpdatePermissionRequest) Reset() {
@@ -635,6 +645,13 @@ func (x *UpdatePermissionRequest) GetStatus() int32 {
 	return 0
 }
 
+func (x *UpdatePermissionRequest) GetExpectedRevision() int64 {
+	if x != nil && x.ExpectedRevision != nil {
+		return *x.ExpectedRevision
+	}
+	return 0
+}
+
 type UpdatePermissionResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Permission    *Permission            `protobuf:"bytes,1,opt,name=permission,proto3" json:"permission,omitempty"`
@@ -680,10 +697,11 @@ func (x *UpdatePermissionResponse) GetPermission() *Permission {
 }
 
 type DeletePermissionRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Id               int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	ExpectedRevision *int64                 `protobuf:"varint,2,opt,name=expected_revision,json=expectedRevision,proto3,oneof" json:"expected_revision,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *DeletePermissionRequest) Reset() {
@@ -719,6 +737,13 @@ func (*DeletePermissionRequest) Descriptor() ([]byte, []int) {
 func (x *DeletePermissionRequest) GetId() int64 {
 	if x != nil {
 		return x.Id
+	}
+	return 0
+}
+
+func (x *DeletePermissionRequest) GetExpectedRevision() int64 {
+	if x != nil && x.ExpectedRevision != nil {
+		return *x.ExpectedRevision
 	}
 	return 0
 }
@@ -853,7 +878,7 @@ var File_eagle_system_v1_permission_proto protoreflect.FileDescriptor
 
 const file_eagle_system_v1_permission_proto_rawDesc = "" +
 	"\n" +
-	" eagle/system/v1/permission.proto\x12\x0feagle.system.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1feagle/annotations/v1/perm.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xf7\x02\n" +
+	" eagle/system/v1/permission.proto\x12\x0feagle.system.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1feagle/annotations/v1/perm.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x93\x03\n" +
 	"\n" +
 	"Permission\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1b\n" +
@@ -871,7 +896,8 @@ const file_eagle_system_v1_permission_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\x82\x03\n" +
+	"updated_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x1a\n" +
+	"\brevision\x18\x0e \x01(\x03R\brevision\"\x82\x03\n" +
 	"\x17CreatePermissionRequest\x12$\n" +
 	"\tparent_id\x18\x01 \x01(\x03B\a\xbaH\x04\"\x02(\x00R\bparentId\x12\x1d\n" +
 	"\x04name\x18\x02 \x01(\tB\t\xbaH\x06r\x04\x10\x01\x18@R\x04name\x12O\n" +
@@ -900,7 +926,7 @@ const file_eagle_system_v1_permission_proto_rawDesc = "" +
 	"\a_statusB\a\n" +
 	"\x05_type\"X\n" +
 	"\x17ListPermissionsResponse\x12=\n" +
-	"\vpermissions\x18\x01 \x03(\v2\x1b.eagle.system.v1.PermissionR\vpermissions\"\x9b\x03\n" +
+	"\vpermissions\x18\x01 \x03(\v2\x1b.eagle.system.v1.PermissionR\vpermissions\"\xec\x03\n" +
 	"\x17UpdatePermissionRequest\x12\x17\n" +
 	"\x02id\x18\x01 \x01(\x03B\a\xbaH\x04\"\x02 \x00R\x02id\x12$\n" +
 	"\tparent_id\x18\x02 \x01(\x03B\a\xbaH\x04\"\x02(\x00R\bparentId\x12\x1d\n" +
@@ -913,26 +939,30 @@ const file_eagle_system_v1_permission_proto_rawDesc = "" +
 	"\x04sort\x18\t \x01(\x05R\x04sort\x12\x18\n" +
 	"\avisible\x18\n" +
 	" \x01(\bR\avisible\x12!\n" +
-	"\x06status\x18\v \x01(\x05B\t\xbaH\x06\x1a\x040\x000\x01R\x06status\"W\n" +
+	"\x06status\x18\v \x01(\x05B\t\xbaH\x06\x1a\x040\x000\x01R\x06status\x129\n" +
+	"\x11expected_revision\x18\f \x01(\x03B\a\xbaH\x04\"\x02 \x00H\x00R\x10expectedRevision\x88\x01\x01B\x14\n" +
+	"\x12_expected_revision\"W\n" +
 	"\x18UpdatePermissionResponse\x12;\n" +
 	"\n" +
 	"permission\x18\x01 \x01(\v2\x1b.eagle.system.v1.PermissionR\n" +
-	"permission\"2\n" +
+	"permission\"\x83\x01\n" +
 	"\x17DeletePermissionRequest\x12\x17\n" +
-	"\x02id\x18\x01 \x01(\x03B\a\xbaH\x04\"\x02 \x00R\x02id\"\x1a\n" +
+	"\x02id\x18\x01 \x01(\x03B\a\xbaH\x04\"\x02 \x00R\x02id\x129\n" +
+	"\x11expected_revision\x18\x02 \x01(\x03B\a\xbaH\x04\"\x02 \x00H\x00R\x10expectedRevision\x88\x01\x01B\x14\n" +
+	"\x12_expected_revision\"\x1a\n" +
 	"\x18DeletePermissionResponse\"\x13\n" +
 	"\x11GetMyMenusRequest\"r\n" +
 	"\x12GetMyMenusResponse\x121\n" +
 	"\x05menus\x18\x01 \x03(\v2\x1b.eagle.system.v1.PermissionR\x05menus\x12)\n" +
-	"\x10permission_codes\x18\x02 \x03(\tR\x0fpermissionCodes2\xd2\a\n" +
-	"\x11PermissionService\x12\xa3\x01\n" +
-	"\x10CreatePermission\x12(.eagle.system.v1.CreatePermissionRequest\x1a).eagle.system.v1.CreatePermissionResponse\":\x8a\xb5\x18\x15system:permission:add\x82\xd3\xe4\x93\x02\x1b:\x01*\"\x16/v1/system/permissions\x12\x9e\x01\n" +
-	"\rGetPermission\x12%.eagle.system.v1.GetPermissionRequest\x1a&.eagle.system.v1.GetPermissionResponse\">\x8a\xb5\x18\x17system:permission:query\x82\xd3\xe4\x93\x02\x1d\x12\x1b/v1/system/permissions/{id}\x12\x9e\x01\n" +
-	"\x0fListPermissions\x12'.eagle.system.v1.ListPermissionsRequest\x1a(.eagle.system.v1.ListPermissionsResponse\"8\x8a\xb5\x18\x16system:permission:list\x82\xd3\xe4\x93\x02\x18\x12\x16/v1/system/permissions\x12\xa9\x01\n" +
-	"\x10UpdatePermission\x12(.eagle.system.v1.UpdatePermissionRequest\x1a).eagle.system.v1.UpdatePermissionResponse\"@\x8a\xb5\x18\x16system:permission:edit\x82\xd3\xe4\x93\x02 :\x01*\x1a\x1b/v1/system/permissions/{id}\x12\xa8\x01\n" +
-	"\x10DeletePermission\x12(.eagle.system.v1.DeletePermissionRequest\x1a).eagle.system.v1.DeletePermissionResponse\"?\x8a\xb5\x18\x18system:permission:remove\x82\xd3\xe4\x93\x02\x1d*\x1b/v1/system/permissions/{id}\x12~\n" +
+	"\x10permission_codes\x18\x02 \x03(\tR\x0fpermissionCodes2\xeb\a\n" +
+	"\x11PermissionService\x12\xa7\x01\n" +
+	"\x10CreatePermission\x12(.eagle.system.v1.CreatePermissionRequest\x1a).eagle.system.v1.CreatePermissionResponse\">\x8a\xb5\x18\x15system:permission:add\x98\xb5\x18\x03\x82\xd3\xe4\x93\x02\x1b:\x01*\"\x16/v1/system/permissions\x12\xa2\x01\n" +
+	"\rGetPermission\x12%.eagle.system.v1.GetPermissionRequest\x1a&.eagle.system.v1.GetPermissionResponse\"B\x8a\xb5\x18\x17system:permission:query\x98\xb5\x18\x03\x82\xd3\xe4\x93\x02\x1d\x12\x1b/v1/system/permissions/{id}\x12\xa2\x01\n" +
+	"\x0fListPermissions\x12'.eagle.system.v1.ListPermissionsRequest\x1a(.eagle.system.v1.ListPermissionsResponse\"<\x8a\xb5\x18\x16system:permission:list\x98\xb5\x18\x03\x82\xd3\xe4\x93\x02\x18\x12\x16/v1/system/permissions\x12\xad\x01\n" +
+	"\x10UpdatePermission\x12(.eagle.system.v1.UpdatePermissionRequest\x1a).eagle.system.v1.UpdatePermissionResponse\"D\x8a\xb5\x18\x16system:permission:edit\x98\xb5\x18\x03\x82\xd3\xe4\x93\x02 :\x01*\x1a\x1b/v1/system/permissions/{id}\x12\xac\x01\n" +
+	"\x10DeletePermission\x12(.eagle.system.v1.DeletePermissionRequest\x1a).eagle.system.v1.DeletePermissionResponse\"C\x8a\xb5\x18\x18system:permission:remove\x98\xb5\x18\x03\x82\xd3\xe4\x93\x02\x1d*\x1b/v1/system/permissions/{id}\x12\x82\x01\n" +
 	"\n" +
-	"GetMyMenus\x12\".eagle.system.v1.GetMyMenusRequest\x1a#.eagle.system.v1.GetMyMenusResponse\"'\x82\xd3\xe4\x93\x02!\x12\x1f/v1/system/permissions/me/menusB8Z6github.com/eagle-go/eagle/api/eagle/system/v1;systemv1b\x06proto3"
+	"GetMyMenus\x12\".eagle.system.v1.GetMyMenusRequest\x1a#.eagle.system.v1.GetMyMenusResponse\"+\x98\xb5\x18\x02\x82\xd3\xe4\x93\x02!\x12\x1f/v1/system/permissions/me/menusB8Z6github.com/eagle-go/eagle/api/eagle/system/v1;systemv1b\x06proto3"
 
 var (
 	file_eagle_system_v1_permission_proto_rawDescOnce sync.Once
@@ -996,6 +1026,8 @@ func file_eagle_system_v1_permission_proto_init() {
 		return
 	}
 	file_eagle_system_v1_permission_proto_msgTypes[5].OneofWrappers = []any{}
+	file_eagle_system_v1_permission_proto_msgTypes[7].OneofWrappers = []any{}
+	file_eagle_system_v1_permission_proto_msgTypes[9].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

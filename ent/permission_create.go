@@ -215,14 +215,6 @@ func (_c *PermissionCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *PermissionCreate) defaults() {
-	if _, ok := _c.mutation.ParentID(); !ok {
-		v := permission.DefaultParentID
-		_c.mutation.SetParentID(v)
-	}
-	if _, ok := _c.mutation.Code(); !ok {
-		v := permission.DefaultCode
-		_c.mutation.SetCode(v)
-	}
 	if _, ok := _c.mutation.Path(); !ok {
 		v := permission.DefaultPath
 		_c.mutation.SetPath(v)
@@ -259,9 +251,6 @@ func (_c *PermissionCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *PermissionCreate) check() error {
-	if _, ok := _c.mutation.ParentID(); !ok {
-		return &ValidationError{Name: "parent_id", err: errors.New(`ent: missing required field "Permission.parent_id"`)}
-	}
 	if _, ok := _c.mutation.Name(); !ok {
 		return &ValidationError{Name: "name", err: errors.New(`ent: missing required field "Permission.name"`)}
 	}
@@ -269,9 +258,6 @@ func (_c *PermissionCreate) check() error {
 		if err := permission.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Permission.name": %w`, err)}
 		}
-	}
-	if _, ok := _c.mutation.Code(); !ok {
-		return &ValidationError{Name: "code", err: errors.New(`ent: missing required field "Permission.code"`)}
 	}
 	if v, ok := _c.mutation.Code(); ok {
 		if err := permission.CodeValidator(v); err != nil {
@@ -355,7 +341,7 @@ func (_c *PermissionCreate) createSpec() (*Permission, *sqlgraph.CreateSpec) {
 	}
 	if value, ok := _c.mutation.ParentID(); ok {
 		_spec.SetField(permission.FieldParentID, field.TypeInt64, value)
-		_node.ParentID = value
+		_node.ParentID = &value
 	}
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(permission.FieldName, field.TypeString, value)
@@ -363,7 +349,7 @@ func (_c *PermissionCreate) createSpec() (*Permission, *sqlgraph.CreateSpec) {
 	}
 	if value, ok := _c.mutation.Code(); ok {
 		_spec.SetField(permission.FieldCode, field.TypeString, value)
-		_node.Code = value
+		_node.Code = &value
 	}
 	if value, ok := _c.mutation.GetType(); ok {
 		_spec.SetField(permission.FieldType, field.TypeInt32, value)
@@ -471,6 +457,12 @@ func (u *PermissionUpsert) AddParentID(v int64) *PermissionUpsert {
 	return u
 }
 
+// ClearParentID clears the value of the "parent_id" field.
+func (u *PermissionUpsert) ClearParentID() *PermissionUpsert {
+	u.SetNull(permission.FieldParentID)
+	return u
+}
+
 // SetName sets the "name" field.
 func (u *PermissionUpsert) SetName(v string) *PermissionUpsert {
 	u.Set(permission.FieldName, v)
@@ -492,6 +484,12 @@ func (u *PermissionUpsert) SetCode(v string) *PermissionUpsert {
 // UpdateCode sets the "code" field to the value that was provided on create.
 func (u *PermissionUpsert) UpdateCode() *PermissionUpsert {
 	u.SetExcluded(permission.FieldCode)
+	return u
+}
+
+// ClearCode clears the value of the "code" field.
+func (u *PermissionUpsert) ClearCode() *PermissionUpsert {
+	u.SetNull(permission.FieldCode)
 	return u
 }
 
@@ -681,6 +679,13 @@ func (u *PermissionUpsertOne) UpdateParentID() *PermissionUpsertOne {
 	})
 }
 
+// ClearParentID clears the value of the "parent_id" field.
+func (u *PermissionUpsertOne) ClearParentID() *PermissionUpsertOne {
+	return u.Update(func(s *PermissionUpsert) {
+		s.ClearParentID()
+	})
+}
+
 // SetName sets the "name" field.
 func (u *PermissionUpsertOne) SetName(v string) *PermissionUpsertOne {
 	return u.Update(func(s *PermissionUpsert) {
@@ -706,6 +711,13 @@ func (u *PermissionUpsertOne) SetCode(v string) *PermissionUpsertOne {
 func (u *PermissionUpsertOne) UpdateCode() *PermissionUpsertOne {
 	return u.Update(func(s *PermissionUpsert) {
 		s.UpdateCode()
+	})
+}
+
+// ClearCode clears the value of the "code" field.
+func (u *PermissionUpsertOne) ClearCode() *PermissionUpsertOne {
+	return u.Update(func(s *PermissionUpsert) {
+		s.ClearCode()
 	})
 }
 
@@ -1080,6 +1092,13 @@ func (u *PermissionUpsertBulk) UpdateParentID() *PermissionUpsertBulk {
 	})
 }
 
+// ClearParentID clears the value of the "parent_id" field.
+func (u *PermissionUpsertBulk) ClearParentID() *PermissionUpsertBulk {
+	return u.Update(func(s *PermissionUpsert) {
+		s.ClearParentID()
+	})
+}
+
 // SetName sets the "name" field.
 func (u *PermissionUpsertBulk) SetName(v string) *PermissionUpsertBulk {
 	return u.Update(func(s *PermissionUpsert) {
@@ -1105,6 +1124,13 @@ func (u *PermissionUpsertBulk) SetCode(v string) *PermissionUpsertBulk {
 func (u *PermissionUpsertBulk) UpdateCode() *PermissionUpsertBulk {
 	return u.Update(func(s *PermissionUpsert) {
 		s.UpdateCode()
+	})
+}
+
+// ClearCode clears the value of the "code" field.
+func (u *PermissionUpsertBulk) ClearCode() *PermissionUpsertBulk {
+	return u.Update(func(s *PermissionUpsert) {
+		s.ClearCode()
 	})
 }
 

@@ -58,6 +58,11 @@ func TestNewPermissionEnforcesInvariants(t *testing.T) {
 			func(p *NewPermissionParams) { p.Code = "bad-code" },
 			ErrInvalidPermissionCode,
 		},
+		{
+			"导航节点不能使用通配权限",
+			func(p *NewPermissionParams) { p.Code = "system:*" },
+			ErrInvalidPermissionCode,
+		},
 	}
 
 	for _, tt := range tests {
@@ -119,11 +124,11 @@ func TestPermissionEnsureDeletable(t *testing.T) {
 func buildTree() *PermissionTree {
 	now := time.Now()
 	return NewPermissionTree([]*Permission{
-		RehydratePermission(1, 0, "系统管理", "", int32(PermissionTypeDir), 1, "", "", "", 1, true, now, now),
-		RehydratePermission(100, 1, "用户管理", "system:user:list", int32(PermissionTypeMenu), 1, "", "", "", 1, true, now, now),
-		RehydratePermission(101, 100, "用户新增", "system:user:add", int32(PermissionTypeButton), 1, "", "", "", 1, true, now, now),
-		RehydratePermission(200, 1, "字典管理", "system:dict:list", int32(PermissionTypeMenu), 1, "", "", "", 2, true, now, now),
-		RehydratePermission(201, 200, "字典停用项", "system:dict:add", int32(PermissionTypeButton), 0, "", "", "", 1, true, now, now),
+		RehydratePermission(1, 0, "系统管理", "", int32(PermissionTypeDir), 1, "", "", "", 1, true, now, now, 1),
+		RehydratePermission(100, 1, "用户管理", "system:user:list", int32(PermissionTypeMenu), 1, "", "", "", 1, true, now, now, 1),
+		RehydratePermission(101, 100, "用户新增", "system:user:add", int32(PermissionTypeButton), 1, "", "", "", 1, true, now, now, 1),
+		RehydratePermission(200, 1, "字典管理", "system:dict:list", int32(PermissionTypeMenu), 1, "", "", "", 2, true, now, now, 1),
+		RehydratePermission(201, 200, "字典停用项", "system:dict:add", int32(PermissionTypeButton), 0, "", "", "", 1, true, now, now, 1),
 	})
 }
 

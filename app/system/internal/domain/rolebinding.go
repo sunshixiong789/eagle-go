@@ -34,8 +34,9 @@ func (r Role) IsZero() bool { return r.name == "" }
 // 聚合边界刻意不包含用户：用户到角色的归属由 Keycloak 维护，
 // 把它纳进来就等于与 Keycloak 双写同一份数据，必然漂移。
 type RoleBinding struct {
-	role  Role
-	codes []PermissionCode
+	role     Role
+	codes    []PermissionCode
+	revision int64
 }
 
 // NewRoleBinding 构造角色权限绑定，并对权限码去重。
@@ -79,6 +80,18 @@ func (b *RoleBinding) CodeStrings() []string { return PermissionCodeStrings(b.co
 
 // IsEmpty 表示该角色未被授予任何权限。
 func (b *RoleBinding) IsEmpty() bool { return len(b.codes) == 0 }
+
+func (b *RoleBinding) Revision() int64 { return b.revision }
+
+// WithRevision 返回带权威策略版本的副本。
+func (b *RoleBinding) WithRevision(revision int64) *RoleBinding {
+	if b == nil {
+		return nil
+	}
+	next := *b
+	next.revision = revision
+	return &next
+}
 
 // Grants 判断本绑定是否覆盖目标权限码（考虑通配）。
 //
@@ -152,11 +165,16 @@ type PolicyRepo interface {
 	// FindBinding 返回角色被直接授予的权限（不含继承）
 	FindBinding(ctx context.Context, role Role) (*RoleBinding, error)
 	// SaveBinding 全量覆盖角色的权限
-	SaveBinding(ctx context.Context, b *RoleBinding) error
+	SaveBinding(ctx context.Context, b *RoleBinding, expectedVersion *int64) (int64, error)
 	// ListBoundRoles 列出已配置过权限的角色
 	ListBoundRoles(ctx context.Context) ([]Role, error)
+	// ListBindings 一次返回全部直接绑定，避免后台列表逐角色查询。
+	ListBindings(ctx context.Context) ([]*RoleBinding, error)
+	PolicyVersion(ctx context.Context) (int64, error)
 	// ResolveCodes 汇总若干角色展开继承后的全部权限码，去重
 	ResolveCodes(ctx context.Context, roles []Role) ([]PermissionCode, error)
 	// SaveInheritance 建立角色继承
-	SaveInheritance(ctx context.Context, ri RoleInheritance) error
+	SaveInheritance(ctx context.Context, ri RoleInheritance, expectedVersion *int64) (int64, error)
+	ListInheritances(ctx context.Context) ([]RoleInheritance, error)
+	DeleteInheritance(ctx context.Context, ri RoleInheritance, expectedVersion *int64) (int64, error)
 }

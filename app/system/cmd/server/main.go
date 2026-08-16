@@ -13,12 +13,14 @@ import (
 	"github.com/go-kratos/kratos/contrib/otel/v3/tracing"
 	"github.com/go-kratos/kratos/v3"
 	"github.com/go-kratos/kratos/v3/config"
+	"github.com/go-kratos/kratos/v3/config/env"
 	"github.com/go-kratos/kratos/v3/config/file"
 	"github.com/go-kratos/kratos/v3/log"
 	"github.com/go-kratos/kratos/v3/transport/grpc"
 	"github.com/go-kratos/kratos/v3/transport/http"
 
 	"github.com/eagle-go/eagle/app/system/internal/conf"
+	"github.com/eagle-go/eagle/pkg/healthx"
 	"github.com/eagle-go/eagle/pkg/otelx"
 
 	// 按可用 CPU 配额设置 GOMAXPROCS。容器里 runtime 默认看到的是宿主机核数，
@@ -45,7 +47,11 @@ func init() {
 func main() {
 	flag.Parse()
 
-	c := config.New(config.WithSource(file.NewSource(flagconf)))
+	c := config.New(config.WithSource(
+		file.NewSource(flagconf),
+		// EAGLE_DATABASE_DSN 等变量会替换配置文件中的 ${DATABASE_DSN:默认值}。
+		env.NewSource("EAGLE"),
+	))
 	defer func() { _ = c.Close() }()
 
 	if err := c.Load(); err != nil {
@@ -54,6 +60,9 @@ func main() {
 
 	var bc conf.Bootstrap
 	if err := c.Scan(&bc); err != nil {
+		panic(err)
+	}
+	if err := conf.Validate(&bc); err != nil {
 		panic(err)
 	}
 
@@ -86,6 +95,7 @@ func main() {
 		panic(err)
 	}
 	defer cleanup()
+	healthx.Default.MarkInitialized()
 
 	if err := app.Run(); err != nil {
 		panic(err)

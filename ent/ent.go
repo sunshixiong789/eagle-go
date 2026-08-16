@@ -16,6 +16,11 @@ import (
 	"github.com/eagle-go/eagle/ent/dictdata"
 	"github.com/eagle-go/eagle/ent/dicttype"
 	"github.com/eagle-go/eagle/ent/permission"
+	"github.com/eagle-go/eagle/ent/permissiondefinition"
+	"github.com/eagle-go/eagle/ent/permissiontreestate"
+	"github.com/eagle-go/eagle/ent/policyaudit"
+	"github.com/eagle-go/eagle/ent/policyoutbox"
+	"github.com/eagle-go/eagle/ent/policystate"
 	"github.com/eagle-go/eagle/ent/userprofile"
 )
 
@@ -77,11 +82,16 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			casbinrule.Table:  casbinrule.ValidColumn,
-			dictdata.Table:    dictdata.ValidColumn,
-			dicttype.Table:    dicttype.ValidColumn,
-			permission.Table:  permission.ValidColumn,
-			userprofile.Table: userprofile.ValidColumn,
+			casbinrule.Table:           casbinrule.ValidColumn,
+			dictdata.Table:             dictdata.ValidColumn,
+			dicttype.Table:             dicttype.ValidColumn,
+			permission.Table:           permission.ValidColumn,
+			permissiondefinition.Table: permissiondefinition.ValidColumn,
+			permissiontreestate.Table:  permissiontreestate.ValidColumn,
+			policyaudit.Table:          policyaudit.ValidColumn,
+			policyoutbox.Table:         policyoutbox.ValidColumn,
+			policystate.Table:          policystate.ValidColumn,
+			userprofile.Table:          userprofile.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

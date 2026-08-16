@@ -154,6 +154,16 @@ func ParentIDLTE(v int64) predicate.Permission {
 	return predicate.Permission(sql.FieldLTE(FieldParentID, v))
 }
 
+// ParentIDIsNil applies the IsNil predicate on the "parent_id" field.
+func ParentIDIsNil() predicate.Permission {
+	return predicate.Permission(sql.FieldIsNull(FieldParentID))
+}
+
+// ParentIDNotNil applies the NotNil predicate on the "parent_id" field.
+func ParentIDNotNil() predicate.Permission {
+	return predicate.Permission(sql.FieldNotNull(FieldParentID))
+}
+
 // NameEQ applies the EQ predicate on the "name" field.
 func NameEQ(v string) predicate.Permission {
 	return predicate.Permission(sql.FieldEQ(FieldName, v))
@@ -272,6 +282,16 @@ func CodeHasPrefix(v string) predicate.Permission {
 // CodeHasSuffix applies the HasSuffix predicate on the "code" field.
 func CodeHasSuffix(v string) predicate.Permission {
 	return predicate.Permission(sql.FieldHasSuffix(FieldCode, v))
+}
+
+// CodeIsNil applies the IsNil predicate on the "code" field.
+func CodeIsNil() predicate.Permission {
+	return predicate.Permission(sql.FieldIsNull(FieldCode))
+}
+
+// CodeNotNil applies the NotNil predicate on the "code" field.
+func CodeNotNil() predicate.Permission {
+	return predicate.Permission(sql.FieldNotNull(FieldCode))
 }
 
 // CodeEqualFold applies the EqualFold predicate on the "code" field.

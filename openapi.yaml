@@ -318,6 +318,10 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: expectedRevision
+                  in: query
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -414,6 +418,45 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/eagle.system.v1.SetRolePermissionsResponse'
+    /v1/system/role-inheritances:
+        get:
+            tags:
+                - RoleBindingService
+            operationId: RoleBindingService_ListRoleInheritances
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.ListRoleInheritancesResponse'
+    /v1/system/role-inheritances/{child}/{parent}:
+        delete:
+            tags:
+                - RoleBindingService
+            operationId: RoleBindingService_DeleteRoleInheritance
+            parameters:
+                - name: child
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: parent
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: expectedVersion
+                  in: query
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.system.v1.DeleteRoleInheritanceResponse'
 components:
     schemas:
         eagle.system.v1.AddRoleInheritanceRequest:
@@ -423,9 +466,13 @@ components:
                     type: string
                 parent:
                     type: string
+                expectedVersion:
+                    type: string
         eagle.system.v1.AddRoleInheritanceResponse:
             type: object
-            properties: {}
+            properties:
+                policyVersion:
+                    type: string
         eagle.system.v1.CreateDictDataRequest:
             type: object
             properties:
@@ -509,6 +556,11 @@ components:
         eagle.system.v1.DeletePermissionResponse:
             type: object
             properties: {}
+        eagle.system.v1.DeleteRoleInheritanceResponse:
+            type: object
+            properties:
+                policyVersion:
+                    type: string
         eagle.system.v1.DictData:
             type: object
             properties:
@@ -608,6 +660,8 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/eagle.system.v1.RoleBinding'
+                policyVersion:
+                    type: string
         eagle.system.v1.ListDictDataResponse:
             type: object
             properties:
@@ -633,6 +687,15 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/eagle.system.v1.Permission'
+        eagle.system.v1.ListRoleInheritancesResponse:
+            type: object
+            properties:
+                inheritances:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/eagle.system.v1.RoleInheritance'
+                policyVersion:
+                    type: string
         eagle.system.v1.Permission:
             type: object
             properties:
@@ -669,6 +732,9 @@ components:
                 updatedAt:
                     type: string
                     format: date-time
+                revision:
+                    type: string
+                    description: 整棵权限树的版本，用于管理端乐观并发控制。
         eagle.system.v1.RoleBinding:
             type: object
             properties:
@@ -679,7 +745,16 @@ components:
                     type: array
                     items:
                         type: string
+                revision:
+                    type: string
             description: RoleBinding 是一个角色及其被授予的权限码。
+        eagle.system.v1.RoleInheritance:
+            type: object
+            properties:
+                child:
+                    type: string
+                parent:
+                    type: string
         eagle.system.v1.SetRolePermissionsRequest:
             type: object
             properties:
@@ -690,9 +765,13 @@ components:
                     items:
                         type: string
                     description: 全量覆盖。传空数组表示收回该角色的全部权限。
+                expectedVersion:
+                    type: string
         eagle.system.v1.SetRolePermissionsResponse:
             type: object
-            properties: {}
+            properties:
+                policyVersion:
+                    type: string
         eagle.system.v1.UpdateDictDataRequest:
             type: object
             properties:
@@ -764,6 +843,8 @@ components:
                 status:
                     type: integer
                     format: int32
+                expectedRevision:
+                    type: string
         eagle.system.v1.UpdatePermissionResponse:
             type: object
             properties:

@@ -22,11 +22,13 @@ service RoleBindingService {
   rpc ListBoundRoles(ListBoundRolesRequest) returns (ListBoundRolesResponse) {
     option (google.api.http) = {get: "/v1/system/role-bindings"};
     option (eagle.annotations.v1.perm) = "system:role:list";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
   rpc GetRolePermissions(GetRolePermissionsRequest) returns (GetRolePermissionsResponse) {
     option (google.api.http) = {get: "/v1/system/role-bindings/{role}"};
     option (eagle.annotations.v1.perm) = "system:role:query";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
   // 全量覆盖某个角色的权限码集合，变更立即生效。
@@ -36,6 +38,7 @@ service RoleBindingService {
       body: "*"
     };
     option (eagle.annotations.v1.perm) = "system:role:assign";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
   // 建立角色继承：child 自动获得 parent 的全部权限。
@@ -45,11 +48,25 @@ service RoleBindingService {
       body: "*"
     };
     option (eagle.annotations.v1.perm) = "system:role:assign";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
+  }
+
+  rpc ListRoleInheritances(ListRoleInheritancesRequest) returns (ListRoleInheritancesResponse) {
+    option (google.api.http) = {get: "/v1/system/role-inheritances"};
+    option (eagle.annotations.v1.perm) = "system:role:query";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
+  }
+
+  rpc DeleteRoleInheritance(DeleteRoleInheritanceRequest) returns (DeleteRoleInheritanceResponse) {
+    option (google.api.http) = {delete: "/v1/system/role-inheritances/{child}/{parent}"};
+    option (eagle.annotations.v1.perm) = "system:role:assign";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
   // 当前登录者自己的权限码，供前端做按钮级显隐。只需登录。
   rpc GetMyPermissions(GetMyPermissionsRequest) returns (GetMyPermissionsResponse) {
     option (google.api.http) = {get: "/v1/system/role-bindings/me/permissions"};
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_AUTHENTICATED;
   }
 }
 
@@ -58,12 +75,14 @@ message RoleBinding {
   // 角色名，必须与 Keycloak realm/client role 一致
   string role = 1;
   repeated string permission_codes = 2;
+  int64 revision = 3;
 }
 
 message ListBoundRolesRequest {}
 
 message ListBoundRolesResponse {
   repeated RoleBinding bindings = 1;
+  int64 policy_version = 2;
 }
 
 message GetRolePermissionsRequest {
@@ -84,9 +103,12 @@ message SetRolePermissionsRequest {
   }];
   // 全量覆盖。传空数组表示收回该角色的全部权限。
   repeated string permission_codes = 2;
+  optional int64 expected_version = 3 [(buf.validate.field).int64.gt = 0];
 }
 
-message SetRolePermissionsResponse {}
+message SetRolePermissionsResponse {
+  int64 policy_version = 1;
+}
 
 message AddRoleInheritanceRequest {
   string child = 1 [(buf.validate.field).string = {
@@ -97,9 +119,34 @@ message AddRoleInheritanceRequest {
     min_len: 1
     max_len: 128
   }];
+  optional int64 expected_version = 3 [(buf.validate.field).int64.gt = 0];
 }
 
-message AddRoleInheritanceResponse {}
+message AddRoleInheritanceResponse {
+  int64 policy_version = 1;
+}
+
+message RoleInheritance {
+  string child = 1;
+  string parent = 2;
+}
+
+message ListRoleInheritancesRequest {}
+
+message ListRoleInheritancesResponse {
+  repeated RoleInheritance inheritances = 1;
+  int64 policy_version = 2;
+}
+
+message DeleteRoleInheritanceRequest {
+  string child = 1 [(buf.validate.field).string = {min_len: 1, max_len: 128}];
+  string parent = 2 [(buf.validate.field).string = {min_len: 1, max_len: 128}];
+  optional int64 expected_version = 3 [(buf.validate.field).int64.gt = 0];
+}
+
+message DeleteRoleInheritanceResponse {
+  int64 policy_version = 1;
+}
 
 message GetMyPermissionsRequest {}
 

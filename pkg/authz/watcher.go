@@ -2,7 +2,9 @@ package authz
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"strconv"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -52,12 +54,28 @@ func NewRedisWatcher(rdb *redis.Client, channel string, logger *slog.Logger) *Re
 // 因为"通知其它副本"这一步失败就让整个写操作报错不划算——
 // 顶多是其它副本晚一点感知，而不是数据不一致。
 func (w *RedisWatcher) Notify(ctx context.Context) {
-	if w == nil {
-		return
-	}
-	if err := w.rdb.Publish(ctx, w.channel, "changed").Err(); err != nil {
+	w.NotifyVersion(ctx, 0)
+}
+
+// NotifyVersion 广播策略版本。版本为 0 兼容旧调用方，仅表达“有变化”。
+func (w *RedisWatcher) NotifyVersion(ctx context.Context, version int64) {
+	if err := w.PublishVersion(ctx, version); err != nil && w != nil {
 		w.logger.ErrorContext(ctx, "authz: 广播策略变更失败", "error", err, "channel", w.channel)
 	}
+}
+
+// PublishVersion 广播策略版本并把投递错误返回给 Outbox 发布器。
+// 普通请求路径可继续使用 NotifyVersion 的尽力而为语义；可靠发布路径则
+// 必须在 Redis 真正接受消息后才能把事件标为已发布。
+func (w *RedisWatcher) PublishVersion(ctx context.Context, version int64) error {
+	if w == nil || w.rdb == nil {
+		return errors.New("authz: policy watcher is not configured")
+	}
+	payload := "changed"
+	if version > 0 {
+		payload = strconv.FormatInt(version, 10)
+	}
+	return w.rdb.Publish(ctx, w.channel, payload).Err()
 }
 
 // Watch 订阅频道，每收到一条消息就重载 target 的策略，直到 ctx 被取消。

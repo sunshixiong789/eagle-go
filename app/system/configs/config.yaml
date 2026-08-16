@@ -19,14 +19,14 @@ server:
 
 data:
   database:
-    dsn: "postgres://eagle:eagle@127.0.0.1:5432/eagle?sslmode=disable"
+    dsn: "${DATABASE_DSN:postgres://eagle:eagle@127.0.0.1:5432/eagle?sslmode=disable}"
     max_conns: 20
     min_conns: 2
     max_conn_lifetime: 3600s
     max_conn_idle_time: 1800s
   redis:
-    addr: 127.0.0.1:6379
-    password: ""
+    addr: "${REDIS_ADDR:127.0.0.1:6379}"
+    password: "${REDIS_PASSWORD:}"
     db: 0
     dial_timeout: 2s
     read_timeout: 0.5s
@@ -36,19 +36,23 @@ auth:
   # Keycloak realm 的 issuer，必须与 token 里的 iss 完全一致
   # （含协议、端口、是否带尾斜杠）。不一致时所有 token 都会因
   # iss 校验失败被拒，而报错信息不易定位到这里。
-  issuer: "http://127.0.0.1:8080/realms/eagle"
+  issuer: "${AUTH_ISSUER:http://127.0.0.1:8080/realms/eagle}"
 
   # 本服务在 Keycloak 中的 client id，
   # 用于从 token 的 resource_access 取本服务的 client 角色
-  client_id: "eagle-system"
+  client_id: "${AUTH_CLIENT_ID:eagle-system}"
 
   # 期望的 aud。Keycloak 默认把 aud 设成 "account"，需要在客户端上
   # 配 audience mapper（见 deploy/keycloak/realm-eagle.json）才有意义。
   # 留空则不校验 aud。
-  audience: "eagle-system"
+  audience: "${AUTH_AUDIENCE:eagle-system}"
+
+  # 内外网地址不同时通过 EAGLE_AUTH_JWKS_URL 覆盖。
+  jwks_url: "${AUTH_JWKS_URL:}"
 
   dict_cache_ttl: 1800s
-  # 具备该角色的主体跳过 Casbin 判定
+  # 仅本服务 client role（resource_access.eagle-system.roles）会触发短路；
+  # 同名 realm role 不具备跨服务超管能力。
   super_admin_role: admin
 
 observability:

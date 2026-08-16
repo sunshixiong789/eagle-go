@@ -29,8 +29,12 @@ type Principal struct {
 	Scopes []string
 
 	// Roles 汇总了 realm 角色与本服务的 client 角色。
-	// Casbin 判定与超管短路都基于它。
+	// 普通 Casbin 策略判定基于它。
 	Roles []string
+
+	// ClientRoles 只包含本资源服务器在 resource_access 下的 client 角色。
+	// 高影响的管理员短路必须基于它，防止 realm 级同名角色跨服务扩权。
+	ClientRoles []string
 
 	// TokenID 是 jti，登出/踢人时写入黑名单的键。
 	TokenID string
@@ -45,6 +49,19 @@ func (p *Principal) HasRole(role string) bool {
 		return false
 	}
 	for _, r := range p.Roles {
+		if r == role {
+			return true
+		}
+	}
+	return false
+}
+
+// HasClientRole 判断主体是否拥有本资源服务器命名空间内的角色。
+func (p *Principal) HasClientRole(role string) bool {
+	if p == nil {
+		return false
+	}
+	for _, r := range p.ClientRoles {
 		if r == role {
 			return true
 		}

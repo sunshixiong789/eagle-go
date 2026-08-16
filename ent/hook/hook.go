@@ -57,6 +57,66 @@ func (f PermissionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, 
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PermissionMutation", m)
 }
 
+// The PermissionDefinitionFunc type is an adapter to allow the use of ordinary
+// function as PermissionDefinition mutator.
+type PermissionDefinitionFunc func(context.Context, *ent.PermissionDefinitionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f PermissionDefinitionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.PermissionDefinitionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PermissionDefinitionMutation", m)
+}
+
+// The PermissionTreeStateFunc type is an adapter to allow the use of ordinary
+// function as PermissionTreeState mutator.
+type PermissionTreeStateFunc func(context.Context, *ent.PermissionTreeStateMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f PermissionTreeStateFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.PermissionTreeStateMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PermissionTreeStateMutation", m)
+}
+
+// The PolicyAuditFunc type is an adapter to allow the use of ordinary
+// function as PolicyAudit mutator.
+type PolicyAuditFunc func(context.Context, *ent.PolicyAuditMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f PolicyAuditFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.PolicyAuditMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PolicyAuditMutation", m)
+}
+
+// The PolicyOutboxFunc type is an adapter to allow the use of ordinary
+// function as PolicyOutbox mutator.
+type PolicyOutboxFunc func(context.Context, *ent.PolicyOutboxMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f PolicyOutboxFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.PolicyOutboxMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PolicyOutboxMutation", m)
+}
+
+// The PolicyStateFunc type is an adapter to allow the use of ordinary
+// function as PolicyState mutator.
+type PolicyStateFunc func(context.Context, *ent.PolicyStateMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f PolicyStateFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.PolicyStateMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PolicyStateMutation", m)
+}
+
 // The UserProfileFunc type is an adapter to allow the use of ordinary
 // function as UserProfile mutator.
 type UserProfileFunc func(context.Context, *ent.UserProfileMutation) (ent.Value, error)

@@ -38,6 +38,8 @@ const (
 	ErrorReason_ERROR_REASON_PERMISSION_HAS_CHILDREN ErrorReason = 22
 	// parent_id 指向自身或其后代，会形成环
 	ErrorReason_ERROR_REASON_PERMISSION_CYCLE ErrorReason = 23
+	// 客户端基于旧 revision 修改，数据已被其他管理员更新
+	ErrorReason_ERROR_REASON_CONCURRENT_MODIFICATION ErrorReason = 24
 	// 字典
 	ErrorReason_ERROR_REASON_DICT_TYPE_NOT_FOUND  ErrorReason = 30
 	ErrorReason_ERROR_REASON_DICT_TYPE_DUPLICATED ErrorReason = 31
@@ -47,6 +49,8 @@ const (
 	ErrorReason_ERROR_REASON_ROLE_NOT_BOUND ErrorReason = 40
 	// 授予了权限树中不存在的权限码，多半是拼写错误
 	ErrorReason_ERROR_REASON_UNKNOWN_PERMISSION_CODE ErrorReason = 41
+	// 角色继承出现自继承或闭环
+	ErrorReason_ERROR_REASON_ROLE_INHERITANCE_CYCLE ErrorReason = 42
 )
 
 // Enum value maps for ErrorReason.
@@ -57,12 +61,14 @@ var (
 		21: "ERROR_REASON_PERMISSION_CODE_DUPLICATED",
 		22: "ERROR_REASON_PERMISSION_HAS_CHILDREN",
 		23: "ERROR_REASON_PERMISSION_CYCLE",
+		24: "ERROR_REASON_CONCURRENT_MODIFICATION",
 		30: "ERROR_REASON_DICT_TYPE_NOT_FOUND",
 		31: "ERROR_REASON_DICT_TYPE_DUPLICATED",
 		32: "ERROR_REASON_DICT_DATA_NOT_FOUND",
 		33: "ERROR_REASON_DICT_DATA_DUPLICATED",
 		40: "ERROR_REASON_ROLE_NOT_BOUND",
 		41: "ERROR_REASON_UNKNOWN_PERMISSION_CODE",
+		42: "ERROR_REASON_ROLE_INHERITANCE_CYCLE",
 	}
 	ErrorReason_value = map[string]int32{
 		"ERROR_REASON_UNSPECIFIED":                0,
@@ -70,12 +76,14 @@ var (
 		"ERROR_REASON_PERMISSION_CODE_DUPLICATED": 21,
 		"ERROR_REASON_PERMISSION_HAS_CHILDREN":    22,
 		"ERROR_REASON_PERMISSION_CYCLE":           23,
+		"ERROR_REASON_CONCURRENT_MODIFICATION":    24,
 		"ERROR_REASON_DICT_TYPE_NOT_FOUND":        30,
 		"ERROR_REASON_DICT_TYPE_DUPLICATED":       31,
 		"ERROR_REASON_DICT_DATA_NOT_FOUND":        32,
 		"ERROR_REASON_DICT_DATA_DUPLICATED":       33,
 		"ERROR_REASON_ROLE_NOT_BOUND":             40,
 		"ERROR_REASON_UNKNOWN_PERMISSION_CODE":    41,
+		"ERROR_REASON_ROLE_INHERITANCE_CYCLE":     42,
 	}
 )
 
@@ -110,19 +118,21 @@ var File_eagle_system_v1_error_reason_proto protoreflect.FileDescriptor
 
 const file_eagle_system_v1_error_reason_proto_rawDesc = "" +
 	"\n" +
-	"\"eagle/system/v1/error_reason.proto\x12\x0feagle.system.v1*\xb1\x03\n" +
+	"\"eagle/system/v1/error_reason.proto\x12\x0feagle.system.v1*\x84\x04\n" +
 	"\vErrorReason\x12\x1c\n" +
 	"\x18ERROR_REASON_UNSPECIFIED\x10\x00\x12%\n" +
 	"!ERROR_REASON_PERMISSION_NOT_FOUND\x10\x14\x12+\n" +
 	"'ERROR_REASON_PERMISSION_CODE_DUPLICATED\x10\x15\x12(\n" +
 	"$ERROR_REASON_PERMISSION_HAS_CHILDREN\x10\x16\x12!\n" +
-	"\x1dERROR_REASON_PERMISSION_CYCLE\x10\x17\x12$\n" +
+	"\x1dERROR_REASON_PERMISSION_CYCLE\x10\x17\x12(\n" +
+	"$ERROR_REASON_CONCURRENT_MODIFICATION\x10\x18\x12$\n" +
 	" ERROR_REASON_DICT_TYPE_NOT_FOUND\x10\x1e\x12%\n" +
 	"!ERROR_REASON_DICT_TYPE_DUPLICATED\x10\x1f\x12$\n" +
 	" ERROR_REASON_DICT_DATA_NOT_FOUND\x10 \x12%\n" +
 	"!ERROR_REASON_DICT_DATA_DUPLICATED\x10!\x12\x1f\n" +
 	"\x1bERROR_REASON_ROLE_NOT_BOUND\x10(\x12(\n" +
-	"$ERROR_REASON_UNKNOWN_PERMISSION_CODE\x10)B8Z6github.com/eagle-go/eagle/api/eagle/system/v1;systemv1b\x06proto3"
+	"$ERROR_REASON_UNKNOWN_PERMISSION_CODE\x10)\x12'\n" +
+	"#ERROR_REASON_ROLE_INHERITANCE_CYCLE\x10*B8Z6github.com/eagle-go/eagle/api/eagle/system/v1;systemv1b\x06proto3"
 
 var (
 	file_eagle_system_v1_error_reason_proto_rawDescOnce sync.Once

@@ -20,9 +20,11 @@ type PermissionCode struct {
 
 // 权限码的段数与通配符。
 const (
-	permCodeSep      = ":"
-	permCodeWildcard = "*"
-	permCodeSegments = 3
+	permCodeSep       = ":"
+	permCodeWildcard  = "*"
+	permCodeSegments  = 3
+	maxPermCodeLen    = 128
+	maxPermSegmentLen = 64
 )
 
 // NewPermissionCode 校验并构造权限码。
@@ -43,6 +45,10 @@ func NewPermissionCode(s string) (PermissionCode, error) {
 	if s == "" {
 		return PermissionCode{}, nil
 	}
+	if len(s) > maxPermCodeLen {
+		return PermissionCode{}, fmt.Errorf(
+			"%w: 权限码长度 %d 超过上限 %d", ErrInvalidPermissionCode, len(s), maxPermCodeLen)
+	}
 
 	segments := strings.Split(s, permCodeSep)
 	if len(segments) < 2 {
@@ -55,7 +61,15 @@ func NewPermissionCode(s string) (PermissionCode, error) {
 			return PermissionCode{}, fmt.Errorf(
 				"%w: %q 第 %d 段为空", ErrInvalidPermissionCode, s, i+1)
 		}
+		if len(seg) > maxPermSegmentLen {
+			return PermissionCode{}, fmt.Errorf(
+				"%w: %q 第 %d 段长度超过上限 %d", ErrInvalidPermissionCode, s, i+1, maxPermSegmentLen)
+		}
 		if !strings.Contains(seg, permCodeWildcard) {
+			if !validPermissionSegment(seg) {
+				return PermissionCode{}, fmt.Errorf(
+					"%w: %q 第 %d 段只能包含英文字母和数字且必须以字母开头", ErrInvalidPermissionCode, s, i+1)
+			}
 			continue
 		}
 		// 通配必须独占整段，不允许 sys*:user:add 这种半通配
@@ -80,6 +94,22 @@ func NewPermissionCode(s string) (PermissionCode, error) {
 	}
 
 	return PermissionCode{value: s}, nil
+}
+
+func validPermissionSegment(segment string) bool {
+	for i, r := range segment {
+		if i == 0 && !isASCIILetter(r) {
+			return false
+		}
+		if !isASCIILetter(r) && (r < '0' || r > '9') {
+			return false
+		}
+	}
+	return segment != ""
+}
+
+func isASCIILetter(r rune) bool {
+	return r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z'
 }
 
 // MustPermissionCode 在构造失败时 panic，仅供测试与常量声明使用。

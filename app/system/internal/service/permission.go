@@ -43,6 +43,7 @@ func toProtoPermission(p *domain.Permission) *v1.Permission {
 		Status:    fromStatus(p.Status()),
 		CreatedAt: ts(p.CreatedAt()),
 		UpdatedAt: ts(p.UpdatedAt()),
+		Revision:  p.Revision(),
 	}
 }
 
@@ -105,7 +106,7 @@ func (s *PermissionService) UpdatePermission(ctx context.Context, req *v1.Update
 		Sort:      req.GetSort(),
 		Visible:   req.GetVisible(),
 		Status:    req.GetStatus(),
-	})
+	}, req.ExpectedRevision)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +115,7 @@ func (s *PermissionService) UpdatePermission(ctx context.Context, req *v1.Update
 
 // DeletePermission 删除权限节点。
 func (s *PermissionService) DeletePermission(ctx context.Context, req *v1.DeletePermissionRequest) (*v1.DeletePermissionResponse, error) {
-	if err := s.uc.DeletePermission(ctx, req.GetId()); err != nil {
+	if err := s.uc.DeletePermission(ctx, req.GetId(), req.ExpectedRevision); err != nil {
 		return nil, err
 	}
 	return &v1.DeletePermissionResponse{}, nil

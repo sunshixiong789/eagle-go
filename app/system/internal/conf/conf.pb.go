@@ -212,7 +212,8 @@ type Auth struct {
 	Audience string `protobuf:"bytes,3,opt,name=audience,proto3" json:"audience,omitempty"`
 	// 字典项缓存时长
 	DictCacheTtl *durationpb.Duration `protobuf:"bytes,4,opt,name=dict_cache_ttl,json=dictCacheTtl,proto3" json:"dict_cache_ttl,omitempty"`
-	// 拥有该角色的主体跳过 Casbin 判定
+	// 在 resource_access.<client_id>.roles 中拥有该 client 角色的主体
+	// 跳过 Casbin 判定；同名 realm 角色不会触发短路。
 	SuperAdminRole string `protobuf:"bytes,5,opt,name=super_admin_role,json=superAdminRole,proto3" json:"super_admin_role,omitempty"`
 	// 拉取 JWKS 的地址，留空则按 Keycloak 约定推导为
 	// <issuer>/protocol/openid-connect/certs

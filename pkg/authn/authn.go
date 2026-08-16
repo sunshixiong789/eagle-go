@@ -124,13 +124,16 @@ func (v *Verifier) Verify(ctx context.Context, rawToken string) (*Claims, error)
 	if v.revocations != nil && claims.JTI != "" {
 		revoked, err := v.revocations.IsRevoked(ctx, claims.JTI)
 		if err != nil {
+			recordRevocationCheck(ctx, "error")
 			// 查不到撤销状态时按"已撤销"处理。
 			// 放行会让 Redis 故障直接变成"所有已登出的 token 重新可用"。
 			return nil, fmt.Errorf("%w: 撤销状态不可知", ErrTokenRevoked)
 		}
 		if revoked {
+			recordRevocationCheck(ctx, "revoked")
 			return nil, ErrTokenRevoked
 		}
+		recordRevocationCheck(ctx, "active")
 	}
 
 	return &claims, nil
@@ -191,9 +194,10 @@ func (v *Verifier) toPrincipal(c *Claims) *identity.Principal {
 		Scopes:   c.Scopes(),
 		// realm 角色 + 本服务的 client 角色一并取出。
 		// 服务账号同样可以在 Keycloak 里被授予角色，所以不分支处理。
-		Roles:     c.Roles(v.clientID),
-		TokenID:   c.JTI,
-		IsService: c.IsServiceToken(),
+		Roles:       c.Roles(v.clientID),
+		ClientRoles: c.ClientRoles(v.clientID),
+		TokenID:     c.JTI,
+		IsService:   c.IsServiceToken(),
 	}
 }
 

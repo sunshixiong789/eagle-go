@@ -42,7 +42,8 @@ func wireApp(confServer *conf.Server, confData *conf.Data, auth *conf.Auth, obse
 		return nil, nil, err
 	}
 	permissionRepo := data.NewPermissionRepo(dataData)
-	redisWatcher, cleanup2, err := data.NewPolicyWatcher(client, enforcer, logger)
+	policyRedis := data.NewPolicyRedis(dataData)
+	redisWatcher, cleanup2, err := data.NewPolicyWatcherWithRedis(policyRedis, enforcer, logger)
 	if err != nil {
 		cleanup()
 		return nil, nil, err

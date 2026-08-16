@@ -19,11 +19,13 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	RoleBindingService_ListBoundRoles_FullMethodName     = "/eagle.system.v1.RoleBindingService/ListBoundRoles"
-	RoleBindingService_GetRolePermissions_FullMethodName = "/eagle.system.v1.RoleBindingService/GetRolePermissions"
-	RoleBindingService_SetRolePermissions_FullMethodName = "/eagle.system.v1.RoleBindingService/SetRolePermissions"
-	RoleBindingService_AddRoleInheritance_FullMethodName = "/eagle.system.v1.RoleBindingService/AddRoleInheritance"
-	RoleBindingService_GetMyPermissions_FullMethodName   = "/eagle.system.v1.RoleBindingService/GetMyPermissions"
+	RoleBindingService_ListBoundRoles_FullMethodName        = "/eagle.system.v1.RoleBindingService/ListBoundRoles"
+	RoleBindingService_GetRolePermissions_FullMethodName    = "/eagle.system.v1.RoleBindingService/GetRolePermissions"
+	RoleBindingService_SetRolePermissions_FullMethodName    = "/eagle.system.v1.RoleBindingService/SetRolePermissions"
+	RoleBindingService_AddRoleInheritance_FullMethodName    = "/eagle.system.v1.RoleBindingService/AddRoleInheritance"
+	RoleBindingService_ListRoleInheritances_FullMethodName  = "/eagle.system.v1.RoleBindingService/ListRoleInheritances"
+	RoleBindingService_DeleteRoleInheritance_FullMethodName = "/eagle.system.v1.RoleBindingService/DeleteRoleInheritance"
+	RoleBindingService_GetMyPermissions_FullMethodName      = "/eagle.system.v1.RoleBindingService/GetMyPermissions"
 )
 
 // RoleBindingServiceClient is the client API for RoleBindingService service.
@@ -47,6 +49,8 @@ type RoleBindingServiceClient interface {
 	SetRolePermissions(ctx context.Context, in *SetRolePermissionsRequest, opts ...grpc.CallOption) (*SetRolePermissionsResponse, error)
 	// 建立角色继承：child 自动获得 parent 的全部权限。
 	AddRoleInheritance(ctx context.Context, in *AddRoleInheritanceRequest, opts ...grpc.CallOption) (*AddRoleInheritanceResponse, error)
+	ListRoleInheritances(ctx context.Context, in *ListRoleInheritancesRequest, opts ...grpc.CallOption) (*ListRoleInheritancesResponse, error)
+	DeleteRoleInheritance(ctx context.Context, in *DeleteRoleInheritanceRequest, opts ...grpc.CallOption) (*DeleteRoleInheritanceResponse, error)
 	// 当前登录者自己的权限码，供前端做按钮级显隐。只需登录。
 	GetMyPermissions(ctx context.Context, in *GetMyPermissionsRequest, opts ...grpc.CallOption) (*GetMyPermissionsResponse, error)
 }
@@ -99,6 +103,26 @@ func (c *roleBindingServiceClient) AddRoleInheritance(ctx context.Context, in *A
 	return out, nil
 }
 
+func (c *roleBindingServiceClient) ListRoleInheritances(ctx context.Context, in *ListRoleInheritancesRequest, opts ...grpc.CallOption) (*ListRoleInheritancesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRoleInheritancesResponse)
+	err := c.cc.Invoke(ctx, RoleBindingService_ListRoleInheritances_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *roleBindingServiceClient) DeleteRoleInheritance(ctx context.Context, in *DeleteRoleInheritanceRequest, opts ...grpc.CallOption) (*DeleteRoleInheritanceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteRoleInheritanceResponse)
+	err := c.cc.Invoke(ctx, RoleBindingService_DeleteRoleInheritance_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *roleBindingServiceClient) GetMyPermissions(ctx context.Context, in *GetMyPermissionsRequest, opts ...grpc.CallOption) (*GetMyPermissionsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetMyPermissionsResponse)
@@ -130,6 +154,8 @@ type RoleBindingServiceServer interface {
 	SetRolePermissions(context.Context, *SetRolePermissionsRequest) (*SetRolePermissionsResponse, error)
 	// 建立角色继承：child 自动获得 parent 的全部权限。
 	AddRoleInheritance(context.Context, *AddRoleInheritanceRequest) (*AddRoleInheritanceResponse, error)
+	ListRoleInheritances(context.Context, *ListRoleInheritancesRequest) (*ListRoleInheritancesResponse, error)
+	DeleteRoleInheritance(context.Context, *DeleteRoleInheritanceRequest) (*DeleteRoleInheritanceResponse, error)
 	// 当前登录者自己的权限码，供前端做按钮级显隐。只需登录。
 	GetMyPermissions(context.Context, *GetMyPermissionsRequest) (*GetMyPermissionsResponse, error)
 	mustEmbedUnimplementedRoleBindingServiceServer()
@@ -153,6 +179,12 @@ func (UnimplementedRoleBindingServiceServer) SetRolePermissions(context.Context,
 }
 func (UnimplementedRoleBindingServiceServer) AddRoleInheritance(context.Context, *AddRoleInheritanceRequest) (*AddRoleInheritanceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddRoleInheritance not implemented")
+}
+func (UnimplementedRoleBindingServiceServer) ListRoleInheritances(context.Context, *ListRoleInheritancesRequest) (*ListRoleInheritancesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRoleInheritances not implemented")
+}
+func (UnimplementedRoleBindingServiceServer) DeleteRoleInheritance(context.Context, *DeleteRoleInheritanceRequest) (*DeleteRoleInheritanceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteRoleInheritance not implemented")
 }
 func (UnimplementedRoleBindingServiceServer) GetMyPermissions(context.Context, *GetMyPermissionsRequest) (*GetMyPermissionsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetMyPermissions not implemented")
@@ -250,6 +282,42 @@ func _RoleBindingService_AddRoleInheritance_Handler(srv interface{}, ctx context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RoleBindingService_ListRoleInheritances_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRoleInheritancesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RoleBindingServiceServer).ListRoleInheritances(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RoleBindingService_ListRoleInheritances_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RoleBindingServiceServer).ListRoleInheritances(ctx, req.(*ListRoleInheritancesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RoleBindingService_DeleteRoleInheritance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteRoleInheritanceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RoleBindingServiceServer).DeleteRoleInheritance(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RoleBindingService_DeleteRoleInheritance_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RoleBindingServiceServer).DeleteRoleInheritance(ctx, req.(*DeleteRoleInheritanceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _RoleBindingService_GetMyPermissions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetMyPermissionsRequest)
 	if err := dec(in); err != nil {
@@ -290,6 +358,14 @@ var RoleBindingService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AddRoleInheritance",
 			Handler:    _RoleBindingService_AddRoleInheritance_Handler,
+		},
+		{
+			MethodName: "ListRoleInheritances",
+			Handler:    _RoleBindingService_ListRoleInheritances_Handler,
+		},
+		{
+			MethodName: "DeleteRoleInheritance",
+			Handler:    _RoleBindingService_DeleteRoleInheritance_Handler,
 		},
 		{
 			MethodName: "GetMyPermissions",

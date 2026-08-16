@@ -30,6 +30,7 @@ type RoleBinding struct {
 	// 角色名，必须与 Keycloak realm/client role 一致
 	Role            string   `protobuf:"bytes,1,opt,name=role,proto3" json:"role,omitempty"`
 	PermissionCodes []string `protobuf:"bytes,2,rep,name=permission_codes,json=permissionCodes,proto3" json:"permission_codes,omitempty"`
+	Revision        int64    `protobuf:"varint,3,opt,name=revision,proto3" json:"revision,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -78,6 +79,13 @@ func (x *RoleBinding) GetPermissionCodes() []string {
 	return nil
 }
 
+func (x *RoleBinding) GetRevision() int64 {
+	if x != nil {
+		return x.Revision
+	}
+	return 0
+}
+
 type ListBoundRolesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -117,6 +125,7 @@ func (*ListBoundRolesRequest) Descriptor() ([]byte, []int) {
 type ListBoundRolesResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Bindings      []*RoleBinding         `protobuf:"bytes,1,rep,name=bindings,proto3" json:"bindings,omitempty"`
+	PolicyVersion int64                  `protobuf:"varint,2,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -156,6 +165,13 @@ func (x *ListBoundRolesResponse) GetBindings() []*RoleBinding {
 		return x.Bindings
 	}
 	return nil
+}
+
+func (x *ListBoundRolesResponse) GetPolicyVersion() int64 {
+	if x != nil {
+		return x.PolicyVersion
+	}
+	return 0
 }
 
 type GetRolePermissionsRequest struct {
@@ -251,6 +267,7 @@ type SetRolePermissionsRequest struct {
 	Role  string                 `protobuf:"bytes,1,opt,name=role,proto3" json:"role,omitempty"`
 	// 全量覆盖。传空数组表示收回该角色的全部权限。
 	PermissionCodes []string `protobuf:"bytes,2,rep,name=permission_codes,json=permissionCodes,proto3" json:"permission_codes,omitempty"`
+	ExpectedVersion *int64   `protobuf:"varint,3,opt,name=expected_version,json=expectedVersion,proto3,oneof" json:"expected_version,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -299,8 +316,16 @@ func (x *SetRolePermissionsRequest) GetPermissionCodes() []string {
 	return nil
 }
 
+func (x *SetRolePermissionsRequest) GetExpectedVersion() int64 {
+	if x != nil && x.ExpectedVersion != nil {
+		return *x.ExpectedVersion
+	}
+	return 0
+}
+
 type SetRolePermissionsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	PolicyVersion int64                  `protobuf:"varint,1,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -335,12 +360,20 @@ func (*SetRolePermissionsResponse) Descriptor() ([]byte, []int) {
 	return file_eagle_system_v1_rolebinding_proto_rawDescGZIP(), []int{6}
 }
 
+func (x *SetRolePermissionsResponse) GetPolicyVersion() int64 {
+	if x != nil {
+		return x.PolicyVersion
+	}
+	return 0
+}
+
 type AddRoleInheritanceRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Child         string                 `protobuf:"bytes,1,opt,name=child,proto3" json:"child,omitempty"`
-	Parent        string                 `protobuf:"bytes,2,opt,name=parent,proto3" json:"parent,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Child           string                 `protobuf:"bytes,1,opt,name=child,proto3" json:"child,omitempty"`
+	Parent          string                 `protobuf:"bytes,2,opt,name=parent,proto3" json:"parent,omitempty"`
+	ExpectedVersion *int64                 `protobuf:"varint,3,opt,name=expected_version,json=expectedVersion,proto3,oneof" json:"expected_version,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *AddRoleInheritanceRequest) Reset() {
@@ -387,8 +420,16 @@ func (x *AddRoleInheritanceRequest) GetParent() string {
 	return ""
 }
 
+func (x *AddRoleInheritanceRequest) GetExpectedVersion() int64 {
+	if x != nil && x.ExpectedVersion != nil {
+		return *x.ExpectedVersion
+	}
+	return 0
+}
+
 type AddRoleInheritanceResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	PolicyVersion int64                  `protobuf:"varint,1,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -423,6 +464,257 @@ func (*AddRoleInheritanceResponse) Descriptor() ([]byte, []int) {
 	return file_eagle_system_v1_rolebinding_proto_rawDescGZIP(), []int{8}
 }
 
+func (x *AddRoleInheritanceResponse) GetPolicyVersion() int64 {
+	if x != nil {
+		return x.PolicyVersion
+	}
+	return 0
+}
+
+type RoleInheritance struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Child         string                 `protobuf:"bytes,1,opt,name=child,proto3" json:"child,omitempty"`
+	Parent        string                 `protobuf:"bytes,2,opt,name=parent,proto3" json:"parent,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RoleInheritance) Reset() {
+	*x = RoleInheritance{}
+	mi := &file_eagle_system_v1_rolebinding_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RoleInheritance) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RoleInheritance) ProtoMessage() {}
+
+func (x *RoleInheritance) ProtoReflect() protoreflect.Message {
+	mi := &file_eagle_system_v1_rolebinding_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RoleInheritance.ProtoReflect.Descriptor instead.
+func (*RoleInheritance) Descriptor() ([]byte, []int) {
+	return file_eagle_system_v1_rolebinding_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *RoleInheritance) GetChild() string {
+	if x != nil {
+		return x.Child
+	}
+	return ""
+}
+
+func (x *RoleInheritance) GetParent() string {
+	if x != nil {
+		return x.Parent
+	}
+	return ""
+}
+
+type ListRoleInheritancesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListRoleInheritancesRequest) Reset() {
+	*x = ListRoleInheritancesRequest{}
+	mi := &file_eagle_system_v1_rolebinding_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListRoleInheritancesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListRoleInheritancesRequest) ProtoMessage() {}
+
+func (x *ListRoleInheritancesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_eagle_system_v1_rolebinding_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListRoleInheritancesRequest.ProtoReflect.Descriptor instead.
+func (*ListRoleInheritancesRequest) Descriptor() ([]byte, []int) {
+	return file_eagle_system_v1_rolebinding_proto_rawDescGZIP(), []int{10}
+}
+
+type ListRoleInheritancesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Inheritances  []*RoleInheritance     `protobuf:"bytes,1,rep,name=inheritances,proto3" json:"inheritances,omitempty"`
+	PolicyVersion int64                  `protobuf:"varint,2,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListRoleInheritancesResponse) Reset() {
+	*x = ListRoleInheritancesResponse{}
+	mi := &file_eagle_system_v1_rolebinding_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListRoleInheritancesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListRoleInheritancesResponse) ProtoMessage() {}
+
+func (x *ListRoleInheritancesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_eagle_system_v1_rolebinding_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListRoleInheritancesResponse.ProtoReflect.Descriptor instead.
+func (*ListRoleInheritancesResponse) Descriptor() ([]byte, []int) {
+	return file_eagle_system_v1_rolebinding_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ListRoleInheritancesResponse) GetInheritances() []*RoleInheritance {
+	if x != nil {
+		return x.Inheritances
+	}
+	return nil
+}
+
+func (x *ListRoleInheritancesResponse) GetPolicyVersion() int64 {
+	if x != nil {
+		return x.PolicyVersion
+	}
+	return 0
+}
+
+type DeleteRoleInheritanceRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Child           string                 `protobuf:"bytes,1,opt,name=child,proto3" json:"child,omitempty"`
+	Parent          string                 `protobuf:"bytes,2,opt,name=parent,proto3" json:"parent,omitempty"`
+	ExpectedVersion *int64                 `protobuf:"varint,3,opt,name=expected_version,json=expectedVersion,proto3,oneof" json:"expected_version,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *DeleteRoleInheritanceRequest) Reset() {
+	*x = DeleteRoleInheritanceRequest{}
+	mi := &file_eagle_system_v1_rolebinding_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteRoleInheritanceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteRoleInheritanceRequest) ProtoMessage() {}
+
+func (x *DeleteRoleInheritanceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_eagle_system_v1_rolebinding_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteRoleInheritanceRequest.ProtoReflect.Descriptor instead.
+func (*DeleteRoleInheritanceRequest) Descriptor() ([]byte, []int) {
+	return file_eagle_system_v1_rolebinding_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *DeleteRoleInheritanceRequest) GetChild() string {
+	if x != nil {
+		return x.Child
+	}
+	return ""
+}
+
+func (x *DeleteRoleInheritanceRequest) GetParent() string {
+	if x != nil {
+		return x.Parent
+	}
+	return ""
+}
+
+func (x *DeleteRoleInheritanceRequest) GetExpectedVersion() int64 {
+	if x != nil && x.ExpectedVersion != nil {
+		return *x.ExpectedVersion
+	}
+	return 0
+}
+
+type DeleteRoleInheritanceResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PolicyVersion int64                  `protobuf:"varint,1,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteRoleInheritanceResponse) Reset() {
+	*x = DeleteRoleInheritanceResponse{}
+	mi := &file_eagle_system_v1_rolebinding_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteRoleInheritanceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteRoleInheritanceResponse) ProtoMessage() {}
+
+func (x *DeleteRoleInheritanceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_eagle_system_v1_rolebinding_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteRoleInheritanceResponse.ProtoReflect.Descriptor instead.
+func (*DeleteRoleInheritanceResponse) Descriptor() ([]byte, []int) {
+	return file_eagle_system_v1_rolebinding_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *DeleteRoleInheritanceResponse) GetPolicyVersion() int64 {
+	if x != nil {
+		return x.PolicyVersion
+	}
+	return 0
+}
+
 type GetMyPermissionsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -431,7 +723,7 @@ type GetMyPermissionsRequest struct {
 
 func (x *GetMyPermissionsRequest) Reset() {
 	*x = GetMyPermissionsRequest{}
-	mi := &file_eagle_system_v1_rolebinding_proto_msgTypes[9]
+	mi := &file_eagle_system_v1_rolebinding_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -443,7 +735,7 @@ func (x *GetMyPermissionsRequest) String() string {
 func (*GetMyPermissionsRequest) ProtoMessage() {}
 
 func (x *GetMyPermissionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_eagle_system_v1_rolebinding_proto_msgTypes[9]
+	mi := &file_eagle_system_v1_rolebinding_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -456,7 +748,7 @@ func (x *GetMyPermissionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMyPermissionsRequest.ProtoReflect.Descriptor instead.
 func (*GetMyPermissionsRequest) Descriptor() ([]byte, []int) {
-	return file_eagle_system_v1_rolebinding_proto_rawDescGZIP(), []int{9}
+	return file_eagle_system_v1_rolebinding_proto_rawDescGZIP(), []int{14}
 }
 
 type GetMyPermissionsResponse struct {
@@ -471,7 +763,7 @@ type GetMyPermissionsResponse struct {
 
 func (x *GetMyPermissionsResponse) Reset() {
 	*x = GetMyPermissionsResponse{}
-	mi := &file_eagle_system_v1_rolebinding_proto_msgTypes[10]
+	mi := &file_eagle_system_v1_rolebinding_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -483,7 +775,7 @@ func (x *GetMyPermissionsResponse) String() string {
 func (*GetMyPermissionsResponse) ProtoMessage() {}
 
 func (x *GetMyPermissionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_eagle_system_v1_rolebinding_proto_msgTypes[10]
+	mi := &file_eagle_system_v1_rolebinding_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -496,7 +788,7 @@ func (x *GetMyPermissionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMyPermissionsResponse.ProtoReflect.Descriptor instead.
 func (*GetMyPermissionsResponse) Descriptor() ([]byte, []int) {
-	return file_eagle_system_v1_rolebinding_proto_rawDescGZIP(), []int{10}
+	return file_eagle_system_v1_rolebinding_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *GetMyPermissionsResponse) GetRoles() []string {
@@ -517,39 +809,65 @@ var File_eagle_system_v1_rolebinding_proto protoreflect.FileDescriptor
 
 const file_eagle_system_v1_rolebinding_proto_rawDesc = "" +
 	"\n" +
-	"!eagle/system/v1/rolebinding.proto\x12\x0feagle.system.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1feagle/annotations/v1/perm.proto\x1a\x1cgoogle/api/annotations.proto\"L\n" +
+	"!eagle/system/v1/rolebinding.proto\x12\x0feagle.system.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1feagle/annotations/v1/perm.proto\x1a\x1cgoogle/api/annotations.proto\"h\n" +
 	"\vRoleBinding\x12\x12\n" +
 	"\x04role\x18\x01 \x01(\tR\x04role\x12)\n" +
-	"\x10permission_codes\x18\x02 \x03(\tR\x0fpermissionCodes\"\x17\n" +
-	"\x15ListBoundRolesRequest\"R\n" +
+	"\x10permission_codes\x18\x02 \x03(\tR\x0fpermissionCodes\x12\x1a\n" +
+	"\brevision\x18\x03 \x01(\x03R\brevision\"\x17\n" +
+	"\x15ListBoundRolesRequest\"y\n" +
 	"\x16ListBoundRolesResponse\x128\n" +
-	"\bbindings\x18\x01 \x03(\v2\x1c.eagle.system.v1.RoleBindingR\bbindings\";\n" +
+	"\bbindings\x18\x01 \x03(\v2\x1c.eagle.system.v1.RoleBindingR\bbindings\x12%\n" +
+	"\x0epolicy_version\x18\x02 \x01(\x03R\rpolicyVersion\";\n" +
 	"\x19GetRolePermissionsRequest\x12\x1e\n" +
 	"\x04role\x18\x01 \x01(\tB\n" +
 	"\xbaH\ar\x05\x10\x01\x18\x80\x01R\x04role\"T\n" +
 	"\x1aGetRolePermissionsResponse\x126\n" +
-	"\abinding\x18\x01 \x01(\v2\x1c.eagle.system.v1.RoleBindingR\abinding\"f\n" +
+	"\abinding\x18\x01 \x01(\v2\x1c.eagle.system.v1.RoleBindingR\abinding\"\xb4\x01\n" +
 	"\x19SetRolePermissionsRequest\x12\x1e\n" +
 	"\x04role\x18\x01 \x01(\tB\n" +
 	"\xbaH\ar\x05\x10\x01\x18\x80\x01R\x04role\x12)\n" +
-	"\x10permission_codes\x18\x02 \x03(\tR\x0fpermissionCodes\"\x1c\n" +
-	"\x1aSetRolePermissionsResponse\"a\n" +
+	"\x10permission_codes\x18\x02 \x03(\tR\x0fpermissionCodes\x127\n" +
+	"\x10expected_version\x18\x03 \x01(\x03B\a\xbaH\x04\"\x02 \x00H\x00R\x0fexpectedVersion\x88\x01\x01B\x13\n" +
+	"\x11_expected_version\"C\n" +
+	"\x1aSetRolePermissionsResponse\x12%\n" +
+	"\x0epolicy_version\x18\x01 \x01(\x03R\rpolicyVersion\"\xaf\x01\n" +
 	"\x19AddRoleInheritanceRequest\x12 \n" +
 	"\x05child\x18\x01 \x01(\tB\n" +
 	"\xbaH\ar\x05\x10\x01\x18\x80\x01R\x05child\x12\"\n" +
 	"\x06parent\x18\x02 \x01(\tB\n" +
-	"\xbaH\ar\x05\x10\x01\x18\x80\x01R\x06parent\"\x1c\n" +
-	"\x1aAddRoleInheritanceResponse\"\x19\n" +
+	"\xbaH\ar\x05\x10\x01\x18\x80\x01R\x06parent\x127\n" +
+	"\x10expected_version\x18\x03 \x01(\x03B\a\xbaH\x04\"\x02 \x00H\x00R\x0fexpectedVersion\x88\x01\x01B\x13\n" +
+	"\x11_expected_version\"C\n" +
+	"\x1aAddRoleInheritanceResponse\x12%\n" +
+	"\x0epolicy_version\x18\x01 \x01(\x03R\rpolicyVersion\"?\n" +
+	"\x0fRoleInheritance\x12\x14\n" +
+	"\x05child\x18\x01 \x01(\tR\x05child\x12\x16\n" +
+	"\x06parent\x18\x02 \x01(\tR\x06parent\"\x1d\n" +
+	"\x1bListRoleInheritancesRequest\"\x8b\x01\n" +
+	"\x1cListRoleInheritancesResponse\x12D\n" +
+	"\finheritances\x18\x01 \x03(\v2 .eagle.system.v1.RoleInheritanceR\finheritances\x12%\n" +
+	"\x0epolicy_version\x18\x02 \x01(\x03R\rpolicyVersion\"\xb2\x01\n" +
+	"\x1cDeleteRoleInheritanceRequest\x12 \n" +
+	"\x05child\x18\x01 \x01(\tB\n" +
+	"\xbaH\ar\x05\x10\x01\x18\x80\x01R\x05child\x12\"\n" +
+	"\x06parent\x18\x02 \x01(\tB\n" +
+	"\xbaH\ar\x05\x10\x01\x18\x80\x01R\x06parent\x127\n" +
+	"\x10expected_version\x18\x03 \x01(\x03B\a\xbaH\x04\"\x02 \x00H\x00R\x0fexpectedVersion\x88\x01\x01B\x13\n" +
+	"\x11_expected_version\"F\n" +
+	"\x1dDeleteRoleInheritanceResponse\x12%\n" +
+	"\x0epolicy_version\x18\x01 \x01(\x03R\rpolicyVersion\"\x19\n" +
 	"\x17GetMyPermissionsRequest\"[\n" +
 	"\x18GetMyPermissionsResponse\x12\x14\n" +
 	"\x05roles\x18\x01 \x03(\tR\x05roles\x12)\n" +
-	"\x10permission_codes\x18\x02 \x03(\tR\x0fpermissionCodes2\xe0\x06\n" +
-	"\x12RoleBindingService\x12\x97\x01\n" +
-	"\x0eListBoundRoles\x12&.eagle.system.v1.ListBoundRolesRequest\x1a'.eagle.system.v1.ListBoundRolesResponse\"4\x8a\xb5\x18\x10system:role:list\x82\xd3\xe4\x93\x02\x1a\x12\x18/v1/system/role-bindings\x12\xab\x01\n" +
-	"\x12GetRolePermissions\x12*.eagle.system.v1.GetRolePermissionsRequest\x1a+.eagle.system.v1.GetRolePermissionsResponse\"<\x8a\xb5\x18\x11system:role:query\x82\xd3\xe4\x93\x02!\x12\x1f/v1/system/role-bindings/{role}\x12\xaf\x01\n" +
-	"\x12SetRolePermissions\x12*.eagle.system.v1.SetRolePermissionsRequest\x1a+.eagle.system.v1.SetRolePermissionsResponse\"@\x8a\xb5\x18\x12system:role:assign\x82\xd3\xe4\x93\x02$:\x01*\x1a\x1f/v1/system/role-bindings/{role}\x12\xb4\x01\n" +
-	"\x12AddRoleInheritance\x12*.eagle.system.v1.AddRoleInheritanceRequest\x1a+.eagle.system.v1.AddRoleInheritanceResponse\"E\x8a\xb5\x18\x12system:role:assign\x82\xd3\xe4\x93\x02):\x01*\"$/v1/system/role-bindings/inheritance\x12\x98\x01\n" +
-	"\x10GetMyPermissions\x12(.eagle.system.v1.GetMyPermissionsRequest\x1a).eagle.system.v1.GetMyPermissionsResponse\"/\x82\xd3\xe4\x93\x02)\x12'/v1/system/role-bindings/me/permissionsB8Z6github.com/eagle-go/eagle/api/eagle/system/v1;systemv1b\x06proto3"
+	"\x10permission_codes\x18\x02 \x03(\tR\x0fpermissionCodes2\xf3\t\n" +
+	"\x12RoleBindingService\x12\x9b\x01\n" +
+	"\x0eListBoundRoles\x12&.eagle.system.v1.ListBoundRolesRequest\x1a'.eagle.system.v1.ListBoundRolesResponse\"8\x8a\xb5\x18\x10system:role:list\x98\xb5\x18\x03\x82\xd3\xe4\x93\x02\x1a\x12\x18/v1/system/role-bindings\x12\xaf\x01\n" +
+	"\x12GetRolePermissions\x12*.eagle.system.v1.GetRolePermissionsRequest\x1a+.eagle.system.v1.GetRolePermissionsResponse\"@\x8a\xb5\x18\x11system:role:query\x98\xb5\x18\x03\x82\xd3\xe4\x93\x02!\x12\x1f/v1/system/role-bindings/{role}\x12\xb3\x01\n" +
+	"\x12SetRolePermissions\x12*.eagle.system.v1.SetRolePermissionsRequest\x1a+.eagle.system.v1.SetRolePermissionsResponse\"D\x8a\xb5\x18\x12system:role:assign\x98\xb5\x18\x03\x82\xd3\xe4\x93\x02$:\x01*\x1a\x1f/v1/system/role-bindings/{role}\x12\xb8\x01\n" +
+	"\x12AddRoleInheritance\x12*.eagle.system.v1.AddRoleInheritanceRequest\x1a+.eagle.system.v1.AddRoleInheritanceResponse\"I\x8a\xb5\x18\x12system:role:assign\x98\xb5\x18\x03\x82\xd3\xe4\x93\x02):\x01*\"$/v1/system/role-bindings/inheritance\x12\xb2\x01\n" +
+	"\x14ListRoleInheritances\x12,.eagle.system.v1.ListRoleInheritancesRequest\x1a-.eagle.system.v1.ListRoleInheritancesResponse\"=\x8a\xb5\x18\x11system:role:query\x98\xb5\x18\x03\x82\xd3\xe4\x93\x02\x1e\x12\x1c/v1/system/role-inheritances\x12\xc7\x01\n" +
+	"\x15DeleteRoleInheritance\x12-.eagle.system.v1.DeleteRoleInheritanceRequest\x1a..eagle.system.v1.DeleteRoleInheritanceResponse\"O\x8a\xb5\x18\x12system:role:assign\x98\xb5\x18\x03\x82\xd3\xe4\x93\x02/*-/v1/system/role-inheritances/{child}/{parent}\x12\x9c\x01\n" +
+	"\x10GetMyPermissions\x12(.eagle.system.v1.GetMyPermissionsRequest\x1a).eagle.system.v1.GetMyPermissionsResponse\"3\x98\xb5\x18\x02\x82\xd3\xe4\x93\x02)\x12'/v1/system/role-bindings/me/permissionsB8Z6github.com/eagle-go/eagle/api/eagle/system/v1;systemv1b\x06proto3"
 
 var (
 	file_eagle_system_v1_rolebinding_proto_rawDescOnce sync.Once
@@ -563,38 +881,48 @@ func file_eagle_system_v1_rolebinding_proto_rawDescGZIP() []byte {
 	return file_eagle_system_v1_rolebinding_proto_rawDescData
 }
 
-var file_eagle_system_v1_rolebinding_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_eagle_system_v1_rolebinding_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_eagle_system_v1_rolebinding_proto_goTypes = []any{
-	(*RoleBinding)(nil),                // 0: eagle.system.v1.RoleBinding
-	(*ListBoundRolesRequest)(nil),      // 1: eagle.system.v1.ListBoundRolesRequest
-	(*ListBoundRolesResponse)(nil),     // 2: eagle.system.v1.ListBoundRolesResponse
-	(*GetRolePermissionsRequest)(nil),  // 3: eagle.system.v1.GetRolePermissionsRequest
-	(*GetRolePermissionsResponse)(nil), // 4: eagle.system.v1.GetRolePermissionsResponse
-	(*SetRolePermissionsRequest)(nil),  // 5: eagle.system.v1.SetRolePermissionsRequest
-	(*SetRolePermissionsResponse)(nil), // 6: eagle.system.v1.SetRolePermissionsResponse
-	(*AddRoleInheritanceRequest)(nil),  // 7: eagle.system.v1.AddRoleInheritanceRequest
-	(*AddRoleInheritanceResponse)(nil), // 8: eagle.system.v1.AddRoleInheritanceResponse
-	(*GetMyPermissionsRequest)(nil),    // 9: eagle.system.v1.GetMyPermissionsRequest
-	(*GetMyPermissionsResponse)(nil),   // 10: eagle.system.v1.GetMyPermissionsResponse
+	(*RoleBinding)(nil),                   // 0: eagle.system.v1.RoleBinding
+	(*ListBoundRolesRequest)(nil),         // 1: eagle.system.v1.ListBoundRolesRequest
+	(*ListBoundRolesResponse)(nil),        // 2: eagle.system.v1.ListBoundRolesResponse
+	(*GetRolePermissionsRequest)(nil),     // 3: eagle.system.v1.GetRolePermissionsRequest
+	(*GetRolePermissionsResponse)(nil),    // 4: eagle.system.v1.GetRolePermissionsResponse
+	(*SetRolePermissionsRequest)(nil),     // 5: eagle.system.v1.SetRolePermissionsRequest
+	(*SetRolePermissionsResponse)(nil),    // 6: eagle.system.v1.SetRolePermissionsResponse
+	(*AddRoleInheritanceRequest)(nil),     // 7: eagle.system.v1.AddRoleInheritanceRequest
+	(*AddRoleInheritanceResponse)(nil),    // 8: eagle.system.v1.AddRoleInheritanceResponse
+	(*RoleInheritance)(nil),               // 9: eagle.system.v1.RoleInheritance
+	(*ListRoleInheritancesRequest)(nil),   // 10: eagle.system.v1.ListRoleInheritancesRequest
+	(*ListRoleInheritancesResponse)(nil),  // 11: eagle.system.v1.ListRoleInheritancesResponse
+	(*DeleteRoleInheritanceRequest)(nil),  // 12: eagle.system.v1.DeleteRoleInheritanceRequest
+	(*DeleteRoleInheritanceResponse)(nil), // 13: eagle.system.v1.DeleteRoleInheritanceResponse
+	(*GetMyPermissionsRequest)(nil),       // 14: eagle.system.v1.GetMyPermissionsRequest
+	(*GetMyPermissionsResponse)(nil),      // 15: eagle.system.v1.GetMyPermissionsResponse
 }
 var file_eagle_system_v1_rolebinding_proto_depIdxs = []int32{
 	0,  // 0: eagle.system.v1.ListBoundRolesResponse.bindings:type_name -> eagle.system.v1.RoleBinding
 	0,  // 1: eagle.system.v1.GetRolePermissionsResponse.binding:type_name -> eagle.system.v1.RoleBinding
-	1,  // 2: eagle.system.v1.RoleBindingService.ListBoundRoles:input_type -> eagle.system.v1.ListBoundRolesRequest
-	3,  // 3: eagle.system.v1.RoleBindingService.GetRolePermissions:input_type -> eagle.system.v1.GetRolePermissionsRequest
-	5,  // 4: eagle.system.v1.RoleBindingService.SetRolePermissions:input_type -> eagle.system.v1.SetRolePermissionsRequest
-	7,  // 5: eagle.system.v1.RoleBindingService.AddRoleInheritance:input_type -> eagle.system.v1.AddRoleInheritanceRequest
-	9,  // 6: eagle.system.v1.RoleBindingService.GetMyPermissions:input_type -> eagle.system.v1.GetMyPermissionsRequest
-	2,  // 7: eagle.system.v1.RoleBindingService.ListBoundRoles:output_type -> eagle.system.v1.ListBoundRolesResponse
-	4,  // 8: eagle.system.v1.RoleBindingService.GetRolePermissions:output_type -> eagle.system.v1.GetRolePermissionsResponse
-	6,  // 9: eagle.system.v1.RoleBindingService.SetRolePermissions:output_type -> eagle.system.v1.SetRolePermissionsResponse
-	8,  // 10: eagle.system.v1.RoleBindingService.AddRoleInheritance:output_type -> eagle.system.v1.AddRoleInheritanceResponse
-	10, // 11: eagle.system.v1.RoleBindingService.GetMyPermissions:output_type -> eagle.system.v1.GetMyPermissionsResponse
-	7,  // [7:12] is the sub-list for method output_type
-	2,  // [2:7] is the sub-list for method input_type
-	2,  // [2:2] is the sub-list for extension type_name
-	2,  // [2:2] is the sub-list for extension extendee
-	0,  // [0:2] is the sub-list for field type_name
+	9,  // 2: eagle.system.v1.ListRoleInheritancesResponse.inheritances:type_name -> eagle.system.v1.RoleInheritance
+	1,  // 3: eagle.system.v1.RoleBindingService.ListBoundRoles:input_type -> eagle.system.v1.ListBoundRolesRequest
+	3,  // 4: eagle.system.v1.RoleBindingService.GetRolePermissions:input_type -> eagle.system.v1.GetRolePermissionsRequest
+	5,  // 5: eagle.system.v1.RoleBindingService.SetRolePermissions:input_type -> eagle.system.v1.SetRolePermissionsRequest
+	7,  // 6: eagle.system.v1.RoleBindingService.AddRoleInheritance:input_type -> eagle.system.v1.AddRoleInheritanceRequest
+	10, // 7: eagle.system.v1.RoleBindingService.ListRoleInheritances:input_type -> eagle.system.v1.ListRoleInheritancesRequest
+	12, // 8: eagle.system.v1.RoleBindingService.DeleteRoleInheritance:input_type -> eagle.system.v1.DeleteRoleInheritanceRequest
+	14, // 9: eagle.system.v1.RoleBindingService.GetMyPermissions:input_type -> eagle.system.v1.GetMyPermissionsRequest
+	2,  // 10: eagle.system.v1.RoleBindingService.ListBoundRoles:output_type -> eagle.system.v1.ListBoundRolesResponse
+	4,  // 11: eagle.system.v1.RoleBindingService.GetRolePermissions:output_type -> eagle.system.v1.GetRolePermissionsResponse
+	6,  // 12: eagle.system.v1.RoleBindingService.SetRolePermissions:output_type -> eagle.system.v1.SetRolePermissionsResponse
+	8,  // 13: eagle.system.v1.RoleBindingService.AddRoleInheritance:output_type -> eagle.system.v1.AddRoleInheritanceResponse
+	11, // 14: eagle.system.v1.RoleBindingService.ListRoleInheritances:output_type -> eagle.system.v1.ListRoleInheritancesResponse
+	13, // 15: eagle.system.v1.RoleBindingService.DeleteRoleInheritance:output_type -> eagle.system.v1.DeleteRoleInheritanceResponse
+	15, // 16: eagle.system.v1.RoleBindingService.GetMyPermissions:output_type -> eagle.system.v1.GetMyPermissionsResponse
+	10, // [10:17] is the sub-list for method output_type
+	3,  // [3:10] is the sub-list for method input_type
+	3,  // [3:3] is the sub-list for extension type_name
+	3,  // [3:3] is the sub-list for extension extendee
+	0,  // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_eagle_system_v1_rolebinding_proto_init() }
@@ -602,13 +930,16 @@ func file_eagle_system_v1_rolebinding_proto_init() {
 	if File_eagle_system_v1_rolebinding_proto != nil {
 		return
 	}
+	file_eagle_system_v1_rolebinding_proto_msgTypes[5].OneofWrappers = []any{}
+	file_eagle_system_v1_rolebinding_proto_msgTypes[7].OneofWrappers = []any{}
+	file_eagle_system_v1_rolebinding_proto_msgTypes[12].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_eagle_system_v1_rolebinding_proto_rawDesc), len(file_eagle_system_v1_rolebinding_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

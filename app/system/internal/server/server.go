@@ -18,6 +18,7 @@ import (
 	"go.opentelemetry.io/otel"
 
 	"github.com/eagle-go/eagle/app/system/internal/conf"
+	"github.com/eagle-go/eagle/app/system/internal/service"
 	"github.com/eagle-go/eagle/pkg/authn"
 	"github.com/eagle-go/eagle/pkg/authz"
 )
@@ -87,6 +88,7 @@ func NewMiddlewares(
 			authz.WithSuperAdminRole(superAdmin),
 			authz.WithEnforcer(enforcer),
 		),
+		service.ErrorMapping(),
 		protovalidatemw.ProtoValidate(),
 	}, nil
 }

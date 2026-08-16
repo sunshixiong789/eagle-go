@@ -18,9 +18,11 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/eagle-go/eagle/app/system/internal/conf"
+	"github.com/eagle-go/eagle/app/system/internal/domain"
 	"github.com/eagle-go/eagle/ent"
 	"github.com/eagle-go/eagle/pkg/authz"
 	"github.com/eagle-go/eagle/pkg/db"
+	"github.com/eagle-go/eagle/pkg/healthx"
 	"github.com/eagle-go/eagle/pkg/redisx"
 )
 
@@ -29,8 +31,9 @@ var ProviderSet = wire.NewSet(
 	NewData,
 	NewEntClient,
 	NewRedisClient,
+	NewPolicyRedis,
 	NewEnforcer,
-	NewPolicyWatcher,
+	NewPolicyWatcherWithRedis,
 	NewPolicyRepo,
 	NewPermissionRepo,
 	NewDictRepo,
@@ -39,13 +42,16 @@ var ProviderSet = wire.NewSet(
 // Data 持有所有外部资源句柄。
 type Data struct {
 	client *ent.Client
-	rdb    *redis.Client
-	cache  cacheConfig
+	// rdb 是安全关键的 token 撤销连接，保留字段名以兼容测试辅助代码。
+	rdb            *redis.Client
+	cacheRDB       *redis.Client
+	policyRDB      *redis.Client
+	dictCache      *redisx.Cache[[]*domain.DictData]
+	healthCleanups []func()
 }
 
-type cacheConfig struct {
-	dictTTL time.Duration
-}
+// PolicyRedis 是策略协调专用连接池的 wire 区分类型。
+type PolicyRedis struct{ Client *redis.Client }
 
 // NewData 建立数据库与 Redis 连接。
 // 返回的 cleanup 由 wire 串进应用退出流程。
@@ -63,29 +69,42 @@ func NewData(c *conf.Data, ac *conf.Auth) (*Data, func(), error) {
 		return nil, nil, err
 	}
 
-	rdb, redisCleanup, err := redisx.New(ctx, redisx.Config{
+	redisCfg := redisx.Config{
 		Addr:         c.GetRedis().GetAddr(),
 		Password:     c.GetRedis().GetPassword(),
 		DB:           int(c.GetRedis().GetDb()),
 		DialTimeout:  c.GetRedis().GetDialTimeout().AsDuration(),
 		ReadTimeout:  c.GetRedis().GetReadTimeout().AsDuration(),
 		WriteTimeout: c.GetRedis().GetWriteTimeout().AsDuration(),
-	})
+	}
+	rdb, redisCleanup, err := redisx.New(ctx, redisCfg)
 	if err != nil {
 		dbCleanup()
 		return nil, nil, err
 	}
 
-	d := &Data{
-		client: client,
-		rdb:    rdb,
-		cache: cacheConfig{
-			dictTTL: orDefault(ac.GetDictCacheTtl().AsDuration(), 30*time.Minute),
-		},
-	}
+	cacheRDB, cacheCleanup := redisx.NewClient(redisCfg)
+	policyRDB, policyCleanup := redisx.NewClient(redisCfg)
+	dictTTL := orDefault(ac.GetDictCacheTtl().AsDuration(), 30*time.Minute)
+	d := &Data{client: client, rdb: rdb, cacheRDB: cacheRDB, policyRDB: policyRDB}
+	d.dictCache = redisx.NewCache[[]*domain.DictData](cacheRDB, dictTTL, jsonCodec[[]*domain.DictData]{})
+	d.healthCleanups = append(d.healthCleanups,
+		healthx.Default.Register("postgres", func(ctx context.Context) error {
+			_, err := client.PolicyState.Query().Exist(ctx)
+			return err
+		}),
+		healthx.Default.Register("redis-revocations", func(ctx context.Context) error {
+			return rdb.Ping(ctx).Err()
+		}),
+	)
 
 	cleanup := func() {
 		log.Info("closing system data resources")
+		for _, unregister := range d.healthCleanups {
+			unregister()
+		}
+		policyCleanup()
+		cacheCleanup()
 		redisCleanup()
 		dbCleanup()
 	}
@@ -99,9 +118,34 @@ func NewEntClient(d *Data) *ent.Client { return d.client }
 // 连接生命周期仍归 Data 管理，这里只共享同一个连接池。
 func NewRedisClient(d *Data) *redis.Client { return d.rdb }
 
+// NewPolicyRedis 暴露策略通知专用连接池。
+func NewPolicyRedis(d *Data) *PolicyRedis { return &PolicyRedis{Client: d.policyRDB} }
+
 // NewEnforcer 构造 Casbin 判定器，策略存储复用项目自身的 ent 客户端。
 func NewEnforcer(client *ent.Client) (*authz.Enforcer, error) {
-	return authz.NewEnforcer(authz.NewEntAdapter(client))
+	adapter := authz.NewEntAdapter(client)
+	codes, err := adapter.PermissionCatalogCodes(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	if err := authz.ValidateRegisteredPolicies(codes); err != nil {
+		return nil, err
+	}
+	enforcer, err := authz.NewEnforcer(adapter)
+	if err != nil {
+		return nil, err
+	}
+	healthx.Default.Register("authz-policy", func(ctx context.Context) error {
+		version, err := adapter.PolicyVersion(ctx)
+		if err != nil {
+			return err
+		}
+		if loaded := enforcer.LoadedPolicyVersion(); loaded != version {
+			return fmt.Errorf("loaded policy version %d, database version %d", loaded, version)
+		}
+		return nil
+	})
+	return enforcer, nil
 }
 
 // NewPolicyWatcher 构造策略广播器，并在后台启动订阅循环，
@@ -118,21 +162,42 @@ func NewEnforcer(client *ent.Client) (*authz.Enforcer, error) {
 // cancel 而不等 goroutine 真正停下来，它手上可能还有一次正在跑的
 // ReloadPolicy，会撞上刚被关闭的连接——现象是退出时打一条无害但唬人的
 // 错误日志。等 goroutine 确认退出后再返回，就不存在这个时间窗口。
-func NewPolicyWatcher(rdb *redis.Client, enforcer *authz.Enforcer, logger *slog.Logger) (*authz.RedisWatcher, func(), error) {
+func NewPolicyWatcher(
+	rdb *redis.Client,
+	enforcer *authz.Enforcer,
+	logger *slog.Logger,
+) (*authz.RedisWatcher, func(), error) {
+	if logger == nil {
+		logger = slog.Default()
+	}
 	w := authz.NewRedisWatcher(rdb, "", logger)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
+	done := make(chan struct{}, 2)
 	go func() {
-		defer close(done)
+		defer func() { done <- struct{}{} }()
 		w.Watch(ctx, enforcer)
+	}()
+	go func() {
+		defer func() { done <- struct{}{} }()
+		runPolicyReconciler(ctx, enforcer, w, logger)
 	}()
 
 	cleanup := func() {
 		cancel()
 		<-done
+		<-done
 	}
 	return w, cleanup, nil
+}
+
+// NewPolicyWatcherWithRedis 是生产装配入口，使用策略协调专用连接池。
+func NewPolicyWatcherWithRedis(
+	policyRedis *PolicyRedis,
+	enforcer *authz.Enforcer,
+	logger *slog.Logger,
+) (*authz.RedisWatcher, func(), error) {
+	return NewPolicyWatcher(policyRedis.Client, enforcer, logger)
 }
 
 func orDefault(v, def time.Duration) time.Duration {
@@ -206,22 +271,4 @@ func (jsonCodec[T]) Unmarshal(b []byte) (T, error) {
 	var v T
 	err := json.Unmarshal(b, &v)
 	return v, err
-}
-
-// cached 读缓存，未命中则回源并回填。
-// Redis 故障时降级为直连数据库——缓存挂掉应该变慢，而不是全站不可用。
-func cached[T any](ctx context.Context, d *Data, key string, ttl time.Duration, load func(context.Context) (T, error)) (T, error) {
-	c := redisx.NewCache[T](d.rdb, ttl, jsonCodec[T]{})
-	return c.Get(ctx, key, load)
-}
-
-// invalidate 删除若干缓存键。
-func (d *Data) invalidate(ctx context.Context, keys ...string) error {
-	if len(keys) == 0 {
-		return nil
-	}
-	if err := d.rdb.Del(ctx, keys...).Err(); err != nil {
-		return fmt.Errorf("invalidate cache: %w", err)
-	}
-	return nil
 }

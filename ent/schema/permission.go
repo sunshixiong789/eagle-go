@@ -10,7 +10,8 @@ import (
 	"entgo.io/ent/schema/index"
 )
 
-// Permission 是权限节点，同时承载前端菜单树。
+// Permission 是前端导航节点。类型名为兼容现有 API 和领域模型而保留，
+// 持久化表已经与后端 permission_definition 分离。
 //
 // 权限码（code）是三方契约的交汇点：proto 注解上写
 // (eagle.annotations.v1.perm) = "system:user:add"，Casbin 策略里是同一个
@@ -26,7 +27,7 @@ type Permission struct {
 // Annotations 指定表名。
 func (Permission) Annotations() []schema.Annotation {
 	return []schema.Annotation{
-		entsql.Annotation{Table: "sys_permission"},
+		entsql.Annotation{Table: "navigation_node"},
 	}
 }
 
@@ -39,8 +40,9 @@ func (Permission) Fields() []ent.Field {
 		field.Int64("id"),
 
 		field.Int64("parent_id").
-			Default(0).
-			Comment("顶级节点为 0"),
+			Optional().
+			Nillable().
+			Comment("顶级节点在数据库中为 NULL，领域层映射为 0"),
 
 		field.String("name").
 			MaxLen(64).
@@ -48,7 +50,9 @@ func (Permission) Fields() []ent.Field {
 
 		field.String("code").
 			MaxLen(128).
-			Default("").
+			Optional().
+			Nillable().
+			StorageKey("permission_code").
 			Comment("权限码，如 system:user:add。目录/菜单可为空，按钮必填"),
 
 		field.Int32("type").
@@ -77,10 +81,7 @@ func (Permission) Fields() []ent.Field {
 // Indexes 定义索引。
 func (Permission) Indexes() []ent.Index {
 	return []ent.Index{
-		// 权限码唯一，但允许多个目录/菜单留空
-		index.Fields("code").
-			Unique().
-			Annotations(entsql.IndexWhere("code <> ''")),
+		index.Fields("code").Unique(),
 		index.Fields("parent_id"),
 	}
 }

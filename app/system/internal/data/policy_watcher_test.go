@@ -67,7 +67,7 @@ func TestPolicyWatcherSyncsAcrossReplicas(t *testing.T) {
 	deadline := time.Now().Add(2 * time.Second)
 	for {
 		binding := mustBinding(t, role, permCode)
-		if err := storeA.SaveBinding(ctx, binding); err != nil {
+		if _, err := storeA.SaveBinding(ctx, binding, nil); err != nil {
 			t.Fatalf("副本 A SaveBinding: %v", err)
 		}
 

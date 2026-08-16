@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/eagle-go/eagle/pkg/healthx"
+
 	kratosmetrics "github.com/go-kratos/kratos/contrib/otel/v3/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -210,10 +212,23 @@ func startMetricsServer(addr string) func(context.Context) error {
 
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
-	// 存活探针放在这里，同样不该走鉴权
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+	writeLive := func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
+	}
+	// 存活只回答进程是否仍在提供 HTTP；依赖故障不应触发重启风暴。
+	mux.HandleFunc("/livez", writeLive)
+	mux.HandleFunc("/healthz", writeLive) // 兼容旧部署
+	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		if err := healthx.Default.Ready(ctx); err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(err.Error()))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ready"))
 	})
 
 	srv := &http.Server{

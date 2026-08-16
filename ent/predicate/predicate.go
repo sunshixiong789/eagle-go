@@ -18,5 +18,20 @@ type DictType func(*sql.Selector)
 // Permission is the predicate function for permission builders.
 type Permission func(*sql.Selector)
 
+// PermissionDefinition is the predicate function for permissiondefinition builders.
+type PermissionDefinition func(*sql.Selector)
+
+// PermissionTreeState is the predicate function for permissiontreestate builders.
+type PermissionTreeState func(*sql.Selector)
+
+// PolicyAudit is the predicate function for policyaudit builders.
+type PolicyAudit func(*sql.Selector)
+
+// PolicyOutbox is the predicate function for policyoutbox builders.
+type PolicyOutbox func(*sql.Selector)
+
+// PolicyState is the predicate function for policystate builders.
+type PolicyState func(*sql.Selector)
+
 // UserProfile is the predicate function for userprofile builders.
 type UserProfile func(*sql.Selector)

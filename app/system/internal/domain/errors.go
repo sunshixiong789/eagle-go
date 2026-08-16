@@ -27,6 +27,8 @@ var (
 	ErrPermissionHasChildren = errors.New("domain: 存在子节点，无法删除")
 	// ErrPermissionCycle 表示父子关系变更会形成环。
 	ErrPermissionCycle = errors.New("domain: 上级权限不能是自身或其后代")
+	// ErrConcurrentModification 表示调用方基于过期版本写入。
+	ErrConcurrentModification = errors.New("domain: 数据已被其他操作更新，请刷新后重试")
 	// ErrButtonRequiresCode 表示按钮型节点缺少权限码。
 	ErrButtonRequiresCode = errors.New("domain: 按钮类权限必须声明权限码")
 	// ErrInvalidPermissionType 表示节点类型取值越界。
@@ -41,7 +43,8 @@ var (
 	// ErrUnknownPermissionCode 表示授予了权限树中不存在的权限码。
 	ErrUnknownPermissionCode = errors.New("domain: 权限码在权限树中不存在")
 	// ErrSelfInheritance 表示角色继承自身。
-	ErrSelfInheritance = errors.New("domain: 角色不能继承自身")
+	ErrSelfInheritance      = errors.New("domain: 角色不能继承自身")
+	ErrRoleInheritanceCycle = errors.New("domain: 角色继承关系不能形成环")
 
 	// ErrDictTypeNotFound 表示字典类型不存在。
 	ErrDictTypeNotFound = errors.New("domain: 字典类型不存在")

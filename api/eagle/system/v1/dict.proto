@@ -18,11 +18,13 @@ service DictService {
       body: "*"
     };
     option (eagle.annotations.v1.perm) = "system:dict:add";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
   rpc ListDictTypes(ListDictTypesRequest) returns (ListDictTypesResponse) {
     option (google.api.http) = {get: "/v1/system/dict/types"};
     option (eagle.annotations.v1.perm) = "system:dict:list";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
   rpc UpdateDictType(UpdateDictTypeRequest) returns (UpdateDictTypeResponse) {
@@ -31,11 +33,13 @@ service DictService {
       body: "*"
     };
     option (eagle.annotations.v1.perm) = "system:dict:edit";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
   rpc DeleteDictType(DeleteDictTypeRequest) returns (DeleteDictTypeResponse) {
     option (google.api.http) = {delete: "/v1/system/dict/types/{id}"};
     option (eagle.annotations.v1.perm) = "system:dict:remove";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
   rpc CreateDictData(CreateDictDataRequest) returns (CreateDictDataResponse) {
@@ -44,11 +48,13 @@ service DictService {
       body: "*"
     };
     option (eagle.annotations.v1.perm) = "system:dict:add";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
   rpc ListDictData(ListDictDataRequest) returns (ListDictDataResponse) {
     option (google.api.http) = {get: "/v1/system/dict/data"};
     option (eagle.annotations.v1.perm) = "system:dict:list";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
   rpc UpdateDictData(UpdateDictDataRequest) returns (UpdateDictDataResponse) {
@@ -57,17 +63,20 @@ service DictService {
       body: "*"
     };
     option (eagle.annotations.v1.perm) = "system:dict:edit";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
   rpc DeleteDictData(DeleteDictDataRequest) returns (DeleteDictDataResponse) {
     option (google.api.http) = {delete: "/v1/system/dict/data/{id}"};
     option (eagle.annotations.v1.perm) = "system:dict:remove";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
   // 按类型取字典项，供前端渲染下拉框。任何登录用户都要用，
   // 所以不挂权限码，只校验登录态；结果走 Redis 缓存。
   rpc GetDictDataByType(GetDictDataByTypeRequest) returns (GetDictDataByTypeResponse) {
     option (google.api.http) = {get: "/v1/system/dict/data/type/{dict_type}"};
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_AUTHENTICATED;
   }
 }
 

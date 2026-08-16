@@ -1355,18 +1355,17 @@ const file_eagle_system_v1_dict_proto_rawDesc = "" +
 	"\x18GetDictDataByTypeRequest\x12&\n" +
 	"\tdict_type\x18\x01 \x01(\tB\t\xbaH\x06r\x04\x10\x02\x18@R\bdictType\"S\n" +
 	"\x19GetDictDataByTypeResponse\x126\n" +
-	"\tdict_data\x18\x01 \x03(\v2\x19.eagle.system.v1.DictDataR\bdictData2\xf6\n" +
-	"\n" +
-	"\vDictService\x12\x96\x01\n" +
-	"\x0eCreateDictType\x12&.eagle.system.v1.CreateDictTypeRequest\x1a'.eagle.system.v1.CreateDictTypeResponse\"3\x8a\xb5\x18\x0fsystem:dict:add\x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/v1/system/dict/types\x12\x91\x01\n" +
-	"\rListDictTypes\x12%.eagle.system.v1.ListDictTypesRequest\x1a&.eagle.system.v1.ListDictTypesResponse\"1\x8a\xb5\x18\x10system:dict:list\x82\xd3\xe4\x93\x02\x17\x12\x15/v1/system/dict/types\x12\x9c\x01\n" +
-	"\x0eUpdateDictType\x12&.eagle.system.v1.UpdateDictTypeRequest\x1a'.eagle.system.v1.UpdateDictTypeResponse\"9\x8a\xb5\x18\x10system:dict:edit\x82\xd3\xe4\x93\x02\x1f:\x01*\x1a\x1a/v1/system/dict/types/{id}\x12\x9b\x01\n" +
-	"\x0eDeleteDictType\x12&.eagle.system.v1.DeleteDictTypeRequest\x1a'.eagle.system.v1.DeleteDictTypeResponse\"8\x8a\xb5\x18\x12system:dict:remove\x82\xd3\xe4\x93\x02\x1c*\x1a/v1/system/dict/types/{id}\x12\x95\x01\n" +
-	"\x0eCreateDictData\x12&.eagle.system.v1.CreateDictDataRequest\x1a'.eagle.system.v1.CreateDictDataResponse\"2\x8a\xb5\x18\x0fsystem:dict:add\x82\xd3\xe4\x93\x02\x19:\x01*\"\x14/v1/system/dict/data\x12\x8d\x01\n" +
-	"\fListDictData\x12$.eagle.system.v1.ListDictDataRequest\x1a%.eagle.system.v1.ListDictDataResponse\"0\x8a\xb5\x18\x10system:dict:list\x82\xd3\xe4\x93\x02\x16\x12\x14/v1/system/dict/data\x12\x9b\x01\n" +
-	"\x0eUpdateDictData\x12&.eagle.system.v1.UpdateDictDataRequest\x1a'.eagle.system.v1.UpdateDictDataResponse\"8\x8a\xb5\x18\x10system:dict:edit\x82\xd3\xe4\x93\x02\x1e:\x01*\x1a\x19/v1/system/dict/data/{id}\x12\x9a\x01\n" +
-	"\x0eDeleteDictData\x12&.eagle.system.v1.DeleteDictDataRequest\x1a'.eagle.system.v1.DeleteDictDataResponse\"7\x8a\xb5\x18\x12system:dict:remove\x82\xd3\xe4\x93\x02\x1b*\x19/v1/system/dict/data/{id}\x12\x99\x01\n" +
-	"\x11GetDictDataByType\x12).eagle.system.v1.GetDictDataByTypeRequest\x1a*.eagle.system.v1.GetDictDataByTypeResponse\"-\x82\xd3\xe4\x93\x02'\x12%/v1/system/dict/data/type/{dict_type}B8Z6github.com/eagle-go/eagle/api/eagle/system/v1;systemv1b\x06proto3"
+	"\tdict_data\x18\x01 \x03(\v2\x19.eagle.system.v1.DictDataR\bdictData2\x9a\v\n" +
+	"\vDictService\x12\x9a\x01\n" +
+	"\x0eCreateDictType\x12&.eagle.system.v1.CreateDictTypeRequest\x1a'.eagle.system.v1.CreateDictTypeResponse\"7\x8a\xb5\x18\x0fsystem:dict:add\x98\xb5\x18\x03\x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/v1/system/dict/types\x12\x95\x01\n" +
+	"\rListDictTypes\x12%.eagle.system.v1.ListDictTypesRequest\x1a&.eagle.system.v1.ListDictTypesResponse\"5\x8a\xb5\x18\x10system:dict:list\x98\xb5\x18\x03\x82\xd3\xe4\x93\x02\x17\x12\x15/v1/system/dict/types\x12\xa0\x01\n" +
+	"\x0eUpdateDictType\x12&.eagle.system.v1.UpdateDictTypeRequest\x1a'.eagle.system.v1.UpdateDictTypeResponse\"=\x8a\xb5\x18\x10system:dict:edit\x98\xb5\x18\x03\x82\xd3\xe4\x93\x02\x1f:\x01*\x1a\x1a/v1/system/dict/types/{id}\x12\x9f\x01\n" +
+	"\x0eDeleteDictType\x12&.eagle.system.v1.DeleteDictTypeRequest\x1a'.eagle.system.v1.DeleteDictTypeResponse\"<\x8a\xb5\x18\x12system:dict:remove\x98\xb5\x18\x03\x82\xd3\xe4\x93\x02\x1c*\x1a/v1/system/dict/types/{id}\x12\x99\x01\n" +
+	"\x0eCreateDictData\x12&.eagle.system.v1.CreateDictDataRequest\x1a'.eagle.system.v1.CreateDictDataResponse\"6\x8a\xb5\x18\x0fsystem:dict:add\x98\xb5\x18\x03\x82\xd3\xe4\x93\x02\x19:\x01*\"\x14/v1/system/dict/data\x12\x91\x01\n" +
+	"\fListDictData\x12$.eagle.system.v1.ListDictDataRequest\x1a%.eagle.system.v1.ListDictDataResponse\"4\x8a\xb5\x18\x10system:dict:list\x98\xb5\x18\x03\x82\xd3\xe4\x93\x02\x16\x12\x14/v1/system/dict/data\x12\x9f\x01\n" +
+	"\x0eUpdateDictData\x12&.eagle.system.v1.UpdateDictDataRequest\x1a'.eagle.system.v1.UpdateDictDataResponse\"<\x8a\xb5\x18\x10system:dict:edit\x98\xb5\x18\x03\x82\xd3\xe4\x93\x02\x1e:\x01*\x1a\x19/v1/system/dict/data/{id}\x12\x9e\x01\n" +
+	"\x0eDeleteDictData\x12&.eagle.system.v1.DeleteDictDataRequest\x1a'.eagle.system.v1.DeleteDictDataResponse\";\x8a\xb5\x18\x12system:dict:remove\x98\xb5\x18\x03\x82\xd3\xe4\x93\x02\x1b*\x19/v1/system/dict/data/{id}\x12\x9d\x01\n" +
+	"\x11GetDictDataByType\x12).eagle.system.v1.GetDictDataByTypeRequest\x1a*.eagle.system.v1.GetDictDataByTypeResponse\"1\x98\xb5\x18\x02\x82\xd3\xe4\x93\x02'\x12%/v1/system/dict/data/type/{dict_type}B8Z6github.com/eagle-go/eagle/api/eagle/system/v1;systemv1b\x06proto3"
 
 var (
 	file_eagle_system_v1_dict_proto_rawDescOnce sync.Once

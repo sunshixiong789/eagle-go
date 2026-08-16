@@ -97,7 +97,8 @@ message Auth {
   // 字典项缓存时长
   google.protobuf.Duration dict_cache_ttl = 4;
 
-  // 拥有该角色的主体跳过 Casbin 判定
+  // 在 resource_access.<client_id>.roles 中拥有该 client 角色的主体
+  // 跳过 Casbin 判定；同名 realm 角色不会触发短路。
   string super_admin_role = 5;
 
   // 拉取 JWKS 的地址，留空则按 Keycloak 约定推导为

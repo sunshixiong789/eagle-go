@@ -9,6 +9,11 @@ import (
 	"github.com/eagle-go/eagle/ent/dictdata"
 	"github.com/eagle-go/eagle/ent/dicttype"
 	"github.com/eagle-go/eagle/ent/permission"
+	"github.com/eagle-go/eagle/ent/permissiondefinition"
+	"github.com/eagle-go/eagle/ent/permissiontreestate"
+	"github.com/eagle-go/eagle/ent/policyaudit"
+	"github.com/eagle-go/eagle/ent/policyoutbox"
+	"github.com/eagle-go/eagle/ent/policystate"
 	"github.com/eagle-go/eagle/ent/schema"
 	"github.com/eagle-go/eagle/ent/userprofile"
 )
@@ -177,10 +182,6 @@ func init() {
 	dicttype.UpdateDefaultUpdatedAt = dicttypeDescUpdatedAt.UpdateDefault.(func() time.Time)
 	permissionFields := schema.Permission{}.Fields()
 	_ = permissionFields
-	// permissionDescParentID is the schema descriptor for parent_id field.
-	permissionDescParentID := permissionFields[1].Descriptor()
-	// permission.DefaultParentID holds the default value on creation for the parent_id field.
-	permission.DefaultParentID = permissionDescParentID.Default.(int64)
 	// permissionDescName is the schema descriptor for name field.
 	permissionDescName := permissionFields[2].Descriptor()
 	// permission.NameValidator is a validator for the "name" field. It is called by the builders before save.
@@ -201,8 +202,6 @@ func init() {
 	}()
 	// permissionDescCode is the schema descriptor for code field.
 	permissionDescCode := permissionFields[3].Descriptor()
-	// permission.DefaultCode holds the default value on creation for the code field.
-	permission.DefaultCode = permissionDescCode.Default.(string)
 	// permission.CodeValidator is a validator for the "code" field. It is called by the builders before save.
 	permission.CodeValidator = permissionDescCode.Validators[0].(func(string) error)
 	// permissionDescPath is the schema descriptor for path field.
@@ -245,6 +244,138 @@ func init() {
 	permission.DefaultUpdatedAt = permissionDescUpdatedAt.Default.(func() time.Time)
 	// permission.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	permission.UpdateDefaultUpdatedAt = permissionDescUpdatedAt.UpdateDefault.(func() time.Time)
+	permissiondefinitionFields := schema.PermissionDefinition{}.Fields()
+	_ = permissiondefinitionFields
+	// permissiondefinitionDescCode is the schema descriptor for code field.
+	permissiondefinitionDescCode := permissiondefinitionFields[1].Descriptor()
+	// permissiondefinition.CodeValidator is a validator for the "code" field. It is called by the builders before save.
+	permissiondefinition.CodeValidator = permissiondefinitionDescCode.Validators[0].(func(string) error)
+	// permissiondefinitionDescService is the schema descriptor for service field.
+	permissiondefinitionDescService := permissiondefinitionFields[2].Descriptor()
+	// permissiondefinition.ServiceValidator is a validator for the "service" field. It is called by the builders before save.
+	permissiondefinition.ServiceValidator = permissiondefinitionDescService.Validators[0].(func(string) error)
+	// permissiondefinitionDescResource is the schema descriptor for resource field.
+	permissiondefinitionDescResource := permissiondefinitionFields[3].Descriptor()
+	// permissiondefinition.ResourceValidator is a validator for the "resource" field. It is called by the builders before save.
+	permissiondefinition.ResourceValidator = permissiondefinitionDescResource.Validators[0].(func(string) error)
+	// permissiondefinitionDescAction is the schema descriptor for action field.
+	permissiondefinitionDescAction := permissiondefinitionFields[4].Descriptor()
+	// permissiondefinition.ActionValidator is a validator for the "action" field. It is called by the builders before save.
+	permissiondefinition.ActionValidator = permissiondefinitionDescAction.Validators[0].(func(string) error)
+	// permissiondefinitionDescStatus is the schema descriptor for status field.
+	permissiondefinitionDescStatus := permissiondefinitionFields[5].Descriptor()
+	// permissiondefinition.DefaultStatus holds the default value on creation for the status field.
+	permissiondefinition.DefaultStatus = permissiondefinitionDescStatus.Default.(int32)
+	// permissiondefinitionDescSource is the schema descriptor for source field.
+	permissiondefinitionDescSource := permissiondefinitionFields[6].Descriptor()
+	// permissiondefinition.DefaultSource holds the default value on creation for the source field.
+	permissiondefinition.DefaultSource = permissiondefinitionDescSource.Default.(string)
+	// permissiondefinition.SourceValidator is a validator for the "source" field. It is called by the builders before save.
+	permissiondefinition.SourceValidator = permissiondefinitionDescSource.Validators[0].(func(string) error)
+	// permissiondefinitionDescCreatedAt is the schema descriptor for created_at field.
+	permissiondefinitionDescCreatedAt := permissiondefinitionFields[7].Descriptor()
+	// permissiondefinition.DefaultCreatedAt holds the default value on creation for the created_at field.
+	permissiondefinition.DefaultCreatedAt = permissiondefinitionDescCreatedAt.Default.(func() time.Time)
+	// permissiondefinitionDescUpdatedAt is the schema descriptor for updated_at field.
+	permissiondefinitionDescUpdatedAt := permissiondefinitionFields[8].Descriptor()
+	// permissiondefinition.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	permissiondefinition.DefaultUpdatedAt = permissiondefinitionDescUpdatedAt.Default.(func() time.Time)
+	// permissiondefinition.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	permissiondefinition.UpdateDefaultUpdatedAt = permissiondefinitionDescUpdatedAt.UpdateDefault.(func() time.Time)
+	permissiontreestateFields := schema.PermissionTreeState{}.Fields()
+	_ = permissiontreestateFields
+	// permissiontreestateDescRevision is the schema descriptor for revision field.
+	permissiontreestateDescRevision := permissiontreestateFields[1].Descriptor()
+	// permissiontreestate.DefaultRevision holds the default value on creation for the revision field.
+	permissiontreestate.DefaultRevision = permissiontreestateDescRevision.Default.(int64)
+	// permissiontreestate.RevisionValidator is a validator for the "revision" field. It is called by the builders before save.
+	permissiontreestate.RevisionValidator = permissiontreestateDescRevision.Validators[0].(func(int64) error)
+	// permissiontreestateDescUpdatedAt is the schema descriptor for updated_at field.
+	permissiontreestateDescUpdatedAt := permissiontreestateFields[2].Descriptor()
+	// permissiontreestate.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	permissiontreestate.DefaultUpdatedAt = permissiontreestateDescUpdatedAt.Default.(func() time.Time)
+	// permissiontreestate.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	permissiontreestate.UpdateDefaultUpdatedAt = permissiontreestateDescUpdatedAt.UpdateDefault.(func() time.Time)
+	policyauditFields := schema.PolicyAudit{}.Fields()
+	_ = policyauditFields
+	// policyauditDescPolicyVersion is the schema descriptor for policy_version field.
+	policyauditDescPolicyVersion := policyauditFields[1].Descriptor()
+	// policyaudit.PolicyVersionValidator is a validator for the "policy_version" field. It is called by the builders before save.
+	policyaudit.PolicyVersionValidator = policyauditDescPolicyVersion.Validators[0].(func(int64) error)
+	// policyauditDescAction is the schema descriptor for action field.
+	policyauditDescAction := policyauditFields[2].Descriptor()
+	// policyaudit.ActionValidator is a validator for the "action" field. It is called by the builders before save.
+	policyaudit.ActionValidator = policyauditDescAction.Validators[0].(func(string) error)
+	// policyauditDescTarget is the schema descriptor for target field.
+	policyauditDescTarget := policyauditFields[3].Descriptor()
+	// policyaudit.TargetValidator is a validator for the "target" field. It is called by the builders before save.
+	policyaudit.TargetValidator = policyauditDescTarget.Validators[0].(func(string) error)
+	// policyauditDescActorSubject is the schema descriptor for actor_subject field.
+	policyauditDescActorSubject := policyauditFields[4].Descriptor()
+	// policyaudit.DefaultActorSubject holds the default value on creation for the actor_subject field.
+	policyaudit.DefaultActorSubject = policyauditDescActorSubject.Default.(string)
+	// policyaudit.ActorSubjectValidator is a validator for the "actor_subject" field. It is called by the builders before save.
+	policyaudit.ActorSubjectValidator = policyauditDescActorSubject.Validators[0].(func(string) error)
+	// policyauditDescActorClientID is the schema descriptor for actor_client_id field.
+	policyauditDescActorClientID := policyauditFields[5].Descriptor()
+	// policyaudit.DefaultActorClientID holds the default value on creation for the actor_client_id field.
+	policyaudit.DefaultActorClientID = policyauditDescActorClientID.Default.(string)
+	// policyaudit.ActorClientIDValidator is a validator for the "actor_client_id" field. It is called by the builders before save.
+	policyaudit.ActorClientIDValidator = policyauditDescActorClientID.Validators[0].(func(string) error)
+	// policyauditDescRequestID is the schema descriptor for request_id field.
+	policyauditDescRequestID := policyauditFields[6].Descriptor()
+	// policyaudit.DefaultRequestID holds the default value on creation for the request_id field.
+	policyaudit.DefaultRequestID = policyauditDescRequestID.Default.(string)
+	// policyaudit.RequestIDValidator is a validator for the "request_id" field. It is called by the builders before save.
+	policyaudit.RequestIDValidator = policyauditDescRequestID.Validators[0].(func(string) error)
+	// policyauditDescTraceID is the schema descriptor for trace_id field.
+	policyauditDescTraceID := policyauditFields[7].Descriptor()
+	// policyaudit.DefaultTraceID holds the default value on creation for the trace_id field.
+	policyaudit.DefaultTraceID = policyauditDescTraceID.Default.(string)
+	// policyaudit.TraceIDValidator is a validator for the "trace_id" field. It is called by the builders before save.
+	policyaudit.TraceIDValidator = policyauditDescTraceID.Validators[0].(func(string) error)
+	// policyauditDescCreatedAt is the schema descriptor for created_at field.
+	policyauditDescCreatedAt := policyauditFields[10].Descriptor()
+	// policyaudit.DefaultCreatedAt holds the default value on creation for the created_at field.
+	policyaudit.DefaultCreatedAt = policyauditDescCreatedAt.Default.(func() time.Time)
+	policyoutboxFields := schema.PolicyOutbox{}.Fields()
+	_ = policyoutboxFields
+	// policyoutboxDescPolicyVersion is the schema descriptor for policy_version field.
+	policyoutboxDescPolicyVersion := policyoutboxFields[1].Descriptor()
+	// policyoutbox.PolicyVersionValidator is a validator for the "policy_version" field. It is called by the builders before save.
+	policyoutbox.PolicyVersionValidator = policyoutboxDescPolicyVersion.Validators[0].(func(int64) error)
+	// policyoutboxDescEventType is the schema descriptor for event_type field.
+	policyoutboxDescEventType := policyoutboxFields[2].Descriptor()
+	// policyoutbox.EventTypeValidator is a validator for the "event_type" field. It is called by the builders before save.
+	policyoutbox.EventTypeValidator = policyoutboxDescEventType.Validators[0].(func(string) error)
+	// policyoutboxDescCreatedAt is the schema descriptor for created_at field.
+	policyoutboxDescCreatedAt := policyoutboxFields[4].Descriptor()
+	// policyoutbox.DefaultCreatedAt holds the default value on creation for the created_at field.
+	policyoutbox.DefaultCreatedAt = policyoutboxDescCreatedAt.Default.(func() time.Time)
+	// policyoutboxDescAttempts is the schema descriptor for attempts field.
+	policyoutboxDescAttempts := policyoutboxFields[6].Descriptor()
+	// policyoutbox.DefaultAttempts holds the default value on creation for the attempts field.
+	policyoutbox.DefaultAttempts = policyoutboxDescAttempts.Default.(int32)
+	// policyoutbox.AttemptsValidator is a validator for the "attempts" field. It is called by the builders before save.
+	policyoutbox.AttemptsValidator = policyoutboxDescAttempts.Validators[0].(func(int32) error)
+	// policyoutboxDescLastError is the schema descriptor for last_error field.
+	policyoutboxDescLastError := policyoutboxFields[7].Descriptor()
+	// policyoutbox.DefaultLastError holds the default value on creation for the last_error field.
+	policyoutbox.DefaultLastError = policyoutboxDescLastError.Default.(string)
+	policystateFields := schema.PolicyState{}.Fields()
+	_ = policystateFields
+	// policystateDescVersion is the schema descriptor for version field.
+	policystateDescVersion := policystateFields[1].Descriptor()
+	// policystate.DefaultVersion holds the default value on creation for the version field.
+	policystate.DefaultVersion = policystateDescVersion.Default.(int64)
+	// policystate.VersionValidator is a validator for the "version" field. It is called by the builders before save.
+	policystate.VersionValidator = policystateDescVersion.Validators[0].(func(int64) error)
+	// policystateDescUpdatedAt is the schema descriptor for updated_at field.
+	policystateDescUpdatedAt := policystateFields[2].Descriptor()
+	// policystate.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	policystate.DefaultUpdatedAt = policystateDescUpdatedAt.Default.(func() time.Time)
+	// policystate.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	policystate.UpdateDefaultUpdatedAt = policystateDescUpdatedAt.UpdateDefault.(func() time.Time)
 	userprofileFields := schema.UserProfile{}.Fields()
 	_ = userprofileFields
 	// userprofileDescSubject is the schema descriptor for subject field.

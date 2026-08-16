@@ -30,12 +30,13 @@ func toProtoBinding(b *domain.RoleBinding) *v1.RoleBinding {
 	return &v1.RoleBinding{
 		Role:            b.Role().String(),
 		PermissionCodes: b.CodeStrings(),
+		Revision:        b.Revision(),
 	}
 }
 
 // ListBoundRoles 列出已配置权限的角色。
 func (s *RoleBindingService) ListBoundRoles(ctx context.Context, _ *v1.ListBoundRolesRequest) (*v1.ListBoundRolesResponse, error) {
-	bindings, err := s.uc.ListBoundRoles(ctx)
+	bindings, version, err := s.uc.ListBoundRoles(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +45,7 @@ func (s *RoleBindingService) ListBoundRoles(ctx context.Context, _ *v1.ListBound
 	for _, b := range bindings {
 		out = append(out, toProtoBinding(b))
 	}
-	return &v1.ListBoundRolesResponse{Bindings: out}, nil
+	return &v1.ListBoundRolesResponse{Bindings: out, PolicyVersion: version}, nil
 }
 
 // GetRolePermissions 返回单个角色的权限码。
@@ -58,18 +59,45 @@ func (s *RoleBindingService) GetRolePermissions(ctx context.Context, req *v1.Get
 
 // SetRolePermissions 全量覆盖角色的权限码。
 func (s *RoleBindingService) SetRolePermissions(ctx context.Context, req *v1.SetRolePermissionsRequest) (*v1.SetRolePermissionsResponse, error) {
-	if err := s.uc.SetRolePermissions(ctx, req.GetRole(), req.GetPermissionCodes()); err != nil {
+	version, err := s.uc.SetRolePermissions(ctx, req.GetRole(), req.GetPermissionCodes(), req.ExpectedVersion)
+	if err != nil {
 		return nil, err
 	}
-	return &v1.SetRolePermissionsResponse{}, nil
+	return &v1.SetRolePermissionsResponse{PolicyVersion: version}, nil
 }
 
 // AddRoleInheritance 建立角色继承。
 func (s *RoleBindingService) AddRoleInheritance(ctx context.Context, req *v1.AddRoleInheritanceRequest) (*v1.AddRoleInheritanceResponse, error) {
-	if err := s.uc.AddRoleInheritance(ctx, req.GetChild(), req.GetParent()); err != nil {
+	version, err := s.uc.AddRoleInheritance(ctx, req.GetChild(), req.GetParent(), req.ExpectedVersion)
+	if err != nil {
 		return nil, err
 	}
-	return &v1.AddRoleInheritanceResponse{}, nil
+	return &v1.AddRoleInheritanceResponse{PolicyVersion: version}, nil
+}
+
+// ListRoleInheritances 列出角色继承关系及其策略版本。
+func (s *RoleBindingService) ListRoleInheritances(ctx context.Context, _ *v1.ListRoleInheritancesRequest) (*v1.ListRoleInheritancesResponse, error) {
+	items, version, err := s.uc.ListRoleInheritances(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*v1.RoleInheritance, 0, len(items))
+	for _, item := range items {
+		out = append(out, &v1.RoleInheritance{
+			Child:  item.Child.String(),
+			Parent: item.Parent.String(),
+		})
+	}
+	return &v1.ListRoleInheritancesResponse{Inheritances: out, PolicyVersion: version}, nil
+}
+
+// DeleteRoleInheritance 删除角色继承关系。
+func (s *RoleBindingService) DeleteRoleInheritance(ctx context.Context, req *v1.DeleteRoleInheritanceRequest) (*v1.DeleteRoleInheritanceResponse, error) {
+	version, err := s.uc.DeleteRoleInheritance(ctx, req.GetChild(), req.GetParent(), req.ExpectedVersion)
+	if err != nil {
+		return nil, err
+	}
+	return &v1.DeleteRoleInheritanceResponse{PolicyVersion: version}, nil
 }
 
 // GetMyPermissions 返回当前登录者的角色与展开后的权限码。

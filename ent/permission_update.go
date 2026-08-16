@@ -49,6 +49,12 @@ func (_u *PermissionUpdate) AddParentID(v int64) *PermissionUpdate {
 	return _u
 }
 
+// ClearParentID clears the value of the "parent_id" field.
+func (_u *PermissionUpdate) ClearParentID() *PermissionUpdate {
+	_u.mutation.ClearParentID()
+	return _u
+}
+
 // SetName sets the "name" field.
 func (_u *PermissionUpdate) SetName(v string) *PermissionUpdate {
 	_u.mutation.SetName(v)
@@ -74,6 +80,12 @@ func (_u *PermissionUpdate) SetNillableCode(v *string) *PermissionUpdate {
 	if v != nil {
 		_u.SetCode(*v)
 	}
+	return _u
+}
+
+// ClearCode clears the value of the "code" field.
+func (_u *PermissionUpdate) ClearCode() *PermissionUpdate {
+	_u.mutation.ClearCode()
 	return _u
 }
 
@@ -291,11 +303,17 @@ func (_u *PermissionUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	if value, ok := _u.mutation.AddedParentID(); ok {
 		_spec.AddField(permission.FieldParentID, field.TypeInt64, value)
 	}
+	if _u.mutation.ParentIDCleared() {
+		_spec.ClearField(permission.FieldParentID, field.TypeInt64)
+	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(permission.FieldName, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Code(); ok {
 		_spec.SetField(permission.FieldCode, field.TypeString, value)
+	}
+	if _u.mutation.CodeCleared() {
+		_spec.ClearField(permission.FieldCode, field.TypeString)
 	}
 	if value, ok := _u.mutation.GetType(); ok {
 		_spec.SetField(permission.FieldType, field.TypeInt32, value)
@@ -371,6 +389,12 @@ func (_u *PermissionUpdateOne) AddParentID(v int64) *PermissionUpdateOne {
 	return _u
 }
 
+// ClearParentID clears the value of the "parent_id" field.
+func (_u *PermissionUpdateOne) ClearParentID() *PermissionUpdateOne {
+	_u.mutation.ClearParentID()
+	return _u
+}
+
 // SetName sets the "name" field.
 func (_u *PermissionUpdateOne) SetName(v string) *PermissionUpdateOne {
 	_u.mutation.SetName(v)
@@ -396,6 +420,12 @@ func (_u *PermissionUpdateOne) SetNillableCode(v *string) *PermissionUpdateOne {
 	if v != nil {
 		_u.SetCode(*v)
 	}
+	return _u
+}
+
+// ClearCode clears the value of the "code" field.
+func (_u *PermissionUpdateOne) ClearCode() *PermissionUpdateOne {
+	_u.mutation.ClearCode()
 	return _u
 }
 
@@ -643,11 +673,17 @@ func (_u *PermissionUpdateOne) sqlSave(ctx context.Context) (_node *Permission, 
 	if value, ok := _u.mutation.AddedParentID(); ok {
 		_spec.AddField(permission.FieldParentID, field.TypeInt64, value)
 	}
+	if _u.mutation.ParentIDCleared() {
+		_spec.ClearField(permission.FieldParentID, field.TypeInt64)
+	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(permission.FieldName, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Code(); ok {
 		_spec.SetField(permission.FieldCode, field.TypeString, value)
+	}
+	if _u.mutation.CodeCleared() {
+		_spec.ClearField(permission.FieldCode, field.TypeString)
 	}
 	if value, ok := _u.mutation.GetType(); ok {
 		_spec.SetField(permission.FieldType, field.TypeInt32, value)

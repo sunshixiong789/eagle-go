@@ -16,17 +16,20 @@ service PermissionService {
       body: "*"
     };
     option (eagle.annotations.v1.perm) = "system:permission:add";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
   rpc GetPermission(GetPermissionRequest) returns (GetPermissionResponse) {
     option (google.api.http) = {get: "/v1/system/permissions/{id}"};
     option (eagle.annotations.v1.perm) = "system:permission:query";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
   // 平铺返回全部权限，树结构由调用方按 parent_id 拼装
   rpc ListPermissions(ListPermissionsRequest) returns (ListPermissionsResponse) {
     option (google.api.http) = {get: "/v1/system/permissions"};
     option (eagle.annotations.v1.perm) = "system:permission:list";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
   rpc UpdatePermission(UpdatePermissionRequest) returns (UpdatePermissionResponse) {
@@ -35,17 +38,20 @@ service PermissionService {
       body: "*"
     };
     option (eagle.annotations.v1.perm) = "system:permission:edit";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
   rpc DeletePermission(DeletePermissionRequest) returns (DeletePermissionResponse) {
     option (google.api.http) = {delete: "/v1/system/permissions/{id}"};
     option (eagle.annotations.v1.perm) = "system:permission:remove";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
   // 当前登录用户的菜单树与权限码，供前端渲染路由和按钮级控制。
   // 只需登录，无需额外权限码——查的就是自己的东西。
   rpc GetMyMenus(GetMyMenusRequest) returns (GetMyMenusResponse) {
     option (google.api.http) = {get: "/v1/system/permissions/me/menus"};
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_AUTHENTICATED;
   }
 }
 
@@ -65,6 +71,8 @@ message Permission {
   int32 status = 11;
   google.protobuf.Timestamp created_at = 12;
   google.protobuf.Timestamp updated_at = 13;
+  // 整棵权限树的版本，用于管理端乐观并发控制。
+  int64 revision = 14;
 }
 
 message CreatePermissionRequest {
@@ -155,6 +163,7 @@ message UpdatePermissionRequest {
       1
     ]
   }];
+  optional int64 expected_revision = 12 [(buf.validate.field).int64.gt = 0];
 }
 
 message UpdatePermissionResponse {
@@ -163,6 +172,7 @@ message UpdatePermissionResponse {
 
 message DeletePermissionRequest {
   int64 id = 1 [(buf.validate.field).int64.gt = 0];
+  optional int64 expected_revision = 2 [(buf.validate.field).int64.gt = 0];
 }
 
 message DeletePermissionResponse {}

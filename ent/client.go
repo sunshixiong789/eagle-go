@@ -18,6 +18,11 @@ import (
 	"github.com/eagle-go/eagle/ent/dictdata"
 	"github.com/eagle-go/eagle/ent/dicttype"
 	"github.com/eagle-go/eagle/ent/permission"
+	"github.com/eagle-go/eagle/ent/permissiondefinition"
+	"github.com/eagle-go/eagle/ent/permissiontreestate"
+	"github.com/eagle-go/eagle/ent/policyaudit"
+	"github.com/eagle-go/eagle/ent/policyoutbox"
+	"github.com/eagle-go/eagle/ent/policystate"
 	"github.com/eagle-go/eagle/ent/userprofile"
 
 	stdsql "database/sql"
@@ -36,6 +41,16 @@ type Client struct {
 	DictType *DictTypeClient
 	// Permission is the client for interacting with the Permission builders.
 	Permission *PermissionClient
+	// PermissionDefinition is the client for interacting with the PermissionDefinition builders.
+	PermissionDefinition *PermissionDefinitionClient
+	// PermissionTreeState is the client for interacting with the PermissionTreeState builders.
+	PermissionTreeState *PermissionTreeStateClient
+	// PolicyAudit is the client for interacting with the PolicyAudit builders.
+	PolicyAudit *PolicyAuditClient
+	// PolicyOutbox is the client for interacting with the PolicyOutbox builders.
+	PolicyOutbox *PolicyOutboxClient
+	// PolicyState is the client for interacting with the PolicyState builders.
+	PolicyState *PolicyStateClient
 	// UserProfile is the client for interacting with the UserProfile builders.
 	UserProfile *UserProfileClient
 }
@@ -53,6 +68,11 @@ func (c *Client) init() {
 	c.DictData = NewDictDataClient(c.config)
 	c.DictType = NewDictTypeClient(c.config)
 	c.Permission = NewPermissionClient(c.config)
+	c.PermissionDefinition = NewPermissionDefinitionClient(c.config)
+	c.PermissionTreeState = NewPermissionTreeStateClient(c.config)
+	c.PolicyAudit = NewPolicyAuditClient(c.config)
+	c.PolicyOutbox = NewPolicyOutboxClient(c.config)
+	c.PolicyState = NewPolicyStateClient(c.config)
 	c.UserProfile = NewUserProfileClient(c.config)
 }
 
@@ -144,13 +164,18 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:         ctx,
-		config:      cfg,
-		CasbinRule:  NewCasbinRuleClient(cfg),
-		DictData:    NewDictDataClient(cfg),
-		DictType:    NewDictTypeClient(cfg),
-		Permission:  NewPermissionClient(cfg),
-		UserProfile: NewUserProfileClient(cfg),
+		ctx:                  ctx,
+		config:               cfg,
+		CasbinRule:           NewCasbinRuleClient(cfg),
+		DictData:             NewDictDataClient(cfg),
+		DictType:             NewDictTypeClient(cfg),
+		Permission:           NewPermissionClient(cfg),
+		PermissionDefinition: NewPermissionDefinitionClient(cfg),
+		PermissionTreeState:  NewPermissionTreeStateClient(cfg),
+		PolicyAudit:          NewPolicyAuditClient(cfg),
+		PolicyOutbox:         NewPolicyOutboxClient(cfg),
+		PolicyState:          NewPolicyStateClient(cfg),
+		UserProfile:          NewUserProfileClient(cfg),
 	}, nil
 }
 
@@ -168,13 +193,18 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:         ctx,
-		config:      cfg,
-		CasbinRule:  NewCasbinRuleClient(cfg),
-		DictData:    NewDictDataClient(cfg),
-		DictType:    NewDictTypeClient(cfg),
-		Permission:  NewPermissionClient(cfg),
-		UserProfile: NewUserProfileClient(cfg),
+		ctx:                  ctx,
+		config:               cfg,
+		CasbinRule:           NewCasbinRuleClient(cfg),
+		DictData:             NewDictDataClient(cfg),
+		DictType:             NewDictTypeClient(cfg),
+		Permission:           NewPermissionClient(cfg),
+		PermissionDefinition: NewPermissionDefinitionClient(cfg),
+		PermissionTreeState:  NewPermissionTreeStateClient(cfg),
+		PolicyAudit:          NewPolicyAuditClient(cfg),
+		PolicyOutbox:         NewPolicyOutboxClient(cfg),
+		PolicyState:          NewPolicyStateClient(cfg),
+		UserProfile:          NewUserProfileClient(cfg),
 	}, nil
 }
 
@@ -203,21 +233,25 @@ func (c *Client) Close() error {
 // Use adds the mutation hooks to all the entity clients.
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
-	c.CasbinRule.Use(hooks...)
-	c.DictData.Use(hooks...)
-	c.DictType.Use(hooks...)
-	c.Permission.Use(hooks...)
-	c.UserProfile.Use(hooks...)
+	for _, n := range []interface{ Use(...Hook) }{
+		c.CasbinRule, c.DictData, c.DictType, c.Permission, c.PermissionDefinition,
+		c.PermissionTreeState, c.PolicyAudit, c.PolicyOutbox, c.PolicyState,
+		c.UserProfile,
+	} {
+		n.Use(hooks...)
+	}
 }
 
 // Intercept adds the query interceptors to all the entity clients.
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
-	c.CasbinRule.Intercept(interceptors...)
-	c.DictData.Intercept(interceptors...)
-	c.DictType.Intercept(interceptors...)
-	c.Permission.Intercept(interceptors...)
-	c.UserProfile.Intercept(interceptors...)
+	for _, n := range []interface{ Intercept(...Interceptor) }{
+		c.CasbinRule, c.DictData, c.DictType, c.Permission, c.PermissionDefinition,
+		c.PermissionTreeState, c.PolicyAudit, c.PolicyOutbox, c.PolicyState,
+		c.UserProfile,
+	} {
+		n.Intercept(interceptors...)
+	}
 }
 
 // Mutate implements the ent.Mutator interface.
@@ -231,6 +265,16 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.DictType.mutate(ctx, m)
 	case *PermissionMutation:
 		return c.Permission.mutate(ctx, m)
+	case *PermissionDefinitionMutation:
+		return c.PermissionDefinition.mutate(ctx, m)
+	case *PermissionTreeStateMutation:
+		return c.PermissionTreeState.mutate(ctx, m)
+	case *PolicyAuditMutation:
+		return c.PolicyAudit.mutate(ctx, m)
+	case *PolicyOutboxMutation:
+		return c.PolicyOutbox.mutate(ctx, m)
+	case *PolicyStateMutation:
+		return c.PolicyState.mutate(ctx, m)
 	case *UserProfileMutation:
 		return c.UserProfile.mutate(ctx, m)
 	default:
@@ -770,6 +814,671 @@ func (c *PermissionClient) mutate(ctx context.Context, m *PermissionMutation) (V
 	}
 }
 
+// PermissionDefinitionClient is a client for the PermissionDefinition schema.
+type PermissionDefinitionClient struct {
+	config
+}
+
+// NewPermissionDefinitionClient returns a client for the PermissionDefinition from the given config.
+func NewPermissionDefinitionClient(c config) *PermissionDefinitionClient {
+	return &PermissionDefinitionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `permissiondefinition.Hooks(f(g(h())))`.
+func (c *PermissionDefinitionClient) Use(hooks ...Hook) {
+	c.hooks.PermissionDefinition = append(c.hooks.PermissionDefinition, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `permissiondefinition.Intercept(f(g(h())))`.
+func (c *PermissionDefinitionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.PermissionDefinition = append(c.inters.PermissionDefinition, interceptors...)
+}
+
+// Create returns a builder for creating a PermissionDefinition entity.
+func (c *PermissionDefinitionClient) Create() *PermissionDefinitionCreate {
+	mutation := newPermissionDefinitionMutation(c.config, OpCreate)
+	return &PermissionDefinitionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of PermissionDefinition entities.
+func (c *PermissionDefinitionClient) CreateBulk(builders ...*PermissionDefinitionCreate) *PermissionDefinitionCreateBulk {
+	return &PermissionDefinitionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *PermissionDefinitionClient) MapCreateBulk(slice any, setFunc func(*PermissionDefinitionCreate, int)) *PermissionDefinitionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &PermissionDefinitionCreateBulk{err: fmt.Errorf("calling to PermissionDefinitionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*PermissionDefinitionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &PermissionDefinitionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for PermissionDefinition.
+func (c *PermissionDefinitionClient) Update() *PermissionDefinitionUpdate {
+	mutation := newPermissionDefinitionMutation(c.config, OpUpdate)
+	return &PermissionDefinitionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *PermissionDefinitionClient) UpdateOne(_m *PermissionDefinition) *PermissionDefinitionUpdateOne {
+	mutation := newPermissionDefinitionMutation(c.config, OpUpdateOne, withPermissionDefinition(_m))
+	return &PermissionDefinitionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *PermissionDefinitionClient) UpdateOneID(id int64) *PermissionDefinitionUpdateOne {
+	mutation := newPermissionDefinitionMutation(c.config, OpUpdateOne, withPermissionDefinitionID(id))
+	return &PermissionDefinitionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for PermissionDefinition.
+func (c *PermissionDefinitionClient) Delete() *PermissionDefinitionDelete {
+	mutation := newPermissionDefinitionMutation(c.config, OpDelete)
+	return &PermissionDefinitionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *PermissionDefinitionClient) DeleteOne(_m *PermissionDefinition) *PermissionDefinitionDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *PermissionDefinitionClient) DeleteOneID(id int64) *PermissionDefinitionDeleteOne {
+	builder := c.Delete().Where(permissiondefinition.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &PermissionDefinitionDeleteOne{builder}
+}
+
+// Query returns a query builder for PermissionDefinition.
+func (c *PermissionDefinitionClient) Query() *PermissionDefinitionQuery {
+	return &PermissionDefinitionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypePermissionDefinition},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a PermissionDefinition entity by its id.
+func (c *PermissionDefinitionClient) Get(ctx context.Context, id int64) (*PermissionDefinition, error) {
+	return c.Query().Where(permissiondefinition.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *PermissionDefinitionClient) GetX(ctx context.Context, id int64) *PermissionDefinition {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *PermissionDefinitionClient) Hooks() []Hook {
+	return c.hooks.PermissionDefinition
+}
+
+// Interceptors returns the client interceptors.
+func (c *PermissionDefinitionClient) Interceptors() []Interceptor {
+	return c.inters.PermissionDefinition
+}
+
+func (c *PermissionDefinitionClient) mutate(ctx context.Context, m *PermissionDefinitionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&PermissionDefinitionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&PermissionDefinitionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&PermissionDefinitionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&PermissionDefinitionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown PermissionDefinition mutation op: %q", m.Op())
+	}
+}
+
+// PermissionTreeStateClient is a client for the PermissionTreeState schema.
+type PermissionTreeStateClient struct {
+	config
+}
+
+// NewPermissionTreeStateClient returns a client for the PermissionTreeState from the given config.
+func NewPermissionTreeStateClient(c config) *PermissionTreeStateClient {
+	return &PermissionTreeStateClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `permissiontreestate.Hooks(f(g(h())))`.
+func (c *PermissionTreeStateClient) Use(hooks ...Hook) {
+	c.hooks.PermissionTreeState = append(c.hooks.PermissionTreeState, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `permissiontreestate.Intercept(f(g(h())))`.
+func (c *PermissionTreeStateClient) Intercept(interceptors ...Interceptor) {
+	c.inters.PermissionTreeState = append(c.inters.PermissionTreeState, interceptors...)
+}
+
+// Create returns a builder for creating a PermissionTreeState entity.
+func (c *PermissionTreeStateClient) Create() *PermissionTreeStateCreate {
+	mutation := newPermissionTreeStateMutation(c.config, OpCreate)
+	return &PermissionTreeStateCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of PermissionTreeState entities.
+func (c *PermissionTreeStateClient) CreateBulk(builders ...*PermissionTreeStateCreate) *PermissionTreeStateCreateBulk {
+	return &PermissionTreeStateCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *PermissionTreeStateClient) MapCreateBulk(slice any, setFunc func(*PermissionTreeStateCreate, int)) *PermissionTreeStateCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &PermissionTreeStateCreateBulk{err: fmt.Errorf("calling to PermissionTreeStateClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*PermissionTreeStateCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &PermissionTreeStateCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for PermissionTreeState.
+func (c *PermissionTreeStateClient) Update() *PermissionTreeStateUpdate {
+	mutation := newPermissionTreeStateMutation(c.config, OpUpdate)
+	return &PermissionTreeStateUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *PermissionTreeStateClient) UpdateOne(_m *PermissionTreeState) *PermissionTreeStateUpdateOne {
+	mutation := newPermissionTreeStateMutation(c.config, OpUpdateOne, withPermissionTreeState(_m))
+	return &PermissionTreeStateUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *PermissionTreeStateClient) UpdateOneID(id int64) *PermissionTreeStateUpdateOne {
+	mutation := newPermissionTreeStateMutation(c.config, OpUpdateOne, withPermissionTreeStateID(id))
+	return &PermissionTreeStateUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for PermissionTreeState.
+func (c *PermissionTreeStateClient) Delete() *PermissionTreeStateDelete {
+	mutation := newPermissionTreeStateMutation(c.config, OpDelete)
+	return &PermissionTreeStateDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *PermissionTreeStateClient) DeleteOne(_m *PermissionTreeState) *PermissionTreeStateDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *PermissionTreeStateClient) DeleteOneID(id int64) *PermissionTreeStateDeleteOne {
+	builder := c.Delete().Where(permissiontreestate.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &PermissionTreeStateDeleteOne{builder}
+}
+
+// Query returns a query builder for PermissionTreeState.
+func (c *PermissionTreeStateClient) Query() *PermissionTreeStateQuery {
+	return &PermissionTreeStateQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypePermissionTreeState},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a PermissionTreeState entity by its id.
+func (c *PermissionTreeStateClient) Get(ctx context.Context, id int64) (*PermissionTreeState, error) {
+	return c.Query().Where(permissiontreestate.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *PermissionTreeStateClient) GetX(ctx context.Context, id int64) *PermissionTreeState {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *PermissionTreeStateClient) Hooks() []Hook {
+	return c.hooks.PermissionTreeState
+}
+
+// Interceptors returns the client interceptors.
+func (c *PermissionTreeStateClient) Interceptors() []Interceptor {
+	return c.inters.PermissionTreeState
+}
+
+func (c *PermissionTreeStateClient) mutate(ctx context.Context, m *PermissionTreeStateMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&PermissionTreeStateCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&PermissionTreeStateUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&PermissionTreeStateUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&PermissionTreeStateDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown PermissionTreeState mutation op: %q", m.Op())
+	}
+}
+
+// PolicyAuditClient is a client for the PolicyAudit schema.
+type PolicyAuditClient struct {
+	config
+}
+
+// NewPolicyAuditClient returns a client for the PolicyAudit from the given config.
+func NewPolicyAuditClient(c config) *PolicyAuditClient {
+	return &PolicyAuditClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `policyaudit.Hooks(f(g(h())))`.
+func (c *PolicyAuditClient) Use(hooks ...Hook) {
+	c.hooks.PolicyAudit = append(c.hooks.PolicyAudit, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `policyaudit.Intercept(f(g(h())))`.
+func (c *PolicyAuditClient) Intercept(interceptors ...Interceptor) {
+	c.inters.PolicyAudit = append(c.inters.PolicyAudit, interceptors...)
+}
+
+// Create returns a builder for creating a PolicyAudit entity.
+func (c *PolicyAuditClient) Create() *PolicyAuditCreate {
+	mutation := newPolicyAuditMutation(c.config, OpCreate)
+	return &PolicyAuditCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of PolicyAudit entities.
+func (c *PolicyAuditClient) CreateBulk(builders ...*PolicyAuditCreate) *PolicyAuditCreateBulk {
+	return &PolicyAuditCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *PolicyAuditClient) MapCreateBulk(slice any, setFunc func(*PolicyAuditCreate, int)) *PolicyAuditCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &PolicyAuditCreateBulk{err: fmt.Errorf("calling to PolicyAuditClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*PolicyAuditCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &PolicyAuditCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for PolicyAudit.
+func (c *PolicyAuditClient) Update() *PolicyAuditUpdate {
+	mutation := newPolicyAuditMutation(c.config, OpUpdate)
+	return &PolicyAuditUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *PolicyAuditClient) UpdateOne(_m *PolicyAudit) *PolicyAuditUpdateOne {
+	mutation := newPolicyAuditMutation(c.config, OpUpdateOne, withPolicyAudit(_m))
+	return &PolicyAuditUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *PolicyAuditClient) UpdateOneID(id int64) *PolicyAuditUpdateOne {
+	mutation := newPolicyAuditMutation(c.config, OpUpdateOne, withPolicyAuditID(id))
+	return &PolicyAuditUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for PolicyAudit.
+func (c *PolicyAuditClient) Delete() *PolicyAuditDelete {
+	mutation := newPolicyAuditMutation(c.config, OpDelete)
+	return &PolicyAuditDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *PolicyAuditClient) DeleteOne(_m *PolicyAudit) *PolicyAuditDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *PolicyAuditClient) DeleteOneID(id int64) *PolicyAuditDeleteOne {
+	builder := c.Delete().Where(policyaudit.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &PolicyAuditDeleteOne{builder}
+}
+
+// Query returns a query builder for PolicyAudit.
+func (c *PolicyAuditClient) Query() *PolicyAuditQuery {
+	return &PolicyAuditQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypePolicyAudit},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a PolicyAudit entity by its id.
+func (c *PolicyAuditClient) Get(ctx context.Context, id int64) (*PolicyAudit, error) {
+	return c.Query().Where(policyaudit.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *PolicyAuditClient) GetX(ctx context.Context, id int64) *PolicyAudit {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *PolicyAuditClient) Hooks() []Hook {
+	return c.hooks.PolicyAudit
+}
+
+// Interceptors returns the client interceptors.
+func (c *PolicyAuditClient) Interceptors() []Interceptor {
+	return c.inters.PolicyAudit
+}
+
+func (c *PolicyAuditClient) mutate(ctx context.Context, m *PolicyAuditMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&PolicyAuditCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&PolicyAuditUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&PolicyAuditUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&PolicyAuditDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown PolicyAudit mutation op: %q", m.Op())
+	}
+}
+
+// PolicyOutboxClient is a client for the PolicyOutbox schema.
+type PolicyOutboxClient struct {
+	config
+}
+
+// NewPolicyOutboxClient returns a client for the PolicyOutbox from the given config.
+func NewPolicyOutboxClient(c config) *PolicyOutboxClient {
+	return &PolicyOutboxClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `policyoutbox.Hooks(f(g(h())))`.
+func (c *PolicyOutboxClient) Use(hooks ...Hook) {
+	c.hooks.PolicyOutbox = append(c.hooks.PolicyOutbox, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `policyoutbox.Intercept(f(g(h())))`.
+func (c *PolicyOutboxClient) Intercept(interceptors ...Interceptor) {
+	c.inters.PolicyOutbox = append(c.inters.PolicyOutbox, interceptors...)
+}
+
+// Create returns a builder for creating a PolicyOutbox entity.
+func (c *PolicyOutboxClient) Create() *PolicyOutboxCreate {
+	mutation := newPolicyOutboxMutation(c.config, OpCreate)
+	return &PolicyOutboxCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of PolicyOutbox entities.
+func (c *PolicyOutboxClient) CreateBulk(builders ...*PolicyOutboxCreate) *PolicyOutboxCreateBulk {
+	return &PolicyOutboxCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *PolicyOutboxClient) MapCreateBulk(slice any, setFunc func(*PolicyOutboxCreate, int)) *PolicyOutboxCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &PolicyOutboxCreateBulk{err: fmt.Errorf("calling to PolicyOutboxClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*PolicyOutboxCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &PolicyOutboxCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for PolicyOutbox.
+func (c *PolicyOutboxClient) Update() *PolicyOutboxUpdate {
+	mutation := newPolicyOutboxMutation(c.config, OpUpdate)
+	return &PolicyOutboxUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *PolicyOutboxClient) UpdateOne(_m *PolicyOutbox) *PolicyOutboxUpdateOne {
+	mutation := newPolicyOutboxMutation(c.config, OpUpdateOne, withPolicyOutbox(_m))
+	return &PolicyOutboxUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *PolicyOutboxClient) UpdateOneID(id int64) *PolicyOutboxUpdateOne {
+	mutation := newPolicyOutboxMutation(c.config, OpUpdateOne, withPolicyOutboxID(id))
+	return &PolicyOutboxUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for PolicyOutbox.
+func (c *PolicyOutboxClient) Delete() *PolicyOutboxDelete {
+	mutation := newPolicyOutboxMutation(c.config, OpDelete)
+	return &PolicyOutboxDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *PolicyOutboxClient) DeleteOne(_m *PolicyOutbox) *PolicyOutboxDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *PolicyOutboxClient) DeleteOneID(id int64) *PolicyOutboxDeleteOne {
+	builder := c.Delete().Where(policyoutbox.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &PolicyOutboxDeleteOne{builder}
+}
+
+// Query returns a query builder for PolicyOutbox.
+func (c *PolicyOutboxClient) Query() *PolicyOutboxQuery {
+	return &PolicyOutboxQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypePolicyOutbox},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a PolicyOutbox entity by its id.
+func (c *PolicyOutboxClient) Get(ctx context.Context, id int64) (*PolicyOutbox, error) {
+	return c.Query().Where(policyoutbox.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *PolicyOutboxClient) GetX(ctx context.Context, id int64) *PolicyOutbox {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *PolicyOutboxClient) Hooks() []Hook {
+	return c.hooks.PolicyOutbox
+}
+
+// Interceptors returns the client interceptors.
+func (c *PolicyOutboxClient) Interceptors() []Interceptor {
+	return c.inters.PolicyOutbox
+}
+
+func (c *PolicyOutboxClient) mutate(ctx context.Context, m *PolicyOutboxMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&PolicyOutboxCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&PolicyOutboxUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&PolicyOutboxUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&PolicyOutboxDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown PolicyOutbox mutation op: %q", m.Op())
+	}
+}
+
+// PolicyStateClient is a client for the PolicyState schema.
+type PolicyStateClient struct {
+	config
+}
+
+// NewPolicyStateClient returns a client for the PolicyState from the given config.
+func NewPolicyStateClient(c config) *PolicyStateClient {
+	return &PolicyStateClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `policystate.Hooks(f(g(h())))`.
+func (c *PolicyStateClient) Use(hooks ...Hook) {
+	c.hooks.PolicyState = append(c.hooks.PolicyState, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `policystate.Intercept(f(g(h())))`.
+func (c *PolicyStateClient) Intercept(interceptors ...Interceptor) {
+	c.inters.PolicyState = append(c.inters.PolicyState, interceptors...)
+}
+
+// Create returns a builder for creating a PolicyState entity.
+func (c *PolicyStateClient) Create() *PolicyStateCreate {
+	mutation := newPolicyStateMutation(c.config, OpCreate)
+	return &PolicyStateCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of PolicyState entities.
+func (c *PolicyStateClient) CreateBulk(builders ...*PolicyStateCreate) *PolicyStateCreateBulk {
+	return &PolicyStateCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *PolicyStateClient) MapCreateBulk(slice any, setFunc func(*PolicyStateCreate, int)) *PolicyStateCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &PolicyStateCreateBulk{err: fmt.Errorf("calling to PolicyStateClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*PolicyStateCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &PolicyStateCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for PolicyState.
+func (c *PolicyStateClient) Update() *PolicyStateUpdate {
+	mutation := newPolicyStateMutation(c.config, OpUpdate)
+	return &PolicyStateUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *PolicyStateClient) UpdateOne(_m *PolicyState) *PolicyStateUpdateOne {
+	mutation := newPolicyStateMutation(c.config, OpUpdateOne, withPolicyState(_m))
+	return &PolicyStateUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *PolicyStateClient) UpdateOneID(id int64) *PolicyStateUpdateOne {
+	mutation := newPolicyStateMutation(c.config, OpUpdateOne, withPolicyStateID(id))
+	return &PolicyStateUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for PolicyState.
+func (c *PolicyStateClient) Delete() *PolicyStateDelete {
+	mutation := newPolicyStateMutation(c.config, OpDelete)
+	return &PolicyStateDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *PolicyStateClient) DeleteOne(_m *PolicyState) *PolicyStateDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *PolicyStateClient) DeleteOneID(id int64) *PolicyStateDeleteOne {
+	builder := c.Delete().Where(policystate.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &PolicyStateDeleteOne{builder}
+}
+
+// Query returns a query builder for PolicyState.
+func (c *PolicyStateClient) Query() *PolicyStateQuery {
+	return &PolicyStateQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypePolicyState},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a PolicyState entity by its id.
+func (c *PolicyStateClient) Get(ctx context.Context, id int64) (*PolicyState, error) {
+	return c.Query().Where(policystate.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *PolicyStateClient) GetX(ctx context.Context, id int64) *PolicyState {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *PolicyStateClient) Hooks() []Hook {
+	return c.hooks.PolicyState
+}
+
+// Interceptors returns the client interceptors.
+func (c *PolicyStateClient) Interceptors() []Interceptor {
+	return c.inters.PolicyState
+}
+
+func (c *PolicyStateClient) mutate(ctx context.Context, m *PolicyStateMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&PolicyStateCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&PolicyStateUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&PolicyStateUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&PolicyStateDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown PolicyState mutation op: %q", m.Op())
+	}
+}
+
 // UserProfileClient is a client for the UserProfile schema.
 type UserProfileClient struct {
 	config
@@ -906,10 +1615,14 @@ func (c *UserProfileClient) mutate(ctx context.Context, m *UserProfileMutation) 
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		CasbinRule, DictData, DictType, Permission, UserProfile []ent.Hook
+		CasbinRule, DictData, DictType, Permission, PermissionDefinition,
+		PermissionTreeState, PolicyAudit, PolicyOutbox, PolicyState,
+		UserProfile []ent.Hook
 	}
 	inters struct {
-		CasbinRule, DictData, DictType, Permission, UserProfile []ent.Interceptor
+		CasbinRule, DictData, DictType, Permission, PermissionDefinition,
+		PermissionTreeState, PolicyAudit, PolicyOutbox, PolicyState,
+		UserProfile []ent.Interceptor
 	}
 )
 
