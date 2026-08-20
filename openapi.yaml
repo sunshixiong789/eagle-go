@@ -65,7 +65,7 @@ paths:
                 - DictService
             description: |-
                 按类型取字典项，供前端渲染下拉框。任何登录用户都要用，
-                 所以不挂权限码，只校验登录态；结果走 Redis 缓存。
+                 所以不挂权限码，只校验登录态；结果直接读取权威数据库。
             operationId: DictService_GetDictDataByType
             parameters:
                 - name: dictType
@@ -740,7 +740,7 @@ components:
             properties:
                 role:
                     type: string
-                    description: 角色名，必须与 Keycloak realm/client role 一致
+                    description: 带来源命名空间的角色键：realm:<role> 或 client:<client-id>:<role>
                 permissionCodes:
                     type: array
                     items:

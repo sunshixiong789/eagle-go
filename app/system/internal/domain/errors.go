@@ -1,7 +1,7 @@
 // Package domain 是纯领域层：实体（含不变量）、值对象、领域服务、
 // 仓储接口与领域事件。
 //
-// 本包不 import 任何基础设施（ent / redis / casbin / protobuf），
+// 本包不 import 任何基础设施（Ent / Casbin / protobuf），
 // 也不 import 应用层。依赖方向自外向内单向流动：
 //
 //	server -> service -> biz(用例) -> domain

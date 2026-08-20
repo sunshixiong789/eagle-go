@@ -12,7 +12,6 @@ import (
 	"github.com/eagle-go/eagle/ent/permissiondefinition"
 	"github.com/eagle-go/eagle/ent/policyaudit"
 	"github.com/eagle-go/eagle/pkg/authz"
-	"github.com/eagle-go/eagle/pkg/healthx"
 )
 
 func skipIfShort(t *testing.T) {
@@ -255,13 +254,12 @@ func TestPermissionRepoListFilters(t *testing.T) {
 func newTestPolicyStore(t *testing.T) domain.PolicyRepo {
 	t.Helper()
 
-	enforcer, err := NewEnforcer(testData.client)
+	store := NewPolicyStore(testData.client)
+	enforcer, err := NewEnforcer(store)
 	if err != nil {
 		t.Fatalf("NewEnforcer: %v", err)
 	}
-	// 本用例只关心单副本内的策略仓储行为，不需要装配广播器；
-	// nil watcher 是合法值（Notify 对 nil receiver 安全）。
-	return NewPolicyRepo(enforcer, testData.client, nil)
+	return NewPolicyRepo(enforcer, store)
 }
 
 // mustRoles 构造角色值对象切片。
@@ -269,6 +267,9 @@ func mustRoles(t *testing.T, names ...string) []domain.Role {
 	t.Helper()
 	out := make([]domain.Role, 0, len(names))
 	for _, n := range names {
+		if !strings.Contains(n, ":") {
+			n = "realm:" + n
+		}
 		r, err := domain.NewRole(n)
 		if err != nil {
 			t.Fatalf("构造角色 %q: %v", n, err)
@@ -281,6 +282,9 @@ func mustRoles(t *testing.T, names ...string) []domain.Role {
 // mustBinding 构造角色权限绑定。
 func mustBinding(t *testing.T, role string, codes ...string) *domain.RoleBinding {
 	t.Helper()
+	if !strings.Contains(role, ":") {
+		role = "realm:" + role
+	}
 	r, err := domain.NewRole(role)
 	if err != nil {
 		t.Fatalf("构造角色: %v", err)
@@ -358,8 +362,8 @@ func TestPolicyStoreRejectsRoleInheritanceCycle(t *testing.T) {
 	skipIfShort(t)
 	ctx := context.Background()
 	store := newTestPolicyStore(t)
-	a, _ := domain.NewRole("cycle-a")
-	b, _ := domain.NewRole("cycle-b")
+	a, _ := domain.NewRole("realm:cycle-a")
+	b, _ := domain.NewRole("realm:cycle-b")
 	first, _ := domain.NewRoleInheritance(a, b)
 	if _, err := store.SaveInheritance(ctx, first, nil); err != nil {
 		t.Fatalf("SaveInheritance(a->b): %v", err)
@@ -403,6 +407,45 @@ func TestPolicyStoreSetRolePermissionsPersists(t *testing.T) {
 	}
 }
 
+// 管理端读取必须来自数据库的同一版本快照，不能把旧内存策略配上新版本号。
+// 否则另一副本写入后，本副本返回的 revision 看似最新，后续更新却会覆盖新策略。
+func TestPolicyRepoFindBindingReadsCurrentDatabaseSnapshot(t *testing.T) {
+	skipIfShort(t)
+
+	ctx := context.Background()
+	store := NewPolicyStore(testData.client)
+	enforcer, err := NewEnforcer(store)
+	if err != nil {
+		t.Fatalf("NewEnforcer: %v", err)
+	}
+	repo := NewPolicyRepo(enforcer, store)
+	role, _ := domain.NewRole("realm:test-snapshot-role")
+	t.Cleanup(func() {
+		_, _ = testData.client.CasbinRule.Delete().Where(casbinrule.V0EQ(role.String())).Exec(ctx)
+	})
+
+	version, err := store.ReplaceRolePermissions(
+		ctx, role.String(), []string{"system:dict:list"}, nil, policyMutationMeta{},
+	)
+	if err != nil {
+		t.Fatalf("external ReplaceRolePermissions: %v", err)
+	}
+	if enforcer.LoadedPolicyVersion() == version {
+		t.Fatal("test requires an enforcer that has not reloaded the external write")
+	}
+
+	got, err := repo.FindBinding(ctx, role)
+	if err != nil {
+		t.Fatalf("FindBinding: %v", err)
+	}
+	if got.Revision() != version {
+		t.Fatalf("revision = %d, want database version %d", got.Revision(), version)
+	}
+	if !slices.Equal(got.CodeStrings(), []string{"system:dict:list"}) {
+		t.Fatalf("permissions = %v, want current database snapshot", got.CodeStrings())
+	}
+}
+
 // 全量覆盖语义：收回权限后旧策略不得残留。
 func TestPolicyStoreSetRolePermissionsReplaces(t *testing.T) {
 	skipIfShort(t)
@@ -441,22 +484,22 @@ func TestPolicyStoreReplaceIsAtomicOnInsertFailure(t *testing.T) {
 	skipIfShort(t)
 
 	ctx := context.Background()
-	adapter := authz.NewEntAdapter(testData.client)
+	store := NewPolicyStore(testData.client)
 	const role = "test-atomic-role"
 
-	if _, err := adapter.ReplaceRolePermissions(ctx, role, []string{"system:dict:query"}, authz.PolicyMutationMeta{}); err != nil {
+	if _, err := store.ReplaceRolePermissions(ctx, role, []string{"system:dict:query"}, nil, policyMutationMeta{}); err != nil {
 		t.Fatalf("seed role permissions: %v", err)
 	}
-	versionBefore, err := adapter.PolicyVersion(ctx)
+	versionBefore, err := store.PolicyVersion(ctx)
 	if err != nil {
 		t.Fatalf("PolicyVersion: %v", err)
 	}
 
 	// Casbin v1 最大 128 字节，强制让批量插入在删除之后失败。
-	if _, err := adapter.ReplaceRolePermissions(ctx, role, []string{strings.Repeat("x", 129)}, authz.PolicyMutationMeta{}); err == nil {
+	if _, err := store.ReplaceRolePermissions(ctx, role, []string{strings.Repeat("x", 129)}, nil, policyMutationMeta{}); err == nil {
 		t.Fatal("expected replacement failure")
 	}
-	versionAfter, err := adapter.PolicyVersion(ctx)
+	versionAfter, err := store.PolicyVersion(ctx)
 	if err != nil {
 		t.Fatalf("PolicyVersion after failure: %v", err)
 	}
@@ -479,16 +522,16 @@ func TestPolicyMutationWritesVersionAndAudit(t *testing.T) {
 	skipIfShort(t)
 
 	ctx := context.Background()
-	adapter := authz.NewEntAdapter(testData.client)
-	before, err := adapter.PolicyVersion(ctx)
+	store := NewPolicyStore(testData.client)
+	before, err := store.PolicyVersion(ctx)
 	if err != nil {
 		t.Fatalf("PolicyVersion: %v", err)
 	}
-	version, err := adapter.ReplaceRolePermissions(ctx, "test-audit-role", []string{"system:dict:list"}, authz.PolicyMutationMeta{
-		ActorSubject:  "subject-1",
-		ActorClientID: "console",
-		RequestID:     "request-1",
-		TraceID:       "0123456789abcdef0123456789abcdef",
+	version, err := store.ReplaceRolePermissions(ctx, "test-audit-role", []string{"system:dict:list"}, nil, policyMutationMeta{
+		actorSubject:  "subject-1",
+		actorClientID: "console",
+		requestID:     "request-1",
+		traceID:       "0123456789abcdef0123456789abcdef",
 	})
 	if err != nil {
 		t.Fatalf("ReplaceRolePermissions: %v", err)
@@ -510,17 +553,13 @@ func TestAuthzPolicyReadyIgnoresVersionLag(t *testing.T) {
 	skipIfShort(t)
 
 	ctx := context.Background()
-	enforcer, err := NewEnforcer(testData.client)
+	store := NewPolicyStore(testData.client)
+	enforcer, err := NewEnforcer(store)
 	if err != nil {
 		t.Fatalf("NewEnforcer: %v", err)
 	}
-	adapter, ok := enforcer.EntAdapter()
-	if !ok {
-		t.Fatal("NewEnforcer did not expose EntAdapter")
-	}
-
 	loaded := enforcer.LoadedPolicyVersion()
-	version, err := adapter.ReplaceRolePermissions(ctx, "test-ready-lag-role", []string{"system:dict:query"}, authz.PolicyMutationMeta{})
+	version, err := store.ReplaceRolePermissions(ctx, "test-ready-lag-role", []string{"system:dict:query"}, nil, policyMutationMeta{})
 	if err != nil {
 		t.Fatalf("ReplaceRolePermissions: %v", err)
 	}
@@ -531,14 +570,13 @@ func TestAuthzPolicyReadyIgnoresVersionLag(t *testing.T) {
 		t.Fatalf("loaded version changed without reload: %d -> %d", loaded, got)
 	}
 
-	healthx.Default.MarkInitialized()
-	if err := healthx.Default.Ready(ctx); err != nil {
-		t.Fatalf("Ready with policy version lag = %v", err)
+	if err := checkAuthzPolicyReady(ctx, store, enforcer); err != nil {
+		t.Fatalf("policy readiness with version lag = %v", err)
 	}
 
 	canceled, cancel := context.WithCancel(ctx)
 	cancel()
-	if err := checkAuthzPolicyReady(canceled, adapter, enforcer); err == nil {
+	if err := checkAuthzPolicyReady(canceled, store, enforcer); err == nil {
 		t.Fatal("unable to read policy version should still fail readiness")
 	}
 }
@@ -547,15 +585,15 @@ func TestPolicyMutationRejectsStaleExpectedVersion(t *testing.T) {
 	skipIfShort(t)
 
 	ctx := context.Background()
-	adapter := authz.NewEntAdapter(testData.client)
+	store := NewPolicyStore(testData.client)
 	const role = "test-policy-concurrency-role"
-	initial, err := adapter.PolicyVersion(ctx)
+	initial, err := store.PolicyVersion(ctx)
 	if err != nil {
 		t.Fatalf("PolicyVersion: %v", err)
 	}
 
-	current, err := adapter.ReplaceRolePermissionsIfVersion(
-		ctx, role, []string{"system:dict:list"}, &initial, authz.PolicyMutationMeta{},
+	current, err := store.ReplaceRolePermissions(
+		ctx, role, []string{"system:dict:list"}, &initial, policyMutationMeta{},
 	)
 	if err != nil {
 		t.Fatalf("first versioned replacement: %v", err)
@@ -564,10 +602,10 @@ func TestPolicyMutationRejectsStaleExpectedVersion(t *testing.T) {
 		t.Fatalf("policy version did not advance: initial=%d current=%d", initial, current)
 	}
 
-	_, err = adapter.ReplaceRolePermissionsIfVersion(
-		ctx, role, []string{"system:dict:remove"}, &initial, authz.PolicyMutationMeta{},
+	_, err = store.ReplaceRolePermissions(
+		ctx, role, []string{"system:dict:remove"}, &initial, policyMutationMeta{},
 	)
-	if !errors.Is(err, authz.ErrConcurrentModification) {
+	if !errors.Is(err, domain.ErrConcurrentModification) {
 		t.Fatalf("stale replacement error = %v", err)
 	}
 
@@ -586,39 +624,39 @@ func TestRoleInheritanceLifecycle(t *testing.T) {
 	skipIfShort(t)
 
 	ctx := context.Background()
-	adapter := authz.NewEntAdapter(testData.client)
+	store := NewPolicyStore(testData.client)
 	const child = "test-lifecycle-child"
 	const parent = "test-lifecycle-parent"
-	version, err := adapter.AddRoleInheritanceAtomic(ctx, child, parent, authz.PolicyMutationMeta{})
+	version, err := store.AddRoleInheritance(ctx, child, parent, nil, policyMutationMeta{})
 	if err != nil {
 		t.Fatalf("add inheritance: %v", err)
 	}
 
-	pairs, err := adapter.RoleInheritances(ctx)
+	rules, _, err := store.RulesSnapshot(ctx, "g")
 	if err != nil {
 		t.Fatalf("list inheritances: %v", err)
 	}
 	found := false
-	for _, pair := range pairs {
-		found = found || pair.Child == child && pair.Parent == parent
+	for _, rule := range rules {
+		found = found || len(rule.Values) >= 2 && rule.Values[0] == child && rule.Values[1] == parent
 	}
 	if !found {
-		t.Fatalf("added inheritance not listed: %#v", pairs)
+		t.Fatalf("added inheritance not listed: %#v", rules)
 	}
 
-	next, err := adapter.DeleteRoleInheritanceIfVersion(ctx, child, parent, &version, authz.PolicyMutationMeta{})
+	next, err := store.DeleteRoleInheritance(ctx, child, parent, &version, policyMutationMeta{})
 	if err != nil {
 		t.Fatalf("delete inheritance: %v", err)
 	}
 	if next <= version {
 		t.Fatalf("delete did not advance version: before=%d after=%d", version, next)
 	}
-	pairs, err = adapter.RoleInheritances(ctx)
+	rules, _, err = store.RulesSnapshot(ctx, "g")
 	if err != nil {
 		t.Fatalf("list inheritances after delete: %v", err)
 	}
-	for _, pair := range pairs {
-		if pair.Child == child && pair.Parent == parent {
+	for _, rule := range rules {
+		if len(rule.Values) >= 2 && rule.Values[0] == child && rule.Values[1] == parent {
 			t.Fatal("deleted inheritance is still listed")
 		}
 	}
@@ -640,7 +678,7 @@ func TestPolicyStoreListBindings(t *testing.T) {
 		names = append(names, b.Role().String())
 	}
 
-	if !slices.Contains(names, "admin") || !slices.Contains(names, "user") {
+	if !slices.Contains(names, "realm:admin") || !slices.Contains(names, "realm:user") {
 		t.Errorf("应包含种子角色 admin 与 user, got %v", names)
 	}
 	if !slices.IsSorted(names) {
@@ -660,61 +698,24 @@ func codesCover(codes []domain.PermissionCode, target string) bool {
 
 // ── 字典 ──────────────────────────────────────────────────
 
-func TestDictRepoListByTypeIsCached(t *testing.T) {
+func TestDictRepoListByTypeReturnsEnabledItems(t *testing.T) {
 	skipIfShort(t)
-	flushCache(t)
 
 	ctx := context.Background()
 	repo := NewDictRepo(testData)
 
 	const dictType = "sys_common_status"
-	key := dictDataKey(dictType)
-
-	if n, _ := redisClient().Exists(ctx, key).Result(); n != 0 {
-		t.Fatal("查询前不应存在缓存")
-	}
-
-	first, err := repo.ListDataByType(ctx, dictType)
+	items, err := repo.ListDataByType(ctx, dictType)
 	if err != nil {
-		t.Fatalf("首次查询: %v", err)
+		t.Fatalf("查询字典项: %v", err)
 	}
-	if len(first) == 0 {
+	if len(items) == 0 {
 		t.Fatal("种子数据应包含通用状态字典项")
 	}
-	if n, _ := redisClient().Exists(ctx, key).Result(); n != 1 {
-		t.Error("首次查询后应回填缓存")
-	}
-
-	second, err := repo.ListDataByType(ctx, dictType)
-	if err != nil {
-		t.Fatalf("二次查询: %v", err)
-	}
-	if len(second) != len(first) {
-		t.Errorf("缓存命中结果应与回源一致: %d vs %d", len(second), len(first))
-	}
-}
-
-// 字典变更后必须立即失效缓存，否则前端下拉框会一直显示旧值。
-func TestDictRepoInvalidateCache(t *testing.T) {
-	skipIfShort(t)
-	flushCache(t)
-
-	ctx := context.Background()
-	repo := NewDictRepo(testData)
-
-	const dictType = "sys_yes_no"
-	if _, err := repo.ListDataByType(ctx, dictType); err != nil {
-		t.Fatalf("预热缓存: %v", err)
-	}
-	if n, _ := redisClient().Exists(ctx, dictDataKey(dictType)).Result(); n != 1 {
-		t.Fatal("预热后应存在缓存")
-	}
-
-	if err := repo.(*dictRepo).InvalidateCache(ctx, dictType); err != nil {
-		t.Fatalf("InvalidateDictCache: %v", err)
-	}
-	if n, _ := redisClient().Exists(ctx, dictDataKey(dictType)).Result(); n != 0 {
-		t.Error("失效后缓存应被删除")
+	for _, item := range items {
+		if !item.Status.Enabled() {
+			t.Fatalf("返回了已停用字典项: %#v", item)
+		}
 	}
 }
 
@@ -740,14 +741,6 @@ func TestDictRepoTypeCRUD(t *testing.T) {
 	})
 	if !errors.Is(err, domain.ErrDictTypeDuplicated) {
 		t.Errorf("重复类型应返回 ErrDictTypeDuplicated, got %v", err)
-	}
-
-	got, err := repo.GetTypeByCode(ctx, "test_dict_crud")
-	if err != nil {
-		t.Fatalf("GetTypeByCode: %v", err)
-	}
-	if got.ID != created.ID {
-		t.Errorf("按 code 查到的 ID 不一致")
 	}
 }
 
@@ -778,13 +771,13 @@ func TestDictRepoDataRejectsUnknownType(t *testing.T) {
 func TestNewEnforcerLoadsFromDatabase(t *testing.T) {
 	skipIfShort(t)
 
-	e, err := NewEnforcer(testData.client)
+	e, err := NewEnforcer(NewPolicyStore(testData.client))
 	if err != nil {
 		t.Fatalf("NewEnforcer: %v", err)
 	}
 
 	// 直接调用判定即可证明类型与可用性，无需额外的类型断言
-	ok, err := e.Allow([]string{"user"}, "system:dict:list")
+	ok, err := e.Allow([]string{"realm:user"}, "system:dict:list")
 	if err != nil {
 		t.Fatalf("Allow: %v", err)
 	}
@@ -792,7 +785,7 @@ func TestNewEnforcerLoadsFromDatabase(t *testing.T) {
 		t.Error("应从库中加载到种子策略")
 	}
 
-	if err := e.SetRolePermissions(context.Background(), "user", []string{"system:dict:list"}); !errors.Is(err, authz.ErrAdapterReadOnly) {
+	if err := e.SetRolePermissions(context.Background(), "realm:user", []string{"system:dict:list"}); !errors.Is(err, authz.ErrAdapterReadOnly) {
 		t.Fatalf("持久化判定器直接改内存策略: %v", err)
 	}
 }

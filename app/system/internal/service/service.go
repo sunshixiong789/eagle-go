@@ -7,17 +7,9 @@ package service
 import (
 	"time"
 
-	"github.com/google/wire"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/eagle-go/eagle/app/system/internal/domain"
-)
-
-// ProviderSet 是 service 层的 wire provider 集合。
-var ProviderSet = wire.NewSet(
-	NewPermissionService,
-	NewDictService,
-	NewRoleBindingService,
 )
 
 // 分页参数的边界。

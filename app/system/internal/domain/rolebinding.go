@@ -5,13 +5,23 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 )
 
-// Role 是角色名。角色由 Keycloak 维护，这里只做非空校验，避免和权限码等 string 传错位。
+// Role 是带来源命名空间的 Keycloak 角色键。
 type Role string
 
 func NewRole(s string) (Role, error) {
-	if s == "" {
+	valid := false
+	switch {
+	case strings.HasPrefix(s, "realm:"):
+		name := strings.TrimPrefix(s, "realm:")
+		valid = name != "" && !strings.Contains(name, ":")
+	case strings.HasPrefix(s, "client:"):
+		parts := strings.Split(strings.TrimPrefix(s, "client:"), ":")
+		valid = len(parts) == 2 && parts[0] != "" && parts[1] != ""
+	}
+	if !valid {
 		return "", ErrEmptyRole
 	}
 	return Role(s), nil

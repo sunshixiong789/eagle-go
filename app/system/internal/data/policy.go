@@ -3,18 +3,16 @@ package data
 import (
 	"cmp"
 	"context"
-	"errors"
 	"fmt"
 	"maps"
 	"slices"
 
-	"github.com/eagle-go/eagle/app/system/internal/domain"
-	"github.com/eagle-go/eagle/ent"
-	"github.com/eagle-go/eagle/ent/casbinrule"
-	"github.com/eagle-go/eagle/pkg/authz"
-	"github.com/eagle-go/eagle/pkg/identity"
 	"github.com/go-kratos/kratos/v3/transport"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/eagle-go/eagle/app/system/internal/domain"
+	"github.com/eagle-go/eagle/pkg/authz"
+	"github.com/eagle-go/eagle/pkg/identity"
 )
 
 // policyRepo 把 Casbin 判定器适配到领域层定义的 PolicyRepo 接口。
@@ -24,24 +22,16 @@ import (
 // 领域规则与用例编排都不必改动。
 type policyRepo struct {
 	enforcer *authz.Enforcer
-	adapter  *authz.EntAdapter
-	client   *ent.Client
-	// watcher 在策略变更后广播给其它副本，使它们重载内存中的 Casbin 模型。
-	// 允许为 nil（Notify 对 nil receiver 安全），单副本场景/部分测试不必装配它。
-	watcher *authz.RedisWatcher
+	store    *policyStore
 }
 
 // NewPolicyRepo 构造策略仓储。
-func NewPolicyRepo(enforcer *authz.Enforcer, client *ent.Client, watcher *authz.RedisWatcher) domain.PolicyRepo {
-	adapter, ok := enforcer.EntAdapter()
-	if !ok {
-		adapter = authz.NewEntAdapter(client)
-	}
-	return &policyRepo{enforcer: enforcer, adapter: adapter, client: client, watcher: watcher}
+func NewPolicyRepo(enforcer *authz.Enforcer, store *policyStore) domain.PolicyRepo {
+	return &policyRepo{enforcer: enforcer, store: store}
 }
 
 func (r *policyRepo) FindBinding(ctx context.Context, role domain.Role) (*domain.RoleBinding, error) {
-	raw, err := r.enforcer.RolePermissions(ctx, role.String())
+	raw, version, err := r.store.RolePermissionsSnapshot(ctx, role.String())
 	if err != nil {
 		return nil, err
 	}
@@ -56,15 +46,11 @@ func (r *policyRepo) FindBinding(ctx context.Context, role domain.Role) (*domain
 	if err != nil {
 		return nil, err
 	}
-	version, err := r.adapter.PolicyVersion(ctx)
-	if err != nil {
-		return nil, err
-	}
 	return binding.WithRevision(version), nil
 }
 
 func (r *policyRepo) SaveBinding(ctx context.Context, b *domain.RoleBinding, expectedVersion *int64) (int64, error) {
-	version, err := r.adapter.ReplaceRolePermissionsIfVersion(ctx, b.Role().String(), b.CodeStrings(), expectedVersion, mutationMeta(ctx))
+	version, err := r.store.ReplaceRolePermissions(ctx, b.Role().String(), b.CodeStrings(), expectedVersion, mutationMeta(ctx))
 	return r.commitPolicy(ctx, version, err)
 }
 
@@ -77,20 +63,27 @@ func (r *policyRepo) ResolveCodes(ctx context.Context, roles []domain.Role) ([]d
 }
 
 func (r *policyRepo) SaveInheritance(ctx context.Context, ri domain.RoleInheritance, expectedVersion *int64) (int64, error) {
-	version, err := r.adapter.AddRoleInheritanceIfVersion(ctx, ri.Child.String(), ri.Parent.String(), expectedVersion, mutationMeta(ctx))
+	version, err := r.store.AddRoleInheritance(ctx, ri.Child.String(), ri.Parent.String(), expectedVersion, mutationMeta(ctx))
 	return r.commitPolicy(ctx, version, err)
 }
 
 func (r *policyRepo) PolicyVersion(ctx context.Context) (int64, error) {
-	return r.adapter.PolicyVersion(ctx)
+	return r.store.PolicyVersion(ctx)
 }
 
 func (r *policyRepo) ListInheritances(ctx context.Context) ([]domain.RoleInheritance, error) {
-	pairs, err := r.adapter.RoleInheritances(ctx)
+	rules, _, err := r.store.RulesSnapshot(ctx, "g")
 	if err != nil {
 		return nil, err
 	}
-	slices.SortFunc(pairs, func(a, b authz.RoleInheritancePair) int {
+	type rolePair struct{ Child, Parent string }
+	pairs := make([]rolePair, 0, len(rules))
+	for _, rule := range rules {
+		if len(rule.Values) >= 2 {
+			pairs = append(pairs, rolePair{Child: rule.Values[0], Parent: rule.Values[1]})
+		}
+	}
+	slices.SortFunc(pairs, func(a, b rolePair) int {
 		if n := cmp.Compare(a.Child, b.Child); n != 0 {
 			return n
 		}
@@ -115,62 +108,48 @@ func (r *policyRepo) ListInheritances(ctx context.Context) ([]domain.RoleInherit
 }
 
 func (r *policyRepo) DeleteInheritance(ctx context.Context, ri domain.RoleInheritance, expectedVersion *int64) (int64, error) {
-	version, err := r.adapter.DeleteRoleInheritanceIfVersion(ctx, ri.Child.String(), ri.Parent.String(), expectedVersion, mutationMeta(ctx))
+	version, err := r.store.DeleteRoleInheritance(ctx, ri.Child.String(), ri.Parent.String(), expectedVersion, mutationMeta(ctx))
 	return r.commitPolicy(ctx, version, err)
 }
 
 func (r *policyRepo) commitPolicy(ctx context.Context, version int64, err error) (int64, error) {
 	if err != nil {
-		if errors.Is(err, authz.ErrConcurrentModification) {
-			return 0, domain.ErrConcurrentModification
-		}
-		if errors.Is(err, authz.ErrRoleInheritanceCycle) {
-			return 0, domain.ErrRoleInheritanceCycle
-		}
 		return 0, err
 	}
 	if err := r.enforcer.ReloadPolicy(ctx); err != nil {
 		return version, fmt.Errorf("策略已提交为版本 %d，但本实例重载失败: %w", version, err)
 	}
-	r.watcher.NotifyVersion(ctx, version)
 	return version, nil
 }
 
-func mutationMeta(ctx context.Context) authz.PolicyMutationMeta {
-	meta := authz.PolicyMutationMeta{}
+func mutationMeta(ctx context.Context) policyMutationMeta {
+	meta := policyMutationMeta{}
 	if p, ok := identity.FromContext(ctx); ok {
-		meta.ActorSubject = p.Subject
-		meta.ActorClientID = p.ClientID
+		meta.actorSubject = p.Subject
+		meta.actorClientID = p.ClientID
 	}
 	if sc := trace.SpanContextFromContext(ctx); sc.IsValid() {
-		meta.TraceID = sc.TraceID().String()
+		meta.traceID = sc.TraceID().String()
 	}
 	if tr, ok := transport.FromServerContext(ctx); ok {
-		meta.RequestID = tr.RequestHeader().Get("X-Request-ID")
+		meta.requestID = tr.RequestHeader().Get("X-Request-ID")
 	}
 	return meta
 }
 
 // ListBindings 用一次数据库查询完成全部角色及其直接权限的分组。
 func (r *policyRepo) ListBindings(ctx context.Context) ([]*domain.RoleBinding, error) {
-	version, err := r.adapter.PolicyVersion(ctx)
-	if err != nil {
-		return nil, err
-	}
-	rules, err := r.client.CasbinRule.Query().
-		Where(casbinrule.PtypeEQ("p")).
-		Select(casbinrule.FieldV0, casbinrule.FieldV1).
-		All(ctx)
+	rules, version, err := r.store.RulesSnapshot(ctx, "p")
 	if err != nil {
 		return nil, fmt.Errorf("list role bindings: %w", err)
 	}
 
 	grouped := make(map[string][]string)
 	for _, rule := range rules {
-		if rule.V0 == "" || rule.V1 == "" {
+		if len(rule.Values) < 2 || rule.Values[0] == "" || rule.Values[1] == "" {
 			continue
 		}
-		grouped[rule.V0] = append(grouped[rule.V0], rule.V1)
+		grouped[rule.Values[0]] = append(grouped[rule.Values[0]], rule.Values[1])
 	}
 	names := slices.Sorted(maps.Keys(grouped))
 

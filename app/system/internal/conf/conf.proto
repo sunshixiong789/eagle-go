@@ -52,31 +52,16 @@ message Data {
     string dsn = 1;
     // 连接池上限。开发环境 20 足够，生产按并发量调
     int32 max_conns = 2;
-    // 连接池常驻的最小连接数，避免每次冷启动都重新握手
-    int32 min_conns = 3;
+    // 连接池最多保留的空闲连接数。database/sql 不保证最小常驻连接数。
+    int32 max_idle_conns = 3;
     // 单个连接的最长存活时间，到点后即使空闲也会被回收重建，
     // 避免连接长期存活后遇到的数据库侧超时/负载均衡漂移问题
     google.protobuf.Duration max_conn_lifetime = 4;
     // 连接空闲超过这个时长就会被释放，回收长期没人用的连接
     google.protobuf.Duration max_conn_idle_time = 5;
   }
-  message Redis {
-    // 形如 host:port，如 127.0.0.1:6379
-    string addr = 1;
-    // 未设密码的实例留空
-    string password = 2;
-    // Redis 逻辑库编号，默认 0
-    int32 db = 3;
-    // 建立连接的超时
-    google.protobuf.Duration dial_timeout = 4;
-    // 单次读操作的超时。鉴权链路上的撤销检查会经过这里，
-    // 值太大会拖慢每个请求；本项目默认 0.5s
-    google.protobuf.Duration read_timeout = 5;
-    // 单次写操作的超时，默认 0.5s
-    google.protobuf.Duration write_timeout = 6;
-  }
   Database database = 1;
-  Redis redis = 2;
+  reserved 2;
 }
 
 // system 作为 OAuth2 资源服务器（面向 Keycloak）的配置
@@ -94,8 +79,7 @@ message Auth {
   // 通常要配 audience mapper 才有意义，留空则不校验
   string audience = 3;
 
-  // 字典项缓存时长
-  google.protobuf.Duration dict_cache_ttl = 4;
+  reserved 4;
 
   // 在 resource_access.<client_id>.roles 中拥有该 client 角色的主体
   // 跳过 Casbin 判定；同名 realm 角色不会触发短路。
@@ -121,4 +105,6 @@ message Observability {
   string log_level = 3;
   // Prometheus 指标暴露地址，如 0.0.0.0:9100
   string metrics_addr = 4;
+  // 集群内明文 OTLP 显式设为 true；跨网络保持 false，使用系统 TLS 根证书。
+  bool otlp_insecure = 5;
 }

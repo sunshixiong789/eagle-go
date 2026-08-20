@@ -2,8 +2,6 @@ package conf
 
 import (
 	"errors"
-	"fmt"
-	"net"
 	"net/url"
 	"strings"
 )
@@ -15,7 +13,6 @@ func Validate(b *Bootstrap) error {
 	}
 	var errs []error
 	db := b.GetData().GetDatabase()
-	redis := b.GetData().GetRedis()
 	auth := b.GetAuth()
 	server := b.GetServer()
 	obs := b.GetObservability()
@@ -25,13 +22,8 @@ func Validate(b *Bootstrap) error {
 	} else if u, err := url.Parse(db.GetDsn()); err != nil || (u.Scheme != "postgres" && u.Scheme != "postgresql") {
 		errs = append(errs, errors.New("data.database.dsn must be a postgres URL"))
 	}
-	if db.GetMaxConns() <= 0 || db.GetMinConns() < 0 || db.GetMinConns() > db.GetMaxConns() {
-		errs = append(errs, errors.New("database pool requires 0 <= min_conns <= max_conns and max_conns > 0"))
-	}
-	if redis.GetAddr() == "" {
-		errs = append(errs, errors.New("data.redis.addr is required"))
-	} else if _, _, err := net.SplitHostPort(redis.GetAddr()); err != nil {
-		errs = append(errs, fmt.Errorf("data.redis.addr: %w", err))
+	if db.GetMaxConns() <= 0 || db.GetMaxIdleConns() < 0 || db.GetMaxIdleConns() > db.GetMaxConns() {
+		errs = append(errs, errors.New("database pool requires 0 <= max_idle_conns <= max_conns and max_conns > 0"))
 	}
 	if err := validateIssuer(auth.GetIssuer()); err != nil {
 		errs = append(errs, err)

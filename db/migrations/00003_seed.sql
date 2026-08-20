@@ -34,24 +34,23 @@ INSERT INTO sys_permission (id, parent_id, name, code, type, path, component, ic
 SELECT setval(pg_get_serial_sequence('sys_permission', 'id'), (SELECT max(id) FROM sys_permission));
 
 -- ── Casbin 策略 ───────────────────────────────────────
--- 角色名必须与 Keycloak realm 里配置的角色一致。
--- admin 在中间件里被短路放行，这里仍显式授权，
--- 以便将来去掉短路逻辑时行为不变。
+-- 策略主体显式区分 realm 与 client role，避免同名角色碰撞。
+-- realm:admin 走正常 Casbin 判定；超管短路只认本服务 client role。
 INSERT INTO casbin_rule (ptype, v0, v1) VALUES
-    -- 通配：admin 拥有 system 域下全部权限
-    ('p', 'admin', 'system:*'),
+    -- 通配：realm admin 拥有 system 域下全部权限
+    ('p', 'realm:admin', 'system:*'),
     -- 普通用户只读
-    ('p', 'user', 'system:user:list'),
-    ('p', 'user', 'system:user:query'),
-    ('p', 'user', 'system:role:list'),
-    ('p', 'user', 'system:role:query'),
-    ('p', 'user', 'system:permission:list'),
-    ('p', 'user', 'system:permission:query'),
-    ('p', 'user', 'system:dict:list'),
-    ('p', 'user', 'system:dict:query');
+    ('p', 'realm:user', 'system:user:list'),
+    ('p', 'realm:user', 'system:user:query'),
+    ('p', 'realm:user', 'system:role:list'),
+    ('p', 'realm:user', 'system:role:query'),
+    ('p', 'realm:user', 'system:permission:list'),
+    ('p', 'realm:user', 'system:permission:query'),
+    ('p', 'realm:user', 'system:dict:list'),
+    ('p', 'realm:user', 'system:dict:query');
 
--- 角色继承：admin 自动获得 user 的全部权限
-INSERT INTO casbin_rule (ptype, v0, v1) VALUES ('g', 'admin', 'user');
+-- 角色继承：realm admin 自动获得 realm user 的全部权限
+INSERT INTO casbin_rule (ptype, v0, v1) VALUES ('g', 'realm:admin', 'realm:user');
 
 -- ── 字典 ──────────────────────────────────────────────
 INSERT INTO sys_dict_type (name, type, remark) VALUES
@@ -76,6 +75,6 @@ INSERT INTO sys_dict_data (dict_type, label, value, sort, css_class, is_default)
 -- +goose StatementBegin
 DELETE FROM sys_dict_data WHERE dict_type IN ('sys_common_status','sys_permission_type','sys_yes_no');
 DELETE FROM sys_dict_type WHERE type IN ('sys_common_status','sys_permission_type','sys_yes_no');
-DELETE FROM casbin_rule WHERE v0 IN ('admin','user');
+DELETE FROM casbin_rule WHERE v0 IN ('realm:admin','realm:user');
 DELETE FROM sys_permission WHERE id <= 200;
 -- +goose StatementEnd

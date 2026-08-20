@@ -37,11 +37,9 @@ func NewEnforcer(adapter persist.Adapter) (*Enforcer, error) {
 
 	en := &Enforcer{e: e, adapter: adapter}
 	if versioned, ok := adapter.(interface {
-		PolicyVersion(context.Context) (int64, error)
+		LoadedPolicyVersion() int64
 	}); ok {
-		if version, versionErr := versioned.PolicyVersion(context.Background()); versionErr == nil {
-			en.loadedVersion.Store(version)
-		}
+		en.loadedVersion.Store(versioned.LoadedPolicyVersion())
 	}
 	return en, nil
 }
@@ -126,14 +124,9 @@ func (en *Enforcer) ReloadPolicy(ctx context.Context) error {
 	en.e = replacement
 
 	if versioned, ok := en.adapter.(interface {
-		PolicyVersion(context.Context) (int64, error)
+		LoadedPolicyVersion() int64
 	}); ok {
-		version, versionErr := versioned.PolicyVersion(ctx)
-		if versionErr != nil {
-			recordPolicyReload(ctx, "error")
-			return fmt.Errorf("authz: 读取重载后的策略版本: %w", versionErr)
-		}
-		en.loadedVersion.Store(version)
+		en.loadedVersion.Store(versioned.LoadedPolicyVersion())
 	}
 	recordPolicyReload(ctx, "success")
 	return nil
@@ -142,15 +135,8 @@ func (en *Enforcer) ReloadPolicy(ctx context.Context) error {
 // LoadedPolicyVersion 返回当前内存快照对应的数据库版本。
 func (en *Enforcer) LoadedPolicyVersion() int64 { return en.loadedVersion.Load() }
 
-// EntAdapter 返回项目自带的策略存储。仅基础设施装配层使用；业务层仍只依赖
-// Enforcer 的窄接口。
-func (en *Enforcer) EntAdapter() (*EntAdapter, bool) {
-	adapter, ok := en.adapter.(*EntAdapter)
-	return adapter, ok
-}
-
 // SetRolePermissions 只允许改内存模型，供无持久化适配器的测试使用。
-// 生产写入必须走 EntAdapter.ReplaceRolePermissions*。
+// 生产写入必须走服务 data 层的事务接口。
 func (en *Enforcer) SetRolePermissions(_ context.Context, role string, perms []string) error {
 	if err := en.guardMemoryOnly(); err != nil {
 		return err
@@ -173,25 +159,6 @@ func (en *Enforcer) SetRolePermissions(_ context.Context, role string, perms []s
 		return fmt.Errorf("authz: 写入角色 %q 的策略: %w", role, err)
 	}
 	return nil
-}
-
-// RolePermissions 返回某个角色被直接授予的权限码（不含继承而来的）。
-func (en *Enforcer) RolePermissions(_ context.Context, role string) ([]string, error) {
-	en.mu.RLock()
-	defer en.mu.RUnlock()
-
-	rules, err := en.e.GetFilteredPolicy(0, role)
-	if err != nil {
-		return nil, fmt.Errorf("authz: 读取角色 %q 的策略: %w", role, err)
-	}
-
-	perms := make([]string, 0, len(rules))
-	for _, r := range rules {
-		if len(r) >= 2 {
-			perms = append(perms, r[1])
-		}
-	}
-	return perms, nil
 }
 
 // PermissionsOf 汇总若干角色的全部权限码（含继承），结果去重。

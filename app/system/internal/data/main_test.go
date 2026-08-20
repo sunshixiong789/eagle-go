@@ -1,22 +1,18 @@
 package data
 
 import (
-	"context"
 	"database/sql"
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
-	"github.com/alicebob/miniredis/v2"
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 	_ "github.com/lib/pq"
 	"github.com/pressly/goose/v3"
-	"github.com/redis/go-redis/v9"
-	"google.golang.org/protobuf/types/known/durationpb"
 
 	"github.com/eagle-go/eagle/app/system/internal/conf"
 )
@@ -25,12 +21,8 @@ import (
 // embedded-postgres 会下载官方 PG 二进制并在本进程内拉起一个实例。
 // 团队成员（尤其 Windows 机器）不必装 Docker 就能跑通全部数据层测试。
 //
-// Redis 侧用 miniredis——纯 Go 实现，进程内启动，无需外部依赖。
-//
 // 首次运行会下载 PG 二进制（约 100MB），之后从本地缓存启动，几秒即可。
 // 用 `go test -short ./...` 可跳过这些测试。
-
-const testPGPort = 55433
 
 var testData *Data
 
@@ -68,13 +60,22 @@ func runWithFixtures(m *testing.M) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	dataDir, err := os.MkdirTemp("", "eagle-data-postgres-")
+	if err != nil {
+		return 0, fmt.Errorf("创建 PostgreSQL 临时数据目录: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(dataDir) }()
+	port, err := availablePort()
+	if err != nil {
+		return 0, err
+	}
 
 	pg := embeddedpostgres.NewDatabase(
 		embeddedpostgres.DefaultConfig().
 			Username("eagle").
 			Password("eagle").
 			Database("eagle_test").
-			Port(testPGPort).
+			Port(port).
 			// 每个测试包必须有独立的解压/数据目录。
 			//
 			// go test ./... 会并行跑不同包的测试二进制，而 embedded-postgres
@@ -83,7 +84,7 @@ func runWithFixtures(m *testing.M) (int, error) {
 			// 或 "directory is not empty"——看起来像数据库坏了，实际是测试
 			// 基础设施的竞态。只隔离端口不够。
 			RuntimePath(runtimeDir).
-			DataPath(filepath.Join(runtimeDir, "data")).
+			DataPath(dataDir).
 			// 默认会把日志打到 stdout，淹没测试输出
 			Logger(io.Discard),
 	)
@@ -93,19 +94,13 @@ func runWithFixtures(m *testing.M) (int, error) {
 	defer func() { _ = pg.Stop() }()
 
 	dsn := fmt.Sprintf(
-		"postgres://eagle:eagle@127.0.0.1:%d/eagle_test?sslmode=disable", testPGPort)
+		"postgres://eagle:eagle@127.0.0.1:%d/eagle_test?sslmode=disable", port)
 
 	if err := runMigrations(dsn); err != nil {
 		return 0, fmt.Errorf("执行迁移: %w", err)
 	}
 
-	mr, err := miniredis.Run()
-	if err != nil {
-		return 0, fmt.Errorf("启动 miniredis: %w", err)
-	}
-	defer mr.Close()
-
-	d, cleanup, err := newTestData(dsn, mr.Addr())
+	d, cleanup, err := newTestData(dsn)
 	if err != nil {
 		return 0, fmt.Errorf("构造 Data: %w", err)
 	}
@@ -113,6 +108,18 @@ func runWithFixtures(m *testing.M) (int, error) {
 
 	testData = d
 	return m.Run(), nil
+}
+
+func availablePort() (uint32, error) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return 0, fmt.Errorf("分配 PostgreSQL 测试端口: %w", err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	if err := listener.Close(); err != nil {
+		return 0, fmt.Errorf("释放 PostgreSQL 测试端口: %w", err)
+	}
+	return uint32(port), nil
 }
 
 // runMigrations 跑的是 db/migrations 下的真实迁移文件，
@@ -140,25 +147,8 @@ func runMigrations(dsn string) error {
 	return nil
 }
 
-func newTestData(dsn, redisAddr string) (*Data, func(), error) {
-	return NewData(
-		&conf.Data{
-			Database: &conf.Data_Database{Dsn: dsn, MaxConns: 4, MinConns: 1},
-			Redis:    &conf.Data_Redis{Addr: redisAddr},
-		},
-		&conf.Auth{
-			DictCacheTtl: durationpb.New(time.Minute),
-		},
-	)
+func newTestData(dsn string) (*Data, func(), error) {
+	return NewData(&conf.Data{
+		Database: &conf.Data_Database{Dsn: dsn, MaxConns: 4, MaxIdleConns: 1},
+	})
 }
-
-// flushCache 清空 Redis，保持用例之间互不影响。
-func flushCache(t *testing.T) {
-	t.Helper()
-	if err := testData.rdb.FlushAll(context.Background()).Err(); err != nil {
-		t.Fatalf("清空缓存: %v", err)
-	}
-}
-
-// redisClient 供需要直接断言缓存状态的用例使用。
-func redisClient() *redis.Client { return testData.rdb }

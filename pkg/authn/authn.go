@@ -1,19 +1,16 @@
 // Package authn 是 OAuth2 资源服务器侧的认证中间件。
 //
 // 它验证 access token 的签名（经认证中心的 JWKS）、时间与 issuer 声明，
-// 再查一次撤销黑名单，最后把 identity.Principal 放进 context 交给 authz 判定授权。
+// 再把 identity.Principal 放进 context 交给 authz 判定授权。
 //
 // 签名验证在本地完成，不需要为每个请求回调认证中心；
-// 只有撤销检查需要访问 Redis，且是一次 O(1) 的存在性查询。
 package authn
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	kratoserrors "github.com/go-kratos/kratos/v3/errors"
@@ -30,20 +27,13 @@ import (
 var (
 	ErrInvalidToken = errors.New("authn: token 无效")
 	ErrTokenExpired = errors.New("authn: token 已过期")
-	ErrTokenRevoked = errors.New("authn: token 已被撤销")
 )
 
 // 认证失败的 reason，客户端据此决定「刷新 token」还是「重新登录」。
 const (
 	ReasonUnauthenticated = "UNAUTHENTICATED"
 	ReasonTokenExpired    = "TOKEN_EXPIRED"
-	ReasonTokenRevoked    = "TOKEN_REVOKED"
 )
-
-// Revocations 查询 token 是否已被撤销（登出、踢人、改密码）。
-type Revocations interface {
-	IsRevoked(ctx context.Context, jti string) (bool, error)
-}
 
 // Config 是资源服务器的验证参数。
 type Config struct {
@@ -60,18 +50,12 @@ type Config struct {
 	// Keycloak 默认把 aud 设为 "account"，通常需要配 audience mapper 才有意义，
 	// 因此默认不校验
 	Audience string
-	// Leeway 容忍的时钟漂移，默认 30s
-	Leeway time.Duration
 }
 
 // Verifier 验证 access token。
 type Verifier struct {
-	keySet      oidc.KeySet
-	issuer      string
-	clientID    string
-	audience    string
-	leeway      time.Duration
-	revocations Revocations
+	verifier *oidc.IDTokenVerifier
+	clientID string
 }
 
 // NewVerifier 构造验证器。
@@ -79,61 +63,35 @@ type Verifier struct {
 // 这里刻意不做 OIDC discovery：discovery 会在构造时发起网络请求，
 // 使得认证中心未就绪时资源服务器起不来。RemoteKeySet 是惰性的，
 // 首个请求到达时才拉 JWKS，两个服务的启动顺序因此互不依赖。
-func NewVerifier(ctx context.Context, cfg Config, revocations Revocations) *Verifier {
+func NewVerifier(ctx context.Context, cfg Config) *Verifier {
 	jwksURL := cfg.JWKSURL
 	if jwksURL == "" {
 		jwksURL = strings.TrimSuffix(cfg.Issuer, "/") + "/protocol/openid-connect/certs"
 	}
-	leeway := cfg.Leeway
-	if leeway <= 0 {
-		leeway = 30 * time.Second
-	}
-
 	return &Verifier{
-		keySet:      oidc.NewRemoteKeySet(ctx, jwksURL),
-		issuer:      cfg.Issuer,
-		clientID:    cfg.ClientID,
-		audience:    cfg.Audience,
-		leeway:      leeway,
-		revocations: revocations,
+		verifier: oidc.NewVerifier(cfg.Issuer, oidc.NewRemoteKeySet(ctx, jwksURL), &oidc.Config{
+			ClientID:             cfg.Audience,
+			SkipClientIDCheck:    cfg.Audience == "",
+			SupportedSigningAlgs: []string{"RS256"},
+		}),
+		clientID: cfg.ClientID,
 	}
 }
 
 // Verify 校验 token 并返回其载荷。
 func (v *Verifier) Verify(ctx context.Context, rawToken string) (*Claims, error) {
-	// RemoteKeySet 按 kid 选公钥，并在遇到未知 kid 时自动重拉 JWKS，
-	// 因此认证中心轮转密钥后无需重启资源服务器
-	payload, err := v.keySet.VerifySignature(ctx, rawToken)
+	token, err := v.verifier.Verify(ctx, rawToken)
 	if err != nil {
+		var expired *oidc.TokenExpiredError
+		if errors.As(err, &expired) {
+			return nil, ErrTokenExpired
+		}
 		return nil, fmt.Errorf("%w: 签名校验失败: %w", ErrInvalidToken, err)
 	}
 
 	var claims Claims
-	if err := json.Unmarshal(payload, &claims); err != nil {
+	if err := token.Claims(&claims); err != nil {
 		return nil, fmt.Errorf("%w: 载荷解析失败: %w", ErrInvalidToken, err)
-	}
-
-	if err := claims.validate(v.issuer, time.Now(), v.leeway); err != nil {
-		return nil, err
-	}
-	if v.audience != "" && !claims.Audience.contains(v.audience) {
-		return nil, fmt.Errorf("%w: aud 不匹配", ErrInvalidToken)
-	}
-
-	// 撤销检查放在最后：只有本来就合法的 token 才值得查一次 Redis
-	if v.revocations != nil && claims.JTI != "" {
-		revoked, err := v.revocations.IsRevoked(ctx, claims.JTI)
-		if err != nil {
-			recordRevocationCheck(ctx, "error")
-			// 查不到撤销状态时按"已撤销"处理。
-			// 放行会让 Redis 故障直接变成"所有已登出的 token 重新可用"。
-			return nil, fmt.Errorf("%w: 撤销状态不可知", ErrTokenRevoked)
-		}
-		if revoked {
-			recordRevocationCheck(ctx, "revoked")
-			return nil, ErrTokenRevoked
-		}
-		recordRevocationCheck(ctx, "active")
 	}
 
 	return &claims, nil
@@ -178,8 +136,6 @@ func toTransportError(err error) error {
 	case errors.Is(err, ErrTokenExpired):
 		// 单独给一个 reason：客户端据此走刷新流程而不是把用户踢回登录页
 		return kratoserrors.Unauthorized(ReasonTokenExpired, "登录已过期")
-	case errors.Is(err, ErrTokenRevoked):
-		return kratoserrors.Unauthorized(ReasonTokenRevoked, "凭证已失效，请重新登录")
 	default:
 		return kratoserrors.Unauthorized(ReasonUnauthenticated, "凭证无效")
 	}
@@ -196,7 +152,6 @@ func (v *Verifier) toPrincipal(c *Claims) *identity.Principal {
 		// 服务账号同样可以在 Keycloak 里被授予角色，所以不分支处理。
 		Roles:       c.Roles(v.clientID),
 		ClientRoles: c.ClientRoles(v.clientID),
-		TokenID:     c.JTI,
 		IsService:   c.IsServiceToken(),
 	}
 }

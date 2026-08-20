@@ -18,7 +18,12 @@ func TestClaimsSeparatesClientRolesFromRealmRoles(t *testing.T) {
 	if got := claims.ClientRoles("eagle-system"); !slices.Equal(got, []string{"system-admin", "editor"}) {
 		t.Fatalf("ClientRoles = %v", got)
 	}
-	wantAll := []string{"admin", "realm-viewer", "system-admin", "editor"}
+	wantAll := []string{
+		"realm:admin",
+		"realm:realm-viewer",
+		"client:eagle-system:system-admin",
+		"client:eagle-system:editor",
+	}
 	if got := claims.Roles("eagle-system"); !slices.Equal(got, wantAll) {
 		t.Fatalf("Roles = %v, want %v", got, wantAll)
 	}

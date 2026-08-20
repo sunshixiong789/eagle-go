@@ -20,7 +20,7 @@
     "realm": [
       {
         "name": "admin",
-        "description": "超级管理员，鉴权中间件对该角色短路放行"
+        "description": "system 域管理员，由本库 realm:admin 策略授权"
       },
       {
         "name": "user",

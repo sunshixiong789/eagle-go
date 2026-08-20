@@ -57,7 +57,6 @@ type ListDictDataQuery struct {
 type DictRepo interface {
 	CreateType(ctx context.Context, t *DictType) (*DictType, error)
 	GetTypeByID(ctx context.Context, id int64) (*DictType, error)
-	GetTypeByCode(ctx context.Context, code string) (*DictType, error)
 	ListTypes(ctx context.Context, q ListDictTypesQuery) ([]*DictType, int64, error)
 	UpdateType(ctx context.Context, t *DictType) (*DictType, error)
 	DeleteType(ctx context.Context, id int64) error
@@ -65,7 +64,7 @@ type DictRepo interface {
 	CreateData(ctx context.Context, d *DictData) (*DictData, error)
 	GetDataByID(ctx context.Context, id int64) (*DictData, error)
 	ListData(ctx context.Context, q ListDictDataQuery) ([]*DictData, int64, error)
-	// ListDataByType 是前端下拉框的主要来源，实现方需带缓存
+	// ListDataByType 是前端下拉框的主要来源。
 	ListDataByType(ctx context.Context, dictType string) ([]*DictData, error)
 	UpdateData(ctx context.Context, d *DictData) (*DictData, error)
 	DeleteData(ctx context.Context, id int64) error

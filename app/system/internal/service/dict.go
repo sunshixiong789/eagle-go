@@ -181,7 +181,7 @@ func (s *DictService) DeleteDictData(ctx context.Context, req *v1.DeleteDictData
 	return &v1.DeleteDictDataResponse{}, nil
 }
 
-// GetDictDataByType 按类型取字典项，供前端渲染下拉框，走缓存。
+// GetDictDataByType 按类型取字典项，供前端渲染下拉框。
 func (s *DictService) GetDictDataByType(ctx context.Context, req *v1.GetDictDataByTypeRequest) (*v1.GetDictDataByTypeResponse, error) {
 	data, err := s.uc.GetDictDataByType(ctx, req.GetDictType())
 	if err != nil {

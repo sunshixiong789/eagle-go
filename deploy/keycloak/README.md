@@ -18,9 +18,9 @@ ERROR: Unrecognized field "_comment_ttl" (class RealmRepresentation), not marked
 
 ### Token 生命周期
 
-`accessTokenLifespan` 设为 900 秒（15 分钟）。刻意保持短寿命：撤销依赖 Redis
-黑名单，而黑名单只需保留到 token 自然过期为止。TTL 越长，黑名单占用越久、
-被撤销的凭证可用窗口也越长。
+`accessTokenLifespan` 设为 900 秒（15 分钟）。资源服务器本地验签，不维护
+token 黑名单；会话撤销由 Keycloak 管理，已签发 access token 最迟在
+15 分钟后自然失效，因此保持短寿命。
 
 ### refresh token 必须一次性使用
 

@@ -45,10 +45,9 @@ jobs:
       # 改了 proto 却忘记重新生成的提交会一路合进主干。
       - name: 验证生成代码是最新的
         run: |
-          buf generate --template buf.gen.yaml
-          buf generate --template buf.gen.config.yaml
+          make api config ent
           if ! git diff --exit-code; then
-            echo "::error::生成代码与 proto 不一致，请在本地运行 buf generate 后提交"
+            echo "::error::生成代码不一致，请在本地运行 make generate 后提交"
             exit 1
           fi
 

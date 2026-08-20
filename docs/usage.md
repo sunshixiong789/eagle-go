@@ -40,7 +40,7 @@ Keycloak          本服务中间件              本库 Casbin
 你有哪些角色？     这个接口要什么权限？
 ```
 
-- **角色**（`admin`、`user`）在 Keycloak 里授给用户，出现在 token 里。
+- **角色**（Keycloak 中的 `admin`、`user`）进入策略库时带来源命名空间，例如 `realm:admin`、`client:eagle-system:admin`。
 - **权限码**（`system:dict:add`）写在 proto 上，也存在本库的 `permission_definition` 表。
 - **角色 → 权限码** 的对照表在本库，后台可以改，改完各副本会重载。
 
@@ -176,13 +176,13 @@ id := identity.Subject(ctx) // 服务账号或未登录时是空串
 
 ### 第 5 步：注册到服务器（仅当新加了一个 Service）
 
-往已有的 `DictService` 里加 RPC，**不用**改 `http.go` / `grpc.go` / `wire.go`。
+往已有的 `DictService` 里加 RPC，**不用**改 `http.go` / `grpc.go` / `cmd/server/app.go`。
 生成代码已经挂在同一个 service 上了。
 
 只有当你新建了 `XxxService`（一个新的 proto `service`）时，才需要：
 
 - `internal/server/http.go`、`grpc.go` 里 `RegisterXxxService...`
-- 若有新的构造函数，改 `wire.go` 后执行 `cd app/system/cmd/server && wire`
+- 若新增了顶层组件，在 `cmd/server/app.go` 显式装配
 
 ### 第 6 步：跑测试
 
@@ -197,16 +197,16 @@ go test ./app/system/internal/data ./app/system/internal/e2e
 
 角色在 Keycloak 里创建并授给用户。本库只保存「这个角色能做什么」。
 
-给 `user` 角色加上 `system:dict:query`（需要你自己先有 `system:role:assign` 权限，超管用 `admin` 即可）：
+给 Keycloak realm 的 `user` 角色加上 `system:dict:query`（需要你自己先有 `system:role:assign` 权限）：
 
 ```bash
 curl -s -X PUT -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"permission_codes":["system:dict:query","system:dict:list"]}' \
-  http://127.0.0.1:8000/v1/system/role-bindings/user
+  http://127.0.0.1:8000/v1/system/role-bindings/realm:user
 ```
 
-这是**全量覆盖**：请求体里没有的码会被收回。改完当前副本立即生效，其它副本靠 Redis 通知，最多几秒对上。
+这是**全量覆盖**：请求体里没有的码会被收回。改完当前副本立即生效，其它副本按数据库策略版本周期对账，最多几秒追平。
 
 常用查询：
 
@@ -223,7 +223,10 @@ curl -s -H "Authorization: Bearer $TOKEN" \
   http://127.0.0.1:8000/v1/system/permissions/me/menus
 ```
 
-`admin` 在配置里是超管（`auth.super_admin_role`）。它认的是 **本服务 client 角色**，不是 realm 里碰巧同名的角色。本地开发给用户加的 `admin` 是 realm 角色，种子策略里同时给 `admin` 配了 `system:*`，所以即使不走超管短路也能调通。
+角色键必须显式区分来源：`realm:<role>` 或 `client:<client-id>:<role>`。
+`auth.super_admin_role: admin` 只认本服务 `resource_access` 下的原始 client role 名；
+同名 realm role 不会触发短路。本地 `realm:admin` 由种子策略授予 `system:*`，
+因此仍能调通 system 域接口，但它走的是正常 Casbin 判定。
 
 ---
 
@@ -258,7 +261,7 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 8. `internal/data/` 实现仓储，这里才能 import `ent`
 9. `internal/biz/` 编排用例
 10. `internal/service/` 做 proto ↔ 领域对象转换，错误不用你转，中间件会把领域错误映射成 HTTP/gRPC
-11. 新的 proto `service` 才去改 `server` + `wire`
+11. 新的 proto `service` 才去改 `server` + `cmd/server/app.go`
 
 有「必须守住的规则」时（权限码格式、树不能成环、按钮必须有码），把规则写进 `domain`，用测试锁住：
 
@@ -281,7 +284,7 @@ go test ./app/system/internal/domain/...
 | `biz/` | 先做什么再做什么 | 应用服务 / 用例 |
 | `domain/` | 规则本身 | 和数据库、HTTP 无关的业务语言 |
 | `data/` | 怎么存怎么读 | Repository 实现 |
-| `pkg/` | 每个服务都会用的技术能力 | 验签、鉴权中间件、DB/Redis。**禁止**依赖 `app/` |
+| `pkg/` | 每个服务都会用的技术能力 | 验签、鉴权中间件、数据库连接。**禁止**依赖 `app/` 和项目 Ent 模型 |
 
 ---
 
@@ -295,8 +298,8 @@ go test ./app/system/internal/domain/...
 常用命令：
 
 ```bash
-make init          # 第一次：安装 buf / wire / goose
-make generate      # proto + 配置 + wire
+make init          # 第一次：安装 buf / goose / golangci-lint
+make generate      # proto + 配置 + Ent
 go generate ./ent  # 只在改了 ent/schema 之后
 make migrate-up    # 执行迁移
 go test ./...      # 不需要 Docker

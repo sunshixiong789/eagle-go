@@ -84,11 +84,10 @@ func main() {
 		}
 	}()
 
-	app, cleanup, err := wireApp(
+	app, cleanup, err := buildApp(
 		bc.GetServer(),
 		bc.GetData(),
 		bc.GetAuth(),
-		bc.GetObservability(),
 		logger,
 	)
 	if err != nil {
@@ -112,8 +111,7 @@ func setupObservability(o *conf.Observability) (func(context.Context) error, err
 		ServiceVersion: Version,
 		InstanceID:     id,
 		OTLPEndpoint:   o.GetOtlpEndpoint(),
-		// 集群内到 collector 通常是明文 gRPC；跨网络务必改为 TLS
-		OTLPInsecure:   true,
+		OTLPInsecure:   o.GetOtlpInsecure(),
 		SampleRatio:    o.GetTraceSampleRatio(),
 		MetricsAddr:    o.GetMetricsAddr(),
 		HistogramViews: []string{kratosmetrics.DefaultServerSecondsHistogramName},

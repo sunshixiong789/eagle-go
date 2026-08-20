@@ -30,10 +30,13 @@ Go 模块化单体底座：**认证 + RBAC 授权 + 字典**。业务域按 `app
                   │  └──────────────┘  │
                   └─────────┬──────────┘
                             ↓
-                 PostgreSQL 17  +  Redis
+                       PostgreSQL 17
 ```
 
 **职责切分**：Keycloak 回答「你是谁、你有哪些角色」，Casbin 回答「这个角色能不能调这个接口」。
+
+策略中的角色键显式保留来源：`realm:<role>` 或
+`client:<client-id>:<role>`。这样 realm role 与 client role 即使同名也不会串权。
 
 之所以不把权限映射也放进 Keycloak：那样每次授权判定都要跨网络调用，且权限配置只能在 Keycloak 后台改。
 之所以不把用户到角色的归属放进本库：那等于与 Keycloak 双写同一份数据，必然漂移。
@@ -49,8 +52,6 @@ Go 模块化单体底座：**认证 + RBAC 授权 + 字典**。业务域按 `app
 | 数据库 | PostgreSQL 17 | 迁移用 [goose](https://github.com/pressly/goose)，不用 ent 自动迁移 |
 | 认证 | **Keycloak** + OIDC | 用户、口令、角色的唯一来源 |
 | 授权 | **[Casbin](https://casbin.org)** v2 | 角色→权限码映射，策略存本库 |
-| 缓存 | Redis 7 + singleflight | 防击穿，故障时降级直连数据库 |
-| 依赖注入 | [wire](https://github.com/google/wire) | 编译期生成，零反射 |
 | 可观测 | OpenTelemetry | `contrib/otel/v3`，trace_id 自动注入日志 |
 
 ### 关于 Kratos v3
@@ -118,13 +119,13 @@ rpc CreatePermission(CreatePermissionRequest) returns (CreatePermissionResponse)
 ### 安装工具链
 
 ```bash
-go install github.com/bufbuild/buf/cmd/buf@latest github.com/google/wire/cmd/wire@v0.7.0 github.com/pressly/goose/v3/cmd/goose@v3.27.3
+make init
 ```
 
 ### 代码生成
 
 ```bash
-buf generate --template buf.gen.yaml && buf generate --template buf.gen.config.yaml && go generate ./ent && (cd app/system/cmd/server && wire)
+make generate
 ```
 
 ### 运行测试（**不需要 Docker**）
@@ -134,7 +135,7 @@ go test ./...
 ```
 
 集成测试用 [embedded-postgres](https://github.com/fergusstrange/embedded-postgres) 下载并在进程内拉起真实 PostgreSQL，
-跑 `db/migrations` 下的真实迁移；Redis 侧用 miniredis。首次运行会下载 PG 二进制（约 100MB），之后从本地缓存启动。
+跑 `db/migrations` 下的真实迁移。首次运行会下载 PG 二进制（约 100MB），之后从本地缓存启动。
 
 端到端测试（`app/system/internal/e2e`）更进一步：真实 HTTP 服务器、
 与生产一致的中间件链，外加一个签发**真实 RS256 JWT** 的 Keycloak 替身——
@@ -166,7 +167,7 @@ docker run --rm -v "$PWD:/src" -w /src golang:1.26 sh -c 'useradd -m -u 1500 t &
 ### 启动依赖与服务
 
 ```bash
-docker compose -f deploy/docker-compose.yml up -d postgres redis keycloak
+docker compose -f deploy/docker-compose.yml up -d postgres keycloak
 ```
 
 Keycloak 会自动导入 `deploy/keycloak/realm-eagle.json`（realm `eagle`，
@@ -258,7 +259,7 @@ server ──→ service ──→ biz(用例) ──→ domain
 | `service` | proto ↔ 领域对象互转，领域错误映射为传输错误 | biz, domain |
 | `biz` | 用例编排 | domain |
 | **`domain`** | **实体（含不变量）· 值对象 · 仓储接口** | **无** |
-| `data` | 仓储实现：ent + Redis + Casbin 适配 | domain |
+| `data` | 仓储实现：ent + Casbin 持久化适配 | domain |
 
 ### 战术 DDD 只用在有不变量的地方
 
@@ -292,21 +293,20 @@ eagle-go/
 │   ├── annotations/v1/     # 自定义权限注解 (perm / public)
 │   └── system/v1/          # 权限树 · 字典 · 角色权限绑定
 ├── app/system/
-│   ├── cmd/server/         # 入口 + wire 装配
+│   ├── cmd/server/         # 入口 + 显式依赖装配
 │   └── internal/
 │       ├── server/         # HTTP/gRPC 装配、中间件链
 │       ├── service/        # proto ↔ 领域对象转换
 │       ├── biz/            # 用例编排 + 错误映射
 │       ├── domain/         # 实体 · 值对象 · 仓储接口（零依赖）
-│       ├── data/           # 仓储实现：ent + Redis + Casbin
+│       ├── data/           # 仓储实现：ent + Casbin 持久化适配
 │       └── conf/           # 配置契约
 ├── ent/schema/             # ent Schema as Code
 ├── pkg/
-│   ├── authn/              # Keycloak JWKS 验签 + Redis 撤销黑名单
+│   ├── authn/              # Keycloak OIDC/JWKS 验签
 │   ├── authz/              # Casbin 判定器 + 适配器 + 中间件
 │   ├── identity/           # context 中的已认证主体
-│   ├── db/                 # ent 客户端 + 事务封装
-│   └── redisx/             # 缓存原语（singleflight 防击穿）
+│   └── db/                 # PostgreSQL database/sql 连接池
 ├── db/migrations/          # goose 迁移
 └── deploy/
 ```
@@ -330,7 +330,7 @@ eagle-go/
 
 | 模块 | 状态 |
 |---|---|
-| 工具链与代码生成（buf / ent / wire） | ✅ 已验证 |
+| 工具链与代码生成（buf / ent） | ✅ 已验证 |
 | 数据库迁移与种子数据 | ✅ 真实 PG 上 up→down→up 往返验证 |
 | 权限树 · 字典 · 角色权限绑定 | ✅ 数据层已验证 |
 | Casbin 鉴权中间件 | ✅ 已验证（401/403/200、通配边界、角色继承、失败关闭） |

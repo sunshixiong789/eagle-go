@@ -148,7 +148,6 @@ func (x *Server) GetGrpc() *Server_GRPC {
 type Data struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Database      *Data_Database         `protobuf:"bytes,1,opt,name=database,proto3" json:"database,omitempty"`
-	Redis         *Data_Redis            `protobuf:"bytes,2,opt,name=redis,proto3" json:"redis,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -190,13 +189,6 @@ func (x *Data) GetDatabase() *Data_Database {
 	return nil
 }
 
-func (x *Data) GetRedis() *Data_Redis {
-	if x != nil {
-		return x.Redis
-	}
-	return nil
-}
-
 // system 作为 OAuth2 资源服务器（面向 Keycloak）的配置
 type Auth struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -210,8 +202,6 @@ type Auth struct {
 	// 期望的 aud。Keycloak 默认把 aud 设成 "account"，
 	// 通常要配 audience mapper 才有意义，留空则不校验
 	Audience string `protobuf:"bytes,3,opt,name=audience,proto3" json:"audience,omitempty"`
-	// 字典项缓存时长
-	DictCacheTtl *durationpb.Duration `protobuf:"bytes,4,opt,name=dict_cache_ttl,json=dictCacheTtl,proto3" json:"dict_cache_ttl,omitempty"`
 	// 在 resource_access.<client_id>.roles 中拥有该 client 角色的主体
 	// 跳过 Casbin 判定；同名 realm 角色不会触发短路。
 	SuperAdminRole string `protobuf:"bytes,5,opt,name=super_admin_role,json=superAdminRole,proto3" json:"super_admin_role,omitempty"`
@@ -279,13 +269,6 @@ func (x *Auth) GetAudience() string {
 	return ""
 }
 
-func (x *Auth) GetDictCacheTtl() *durationpb.Duration {
-	if x != nil {
-		return x.DictCacheTtl
-	}
-	return nil
-}
-
 func (x *Auth) GetSuperAdminRole() string {
 	if x != nil {
 		return x.SuperAdminRole
@@ -309,7 +292,9 @@ type Observability struct {
 	// debug / info / warn / error
 	LogLevel string `protobuf:"bytes,3,opt,name=log_level,json=logLevel,proto3" json:"log_level,omitempty"`
 	// Prometheus 指标暴露地址，如 0.0.0.0:9100
-	MetricsAddr   string `protobuf:"bytes,4,opt,name=metrics_addr,json=metricsAddr,proto3" json:"metrics_addr,omitempty"`
+	MetricsAddr string `protobuf:"bytes,4,opt,name=metrics_addr,json=metricsAddr,proto3" json:"metrics_addr,omitempty"`
+	// 集群内明文 OTLP 显式设为 true；跨网络保持 false，使用系统 TLS 根证书。
+	OtlpInsecure  bool `protobuf:"varint,5,opt,name=otlp_insecure,json=otlpInsecure,proto3" json:"otlp_insecure,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -370,6 +355,13 @@ func (x *Observability) GetMetricsAddr() string {
 		return x.MetricsAddr
 	}
 	return ""
+}
+
+func (x *Observability) GetOtlpInsecure() bool {
+	if x != nil {
+		return x.OtlpInsecure
+	}
+	return false
 }
 
 type Server_HTTP struct {
@@ -505,8 +497,8 @@ type Data_Database struct {
 	Dsn string `protobuf:"bytes,1,opt,name=dsn,proto3" json:"dsn,omitempty"`
 	// 连接池上限。开发环境 20 足够，生产按并发量调
 	MaxConns int32 `protobuf:"varint,2,opt,name=max_conns,json=maxConns,proto3" json:"max_conns,omitempty"`
-	// 连接池常驻的最小连接数，避免每次冷启动都重新握手
-	MinConns int32 `protobuf:"varint,3,opt,name=min_conns,json=minConns,proto3" json:"min_conns,omitempty"`
+	// 连接池最多保留的空闲连接数。database/sql 不保证最小常驻连接数。
+	MaxIdleConns int32 `protobuf:"varint,3,opt,name=max_idle_conns,json=maxIdleConns,proto3" json:"max_idle_conns,omitempty"`
 	// 单个连接的最长存活时间，到点后即使空闲也会被回收重建，
 	// 避免连接长期存活后遇到的数据库侧超时/负载均衡漂移问题
 	MaxConnLifetime *durationpb.Duration `protobuf:"bytes,4,opt,name=max_conn_lifetime,json=maxConnLifetime,proto3" json:"max_conn_lifetime,omitempty"`
@@ -560,9 +552,9 @@ func (x *Data_Database) GetMaxConns() int32 {
 	return 0
 }
 
-func (x *Data_Database) GetMinConns() int32 {
+func (x *Data_Database) GetMaxIdleConns() int32 {
 	if x != nil {
-		return x.MinConns
+		return x.MaxIdleConns
 	}
 	return 0
 }
@@ -577,97 +569,6 @@ func (x *Data_Database) GetMaxConnLifetime() *durationpb.Duration {
 func (x *Data_Database) GetMaxConnIdleTime() *durationpb.Duration {
 	if x != nil {
 		return x.MaxConnIdleTime
-	}
-	return nil
-}
-
-type Data_Redis struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// 形如 host:port，如 127.0.0.1:6379
-	Addr string `protobuf:"bytes,1,opt,name=addr,proto3" json:"addr,omitempty"`
-	// 未设密码的实例留空
-	Password string `protobuf:"bytes,2,opt,name=password,proto3" json:"password,omitempty"`
-	// Redis 逻辑库编号，默认 0
-	Db int32 `protobuf:"varint,3,opt,name=db,proto3" json:"db,omitempty"`
-	// 建立连接的超时
-	DialTimeout *durationpb.Duration `protobuf:"bytes,4,opt,name=dial_timeout,json=dialTimeout,proto3" json:"dial_timeout,omitempty"`
-	// 单次读操作的超时。鉴权链路上的撤销检查会经过这里，
-	// 值太大会拖慢每个请求；本项目默认 0.5s
-	ReadTimeout *durationpb.Duration `protobuf:"bytes,5,opt,name=read_timeout,json=readTimeout,proto3" json:"read_timeout,omitempty"`
-	// 单次写操作的超时，默认 0.5s
-	WriteTimeout  *durationpb.Duration `protobuf:"bytes,6,opt,name=write_timeout,json=writeTimeout,proto3" json:"write_timeout,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Data_Redis) Reset() {
-	*x = Data_Redis{}
-	mi := &file_system_internal_conf_conf_proto_msgTypes[8]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Data_Redis) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Data_Redis) ProtoMessage() {}
-
-func (x *Data_Redis) ProtoReflect() protoreflect.Message {
-	mi := &file_system_internal_conf_conf_proto_msgTypes[8]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Data_Redis.ProtoReflect.Descriptor instead.
-func (*Data_Redis) Descriptor() ([]byte, []int) {
-	return file_system_internal_conf_conf_proto_rawDescGZIP(), []int{2, 1}
-}
-
-func (x *Data_Redis) GetAddr() string {
-	if x != nil {
-		return x.Addr
-	}
-	return ""
-}
-
-func (x *Data_Redis) GetPassword() string {
-	if x != nil {
-		return x.Password
-	}
-	return ""
-}
-
-func (x *Data_Redis) GetDb() int32 {
-	if x != nil {
-		return x.Db
-	}
-	return 0
-}
-
-func (x *Data_Redis) GetDialTimeout() *durationpb.Duration {
-	if x != nil {
-		return x.DialTimeout
-	}
-	return nil
-}
-
-func (x *Data_Redis) GetReadTimeout() *durationpb.Duration {
-	if x != nil {
-		return x.ReadTimeout
-	}
-	return nil
-}
-
-func (x *Data_Redis) GetWriteTimeout() *durationpb.Duration {
-	if x != nil {
-		return x.WriteTimeout
 	}
 	return nil
 }
@@ -692,35 +593,27 @@ const file_system_internal_conf_conf_proto_rawDesc = "" +
 	"\x04GRPC\x12\x18\n" +
 	"\anetwork\x18\x01 \x01(\tR\anetwork\x12\x12\n" +
 	"\x04addr\x18\x02 \x01(\tR\x04addr\x123\n" +
-	"\atimeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\atimeout\"\xe7\x04\n" +
+	"\atimeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\atimeout\"\xbb\x02\n" +
 	"\x04Data\x12<\n" +
-	"\bdatabase\x18\x01 \x01(\v2 .eagle.system.conf.Data.DatabaseR\bdatabase\x123\n" +
-	"\x05redis\x18\x02 \x01(\v2\x1d.eagle.system.conf.Data.RedisR\x05redis\x1a\xe5\x01\n" +
+	"\bdatabase\x18\x01 \x01(\v2 .eagle.system.conf.Data.DatabaseR\bdatabase\x1a\xee\x01\n" +
 	"\bDatabase\x12\x10\n" +
 	"\x03dsn\x18\x01 \x01(\tR\x03dsn\x12\x1b\n" +
-	"\tmax_conns\x18\x02 \x01(\x05R\bmaxConns\x12\x1b\n" +
-	"\tmin_conns\x18\x03 \x01(\x05R\bminConns\x12E\n" +
+	"\tmax_conns\x18\x02 \x01(\x05R\bmaxConns\x12$\n" +
+	"\x0emax_idle_conns\x18\x03 \x01(\x05R\fmaxIdleConns\x12E\n" +
 	"\x11max_conn_lifetime\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\x0fmaxConnLifetime\x12F\n" +
-	"\x12max_conn_idle_time\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\x0fmaxConnIdleTime\x1a\x83\x02\n" +
-	"\x05Redis\x12\x12\n" +
-	"\x04addr\x18\x01 \x01(\tR\x04addr\x12\x1a\n" +
-	"\bpassword\x18\x02 \x01(\tR\bpassword\x12\x0e\n" +
-	"\x02db\x18\x03 \x01(\x05R\x02db\x12<\n" +
-	"\fdial_timeout\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\vdialTimeout\x12<\n" +
-	"\fread_timeout\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\vreadTimeout\x12>\n" +
-	"\rwrite_timeout\x18\x06 \x01(\v2\x19.google.protobuf.DurationR\fwriteTimeout\"\xdd\x01\n" +
+	"\x12max_conn_idle_time\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\x0fmaxConnIdleTimeJ\x04\b\x02\x10\x03\"\xa2\x01\n" +
 	"\x04Auth\x12\x16\n" +
 	"\x06issuer\x18\x01 \x01(\tR\x06issuer\x12\x1b\n" +
 	"\tclient_id\x18\x02 \x01(\tR\bclientId\x12\x1a\n" +
-	"\baudience\x18\x03 \x01(\tR\baudience\x12?\n" +
-	"\x0edict_cache_ttl\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\fdictCacheTtl\x12(\n" +
+	"\baudience\x18\x03 \x01(\tR\baudience\x12(\n" +
 	"\x10super_admin_role\x18\x05 \x01(\tR\x0esuperAdminRole\x12\x19\n" +
-	"\bjwks_url\x18\x06 \x01(\tR\ajwksUrl\"\xa2\x01\n" +
+	"\bjwks_url\x18\x06 \x01(\tR\ajwksUrlJ\x04\b\x04\x10\x05\"\xc7\x01\n" +
 	"\rObservability\x12#\n" +
 	"\rotlp_endpoint\x18\x01 \x01(\tR\fotlpEndpoint\x12,\n" +
 	"\x12trace_sample_ratio\x18\x02 \x01(\x01R\x10traceSampleRatio\x12\x1b\n" +
 	"\tlog_level\x18\x03 \x01(\tR\blogLevel\x12!\n" +
-	"\fmetrics_addr\x18\x04 \x01(\tR\vmetricsAddrB9Z7github.com/eagle-go/eagle/app/system/internal/conf;confb\x06proto3"
+	"\fmetrics_addr\x18\x04 \x01(\tR\vmetricsAddr\x12#\n" +
+	"\rotlp_insecure\x18\x05 \x01(\bR\fotlpInsecureB9Z7github.com/eagle-go/eagle/app/system/internal/conf;confb\x06proto3"
 
 var (
 	file_system_internal_conf_conf_proto_rawDescOnce sync.Once
@@ -734,7 +627,7 @@ func file_system_internal_conf_conf_proto_rawDescGZIP() []byte {
 	return file_system_internal_conf_conf_proto_rawDescData
 }
 
-var file_system_internal_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_system_internal_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_system_internal_conf_conf_proto_goTypes = []any{
 	(*Bootstrap)(nil),           // 0: eagle.system.conf.Bootstrap
 	(*Server)(nil),              // 1: eagle.system.conf.Server
@@ -744,8 +637,7 @@ var file_system_internal_conf_conf_proto_goTypes = []any{
 	(*Server_HTTP)(nil),         // 5: eagle.system.conf.Server.HTTP
 	(*Server_GRPC)(nil),         // 6: eagle.system.conf.Server.GRPC
 	(*Data_Database)(nil),       // 7: eagle.system.conf.Data.Database
-	(*Data_Redis)(nil),          // 8: eagle.system.conf.Data.Redis
-	(*durationpb.Duration)(nil), // 9: google.protobuf.Duration
+	(*durationpb.Duration)(nil), // 8: google.protobuf.Duration
 }
 var file_system_internal_conf_conf_proto_depIdxs = []int32{
 	1,  // 0: eagle.system.conf.Bootstrap.server:type_name -> eagle.system.conf.Server
@@ -755,20 +647,15 @@ var file_system_internal_conf_conf_proto_depIdxs = []int32{
 	5,  // 4: eagle.system.conf.Server.http:type_name -> eagle.system.conf.Server.HTTP
 	6,  // 5: eagle.system.conf.Server.grpc:type_name -> eagle.system.conf.Server.GRPC
 	7,  // 6: eagle.system.conf.Data.database:type_name -> eagle.system.conf.Data.Database
-	8,  // 7: eagle.system.conf.Data.redis:type_name -> eagle.system.conf.Data.Redis
-	9,  // 8: eagle.system.conf.Auth.dict_cache_ttl:type_name -> google.protobuf.Duration
-	9,  // 9: eagle.system.conf.Server.HTTP.timeout:type_name -> google.protobuf.Duration
-	9,  // 10: eagle.system.conf.Server.GRPC.timeout:type_name -> google.protobuf.Duration
-	9,  // 11: eagle.system.conf.Data.Database.max_conn_lifetime:type_name -> google.protobuf.Duration
-	9,  // 12: eagle.system.conf.Data.Database.max_conn_idle_time:type_name -> google.protobuf.Duration
-	9,  // 13: eagle.system.conf.Data.Redis.dial_timeout:type_name -> google.protobuf.Duration
-	9,  // 14: eagle.system.conf.Data.Redis.read_timeout:type_name -> google.protobuf.Duration
-	9,  // 15: eagle.system.conf.Data.Redis.write_timeout:type_name -> google.protobuf.Duration
-	16, // [16:16] is the sub-list for method output_type
-	16, // [16:16] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	8,  // 7: eagle.system.conf.Server.HTTP.timeout:type_name -> google.protobuf.Duration
+	8,  // 8: eagle.system.conf.Server.GRPC.timeout:type_name -> google.protobuf.Duration
+	8,  // 9: eagle.system.conf.Data.Database.max_conn_lifetime:type_name -> google.protobuf.Duration
+	8,  // 10: eagle.system.conf.Data.Database.max_conn_idle_time:type_name -> google.protobuf.Duration
+	11, // [11:11] is the sub-list for method output_type
+	11, // [11:11] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_system_internal_conf_conf_proto_init() }
@@ -782,7 +669,7 @@ func file_system_internal_conf_conf_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_system_internal_conf_conf_proto_rawDesc), len(file_system_internal_conf_conf_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

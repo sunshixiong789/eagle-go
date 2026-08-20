@@ -13,8 +13,6 @@ import (
 	"github.com/go-kratos/kratos/v3/middleware/logging"
 	"github.com/go-kratos/kratos/v3/middleware/ratelimit"
 	"github.com/go-kratos/kratos/v3/middleware/recovery"
-	"github.com/google/wire"
-	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/otel"
 
 	"github.com/eagle-go/eagle/app/system/internal/conf"
@@ -26,16 +24,8 @@ import (
 // meterName 是本服务所有自定义指标的 instrumentation scope。
 const meterName = "github.com/eagle-go/eagle/app/system"
 
-// ProviderSet 是 server 层的 wire provider 集合。
-var ProviderSet = wire.NewSet(
-	NewGRPCServer,
-	NewHTTPServer,
-	NewVerifier,
-	NewMiddlewares,
-)
-
 // NewVerifier 构造 Keycloak token 验证器。
-func NewVerifier(c *conf.Auth, rdb *redis.Client) *authn.Verifier {
+func NewVerifier(c *conf.Auth) *authn.Verifier {
 	return authn.NewVerifier(
 		context.Background(),
 		authn.Config{
@@ -47,7 +37,6 @@ func NewVerifier(c *conf.Auth, rdb *redis.Client) *authn.Verifier {
 			// 与本服务可达的集群内地址往往不是同一个。
 			JWKSURL: c.GetJwksUrl(),
 		},
-		authn.NewRedisRevocations(rdb),
 	)
 }
 

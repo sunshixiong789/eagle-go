@@ -8,7 +8,6 @@ EAGLE_DSN ?= postgres://eagle:eagle@127.0.0.1:5432/eagle?sslmode=disable
 .PHONY: init
 # 安装开发期工具链
 init:
-	go install github.com/google/wire/cmd/wire@v0.7.0
 	go install github.com/bufbuild/buf/cmd/buf@latest
 	go install github.com/pressly/goose/v3/cmd/goose@v3.27.3
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
@@ -29,10 +28,10 @@ lint-proto:
 	buf lint
 	buf breaking --against '.git#branch=main'
 
-.PHONY: wire
-# 生成依赖注入代码
-wire:
-	cd app/system/cmd/server && wire
+.PHONY: ent
+# 生成 Ent 数据访问代码
+ent:
+	go generate ./ent
 
 .PHONY: migrate-up
 # 执行数据库迁移
@@ -49,8 +48,8 @@ migrate-status:
 	goose -dir db/migrations postgres "$(EAGLE_DSN)" status
 
 .PHONY: generate
-# 全量生成：proto + 配置 + wire
-generate: api config wire
+# 全量生成：对外契约 + 内部配置 + Ent
+generate: api config ent
 	go mod tidy
 
 .PHONY: build
@@ -64,12 +63,12 @@ lint:
 	golangci-lint run ./...
 
 .PHONY: test
-# 单测 + 集成测试（embedded-postgres + miniredis，不需要 Docker）
+# 单测 + 集成测试（embedded-postgres，不需要 Docker）
 test:
 	go test -race -cover ./...
 
 .PHONY: up
-# 起本地依赖（PostgreSQL + Redis + OTel + Grafana）
+# 起本地依赖（PostgreSQL + Keycloak + OTel + Grafana）
 up:
 	docker compose -f deploy/docker-compose.yml up -d
 

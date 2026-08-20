@@ -1,6 +1,6 @@
 # eagle system 服务本地开发配置。
 #
-# 生产环境不要直接改这个文件：敏感项（DSN 口令、Redis 密码）应经由
+# 生产环境不要直接改这个文件：敏感项（如 DSN 口令）应经由
 # 环境变量或 K8s Secret 注入，本文件只保留结构和安全的默认值。
 #
 # 【时长字段的写法】
@@ -21,16 +21,9 @@ data:
   database:
     dsn: "${DATABASE_DSN:postgres://eagle:eagle@127.0.0.1:5432/eagle?sslmode=disable}"
     max_conns: 20
-    min_conns: 2
+    max_idle_conns: 2
     max_conn_lifetime: 3600s
     max_conn_idle_time: 1800s
-  redis:
-    addr: "${REDIS_ADDR:127.0.0.1:6379}"
-    password: "${REDIS_PASSWORD:}"
-    db: 0
-    dial_timeout: 2s
-    read_timeout: 0.5s
-    write_timeout: 0.5s
 
 auth:
   # Keycloak realm 的 issuer，必须与 token 里的 iss 完全一致
@@ -50,7 +43,6 @@ auth:
   # 内外网地址不同时通过 EAGLE_AUTH_JWKS_URL 覆盖。
   jwks_url: "${AUTH_JWKS_URL:}"
 
-  dict_cache_ttl: 1800s
   # 仅本服务 client role（resource_access.eagle-system.roles）会触发短路；
   # 同名 realm role 不具备跨服务超管能力。
   super_admin_role: admin
@@ -63,6 +55,7 @@ observability:
   # 实测服务照常启动、接口照常响应、日志零噪音，因此填着没有副作用。
   # 完全不想上报时置空即可。
   otlp_endpoint: "127.0.0.1:4317"
+  otlp_insecure: true
   # 开发期全采样；生产建议降到 0.01~0.1
   trace_sample_ratio: 1.0
   log_level: info

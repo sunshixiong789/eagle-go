@@ -8,7 +8,7 @@ import (
 
 // DictUsecase 是字典模块的应用服务。
 //
-// 字典没有需要守护的业务不变量，所以这层就是薄薄的编排 + 缓存失效，
+// 字典没有需要守护的业务不变量，所以这层只保留薄薄的用例编排，
 // 没有对应的聚合根。战术 DDD 用在有不变量的地方才有价值。
 type DictUsecase struct {
 	repo domain.DictRepo

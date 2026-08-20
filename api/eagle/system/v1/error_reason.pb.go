@@ -55,7 +55,7 @@ const (
 	ErrorReason_ERROR_REASON_DICT_DATA_DUPLICATED ErrorReason = 33
 	// 角色权限绑定
 	ErrorReason_ERROR_REASON_ROLE_NOT_BOUND ErrorReason = 40
-	// 授予了权限树中不存在的权限码，多半是拼写错误
+	// 引用了权限目录中不存在的权限码，多半是拼写错误
 	ErrorReason_ERROR_REASON_UNKNOWN_PERMISSION_CODE ErrorReason = 41
 	// 角色继承出现自继承或闭环
 	ErrorReason_ERROR_REASON_ROLE_INHERITANCE_CYCLE ErrorReason = 42

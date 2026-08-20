@@ -1,10 +1,9 @@
 package authn
 
 import (
-	"encoding/json"
-	"fmt"
 	"strings"
-	"time"
+
+	"github.com/eagle-go/eagle/pkg/identity"
 )
 
 // serviceAccountPrefix 是 Keycloak 为 client_credentials 服务账号
@@ -18,14 +17,7 @@ const serviceAccountPrefix = "service-account-"
 // allowed-origins、email_verified 等一堆字段，全声明进来会造成
 // 「这些都参与判定」的错觉——鉴权结构体尤其要避免这种误导。
 type Claims struct {
-	Issuer    string   `json:"iss"`
-	Subject   string   `json:"sub"`
-	Audience  audience `json:"aud"`
-	ExpiresAt int64    `json:"exp"`
-	IssuedAt  int64    `json:"iat"`
-	// JTI 是 token 唯一标识，登出/踢人时写进黑名单
-	JTI string `json:"jti"`
-
+	Subject string `json:"sub"`
 	// AuthorizedParty 是 Keycloak 的 azp，即换取该 token 的客户端。
 	// 注意不是 client_id——Keycloak 的 access token 里用的是 azp。
 	AuthorizedParty string `json:"azp"`
@@ -63,11 +55,19 @@ func (c *Claims) Scopes() []string {
 // 按 client 授权的角色静默失效。
 func (c *Claims) Roles(clientID string) []string {
 	roles := make([]string, 0, len(c.RealmAccess.Roles))
-	roles = append(roles, c.RealmAccess.Roles...)
+	for _, role := range c.RealmAccess.Roles {
+		if role != "" {
+			roles = append(roles, identity.RealmRoleKey(role))
+		}
+	}
 
 	if clientID != "" {
 		if ra, ok := c.ResourceAccess[clientID]; ok {
-			roles = append(roles, ra.Roles...)
+			for _, role := range ra.Roles {
+				if role != "" {
+					roles = append(roles, identity.ClientRoleKey(clientID, role))
+				}
+			}
 		}
 	}
 	return roles
@@ -94,61 +94,4 @@ func (c *Claims) ClientRoles(clientID string) []string {
 // service-account- 前缀。
 func (c *Claims) IsServiceToken() bool {
 	return strings.HasPrefix(c.Username, serviceAccountPrefix)
-}
-
-// ServiceName 从服务账号用户名里还原出客户端标识。
-// 非服务令牌返回空串。
-func (c *Claims) ServiceName() string {
-	if !c.IsServiceToken() {
-		return ""
-	}
-	if c.AuthorizedParty != "" {
-		return c.AuthorizedParty
-	}
-	return strings.TrimPrefix(c.Username, serviceAccountPrefix)
-}
-
-// validate 校验与签名无关的时间和 issuer 声明。
-// 签名由 JWKS 负责，这里补上其余部分。
-func (c *Claims) validate(wantIssuer string, now time.Time, leeway time.Duration) error {
-	if c.Issuer != wantIssuer {
-		return fmt.Errorf("%w: issuer %q, want %q", ErrInvalidToken, c.Issuer, wantIssuer)
-	}
-	if c.ExpiresAt == 0 {
-		return fmt.Errorf("%w: 缺少 exp 声明", ErrInvalidToken)
-	}
-	if now.After(time.Unix(c.ExpiresAt, 0).Add(leeway)) {
-		return ErrTokenExpired
-	}
-	if c.IssuedAt != 0 && now.Add(leeway).Before(time.Unix(c.IssuedAt, 0)) {
-		return fmt.Errorf("%w: iat 位于未来", ErrInvalidToken)
-	}
-	return nil
-}
-
-// audience 兼容 aud 的两种合法形式：字符串或字符串数组。
-// Keycloak 单个受众时发字符串、多个时发数组，只处理一种会随配置变化而失败。
-type audience []string
-
-func (a *audience) UnmarshalJSON(b []byte) error {
-	var single string
-	if err := json.Unmarshal(b, &single); err == nil {
-		*a = audience{single}
-		return nil
-	}
-	var multi []string
-	if err := json.Unmarshal(b, &multi); err != nil {
-		return fmt.Errorf("aud 既不是字符串也不是字符串数组: %w", err)
-	}
-	*a = multi
-	return nil
-}
-
-func (a audience) contains(v string) bool {
-	for _, s := range a {
-		if s == v {
-			return true
-		}
-	}
-	return false
 }

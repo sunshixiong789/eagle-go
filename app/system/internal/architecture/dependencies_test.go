@@ -86,6 +86,9 @@ func TestInfrastructureBoundaries(t *testing.T) {
 			if strings.HasPrefix(imp, "github.com/eagle-go/eagle/app/") {
 				t.Errorf("shared package %s must not depend on application package %s", pkg.ImportPath, imp)
 			}
+			if imp == "github.com/eagle-go/eagle/ent" || strings.HasPrefix(imp, "github.com/eagle-go/eagle/ent/") {
+				t.Errorf("shared package %s must not depend on project persistence package %s", pkg.ImportPath, imp)
+			}
 		}
 	}
 
@@ -116,6 +119,8 @@ var bannedModulePrefixes = []string{
 	"gorm.io/gorm",
 	"github.com/go-redis/redis/v8",
 	"github.com/go-redis/redis/v7",
+	"github.com/redis/go-redis",
+	"github.com/google/wire",
 }
 
 func TestBannedDependencies(t *testing.T) {

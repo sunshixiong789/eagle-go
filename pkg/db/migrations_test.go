@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -13,9 +14,6 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/pressly/goose/v3"
 )
-
-// 用独立端口，避免与 data 包的集成测试实例冲突（两者可能并行执行）。
-const migrationTestPort = 55434
 
 // 迁移的 up 能跑通不代表 down 也能。回滚脚本平时没人执行，
 // 等到线上真要回滚才发现写错，代价极高——所以在 CI 里就跑一遍往返。
@@ -31,15 +29,16 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	}
 	// 独立运行目录，避免与其他测试包并行时争抢解压目录
 	runtimeDir := filepath.Join(home, ".embedded-postgres-go", "eagle-migrations")
+	port := availablePort(t)
 
 	pg := embeddedpostgres.NewDatabase(
 		embeddedpostgres.DefaultConfig().
 			Username("eagle").
 			Password("eagle").
 			Database("eagle_migrate_test").
-			Port(migrationTestPort).
+			Port(port).
 			RuntimePath(runtimeDir).
-			DataPath(filepath.Join(runtimeDir, "data")).
+			DataPath(t.TempDir()).
 			Logger(io.Discard),
 	)
 	if err := pg.Start(); err != nil {
@@ -49,7 +48,7 @@ func TestMigrationsRoundTrip(t *testing.T) {
 
 	dsn := fmt.Sprintf(
 		"postgres://eagle:eagle@127.0.0.1:%d/eagle_migrate_test?sslmode=disable",
-		migrationTestPort)
+		port)
 
 	sqlDB, err := sql.Open("postgres", dsn)
 	if err != nil {
@@ -72,6 +71,18 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	}
 	assertSeedData(t, sqlDB)
 
+	// 单独往返角色命名空间迁移，模拟已有数据库从裸角色升级。
+	if err := goose.DownTo(sqlDB, dir, 8); err != nil {
+		t.Fatalf("回退角色命名空间迁移: %v", err)
+	}
+	assertPolicyRole(t, sqlDB, "admin", true)
+	assertPolicyRole(t, sqlDB, "realm:admin", false)
+	if err := goose.Up(sqlDB, dir); err != nil {
+		t.Fatalf("重新应用角色命名空间迁移: %v", err)
+	}
+	assertPolicyRole(t, sqlDB, "admin", false)
+	assertPolicyRole(t, sqlDB, "realm:admin", true)
+
 	if err := goose.DownTo(sqlDB, dir, 0); err != nil {
 		t.Fatalf("down-to 0: %v", err)
 	}
@@ -85,6 +96,32 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	assertSeedData(t, sqlDB)
 }
 
+func assertPolicyRole(t *testing.T, db *sql.DB, role string, want bool) {
+	t.Helper()
+	var exists bool
+	if err := db.QueryRow(
+		`SELECT EXISTS(SELECT 1 FROM casbin_rule WHERE ptype = 'p' AND v0 = $1)`, role,
+	).Scan(&exists); err != nil {
+		t.Fatalf("查询角色策略 %s: %v", role, err)
+	}
+	if exists != want {
+		t.Fatalf("角色策略 %q exists=%v, want %v", role, exists, want)
+	}
+}
+
+func availablePort(t *testing.T) uint32 {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("分配 PostgreSQL 测试端口: %v", err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	if err := listener.Close(); err != nil {
+		t.Fatalf("释放 PostgreSQL 测试端口: %v", err)
+	}
+	return uint32(port)
+}
+
 // 种子数据是权限体系的基线，缺了会导致鉴权全线失效。
 //
 // 这里断言的是不变量而不是行数：写死 count 的测试在任何人新增一个
@@ -94,7 +131,7 @@ func assertSeedData(t *testing.T, db *sql.DB) {
 
 	// Casbin 策略里必须有内置角色。角色本身在 Keycloak，
 	// 这里存的是「角色 -> 权限码」映射
-	for _, role := range []string{"admin", "user"} {
+	for _, role := range []string{"realm:admin", "realm:user"} {
 		var exists bool
 		err := db.QueryRow(
 			`SELECT EXISTS(SELECT 1 FROM casbin_rule WHERE ptype = 'p' AND v0 = $1)`, role).Scan(&exists)
@@ -126,7 +163,7 @@ func assertSeedData(t *testing.T, db *sql.DB) {
 	var writeGrants int
 	err := db.QueryRow(`
 		SELECT count(*) FROM casbin_rule
-		WHERE ptype = 'p' AND v0 = 'user'
+		WHERE ptype = 'p' AND v0 = 'realm:user'
 		  AND v1 NOT LIKE '%:query'
 		  AND v1 NOT LIKE '%:list'`).Scan(&writeGrants)
 	if err != nil {
@@ -140,7 +177,7 @@ func assertSeedData(t *testing.T, db *sql.DB) {
 	var wildcards int
 	err = db.QueryRow(`
 		SELECT count(*) FROM casbin_rule
-		WHERE ptype = 'p' AND v0 = 'user' AND v1 LIKE '%*%'`).Scan(&wildcards)
+		WHERE ptype = 'p' AND v0 = 'realm:user' AND v1 LIKE '%*%'`).Scan(&wildcards)
 	if err != nil {
 		t.Fatalf("查询 user 角色的通配策略: %v", err)
 	}
@@ -151,7 +188,7 @@ func assertSeedData(t *testing.T, db *sql.DB) {
 	// 但它必须确实有只读权限，否则说明策略根本没种进去
 	var readGrants int
 	err = db.QueryRow(
-		`SELECT count(*) FROM casbin_rule WHERE ptype = 'p' AND v0 = 'user'`).Scan(&readGrants)
+		`SELECT count(*) FROM casbin_rule WHERE ptype = 'p' AND v0 = 'realm:user'`).Scan(&readGrants)
 	if err != nil {
 		t.Fatalf("查询 user 角色的权限数: %v", err)
 	}

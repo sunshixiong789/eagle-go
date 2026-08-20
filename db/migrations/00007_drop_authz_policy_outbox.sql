@@ -1,7 +1,7 @@
 -- +goose Up
 -- +goose StatementBegin
 
--- 策略同步已改为 version + Redis 通知 + 周期对账，不再使用 outbox。
+-- 策略同步已改为数据库 version + 周期对账，不再使用 outbox。
 DROP TABLE IF EXISTS authz_policy_outbox;
 
 -- +goose StatementEnd

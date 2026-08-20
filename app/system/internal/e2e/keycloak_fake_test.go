@@ -72,8 +72,9 @@ type tokenOpts struct {
 	// clientRoles 是 resource_access 里按客户端划分的角色
 	clientRoles map[string][]string
 	audience    []string
-	jti         string
 	expiresIn   time.Duration
+	notBefore   time.Duration
+	algorithm   jose.SignatureAlgorithm
 	// notSigned 为 true 时用另一把密钥签名，模拟伪造 token
 	wrongKey bool
 }
@@ -85,11 +86,11 @@ func (fk *fakeKeycloak) mint(t *testing.T, o tokenOpts) string {
 	if o.expiresIn == 0 {
 		o.expiresIn = 15 * time.Minute
 	}
-	if o.jti == "" {
-		o.jti = "jti-" + o.subject
-	}
 	if o.audience == nil {
 		o.audience = []string{clientID}
+	}
+	if o.algorithm == "" {
+		o.algorithm = jose.RS256
 	}
 
 	signingKey := fk.key
@@ -102,7 +103,7 @@ func (fk *fakeKeycloak) mint(t *testing.T, o tokenOpts) string {
 	}
 
 	signer, err := jose.NewSigner(
-		jose.SigningKey{Algorithm: jose.RS256, Key: signingKey},
+		jose.SigningKey{Algorithm: o.algorithm, Key: signingKey},
 		// kid 必须带上：RemoteKeySet 按 kid 选公钥
 		(&jose.SignerOptions{}).WithType("JWT").WithHeader("kid", fk.keyID),
 	)
@@ -120,7 +121,6 @@ func (fk *fakeKeycloak) mint(t *testing.T, o tokenOpts) string {
 		"aud":                o.audience,
 		"exp":                now.Add(o.expiresIn).Unix(),
 		"iat":                now.Unix(),
-		"jti":                o.jti,
 		"typ":                "Bearer",
 		"azp":                clientID,
 		"scope":              "openid profile email",
@@ -129,6 +129,9 @@ func (fk *fakeKeycloak) mint(t *testing.T, o tokenOpts) string {
 		"realm_access": map[string]any{
 			"roles": o.realmRole,
 		},
+	}
+	if o.notBefore != 0 {
+		claims["nbf"] = now.Add(o.notBefore).Unix()
 	}
 	if len(o.clientRoles) > 0 {
 		ra := make(map[string]any, len(o.clientRoles))

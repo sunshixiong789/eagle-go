@@ -21,20 +21,6 @@ services:
       timeout: 3s
       retries: 10
 
-  redis:
-    image: redis:7-alpine
-    container_name: eagle-redis
-    command: ["redis-server", "--appendonly", "yes"]
-    ports:
-      - "6379:6379"
-    volumes:
-      - redisdata:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
   # 认证中心：用户、口令、角色的唯一来源。
   # 与业务库共用同一个 PostgreSQL 实例但使用独立的 database——
   # 本地省一个容器，生产应各自独立部署。
@@ -114,4 +100,3 @@ services:
 
 volumes:
   pgdata:
-  redisdata:

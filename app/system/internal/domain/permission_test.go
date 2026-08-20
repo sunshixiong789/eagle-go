@@ -271,19 +271,3 @@ func TestPermissionTreeVisibleMenusSkipsDisabled(t *testing.T) {
 		t.Errorf("仅有停用节点的权限时菜单应为空, got %d 项", len(menus))
 	}
 }
-
-func TestPermissionTreeKnownCodes(t *testing.T) {
-	known := buildTree().KnownCodes()
-
-	for _, code := range []string{
-		"system:user:list", "system:user:add", "system:dict:list", "system:dict:add",
-	} {
-		if _, ok := known[code]; !ok {
-			t.Errorf("应包含权限码 %q", code)
-		}
-	}
-	// 目录没有权限码，不应产生空串条目
-	if _, ok := known[""]; ok {
-		t.Error("不应包含空权限码")
-	}
-}

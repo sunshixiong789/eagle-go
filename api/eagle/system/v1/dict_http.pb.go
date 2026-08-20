@@ -33,7 +33,7 @@ type DictServiceHTTPServer interface {
 	DeleteDictData(context.Context, *DeleteDictDataRequest) (*DeleteDictDataResponse, error)
 	DeleteDictType(context.Context, *DeleteDictTypeRequest) (*DeleteDictTypeResponse, error)
 	// GetDictDataByType 按类型取字典项，供前端渲染下拉框。任何登录用户都要用，
-	// 所以不挂权限码，只校验登录态；结果走 Redis 缓存。
+	// 所以不挂权限码，只校验登录态；结果直接读取权威数据库。
 	GetDictDataByType(context.Context, *GetDictDataByTypeRequest) (*GetDictDataByTypeResponse, error)
 	ListDictData(context.Context, *ListDictDataRequest) (*ListDictDataResponse, error)
 	ListDictTypes(context.Context, *ListDictTypesRequest) (*ListDictTypesResponse, error)
@@ -246,7 +246,7 @@ type DictServiceHTTPClient interface {
 	DeleteDictData(ctx context.Context, req *DeleteDictDataRequest, opts ...http.CallOption) (rsp *DeleteDictDataResponse, err error)
 	DeleteDictType(ctx context.Context, req *DeleteDictTypeRequest, opts ...http.CallOption) (rsp *DeleteDictTypeResponse, err error)
 	// GetDictDataByType 按类型取字典项，供前端渲染下拉框。任何登录用户都要用，
-	// 所以不挂权限码，只校验登录态；结果走 Redis 缓存。
+	// 所以不挂权限码，只校验登录态；结果直接读取权威数据库。
 	GetDictDataByType(ctx context.Context, req *GetDictDataByTypeRequest, opts ...http.CallOption) (rsp *GetDictDataByTypeResponse, err error)
 	ListDictData(ctx context.Context, req *ListDictDataRequest, opts ...http.CallOption) (rsp *ListDictDataResponse, err error)
 	ListDictTypes(ctx context.Context, req *ListDictTypesRequest, opts ...http.CallOption) (rsp *ListDictTypesResponse, err error)
@@ -329,7 +329,7 @@ func (c *DictServiceHTTPClientImpl) DeleteDictType(ctx context.Context, in *Dele
 }
 
 // GetDictDataByType 按类型取字典项，供前端渲染下拉框。任何登录用户都要用，
-// 所以不挂权限码，只校验登录态；结果走 Redis 缓存。
+// 所以不挂权限码，只校验登录态；结果直接读取权威数据库。
 func (c *DictServiceHTTPClientImpl) GetDictDataByType(ctx context.Context, in *GetDictDataByTypeRequest, opts ...http.CallOption) (*GetDictDataByTypeResponse, error) {
 	var out GetDictDataByTypeResponse
 	pattern := "/v1/system/dict/data/type/{dict_type}"

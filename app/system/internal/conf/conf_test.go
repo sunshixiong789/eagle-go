@@ -4,7 +4,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/go-kratos/kratos/v3/config"
 	configenv "github.com/go-kratos/kratos/v3/config/env"
@@ -44,7 +43,6 @@ func TestEnvironmentOverridesSensitiveDefaults(t *testing.T) {
 		t.Fatalf("解析配置目录: %v", err)
 	}
 	t.Setenv("EAGLE_DATABASE_DSN", "postgres://runtime:secret@db.internal:5432/eagle?sslmode=require")
-	t.Setenv("EAGLE_REDIS_PASSWORD", "runtime-redis-secret")
 
 	c := config.New(config.WithSource(file.NewSource(path), configenv.NewSource("EAGLE")))
 	t.Cleanup(func() { _ = c.Close() })
@@ -57,9 +55,6 @@ func TestEnvironmentOverridesSensitiveDefaults(t *testing.T) {
 	}
 	if got := bc.GetData().GetDatabase().GetDsn(); !strings.Contains(got, "runtime:secret@db.internal") {
 		t.Fatalf("DATABASE_DSN override not applied: %q", got)
-	}
-	if got := bc.GetData().GetRedis().GetPassword(); got != "runtime-redis-secret" {
-		t.Fatalf("REDIS_PASSWORD override = %q", got)
 	}
 }
 
@@ -77,9 +72,6 @@ func TestConfigParses(t *testing.T) {
 	}
 	if bc.GetData().GetDatabase().GetDsn() == "" {
 		t.Error("data.database.dsn 未解析出来")
-	}
-	if bc.GetData().GetRedis().GetAddr() == "" {
-		t.Error("data.redis.addr 未解析出来")
 	}
 }
 
@@ -118,21 +110,13 @@ func TestObservabilityConfigIsSane(t *testing.T) {
 	if o.GetMetricsAddr() == "" {
 		t.Error("metrics_addr 未配置，Prometheus 抓不到指标")
 	}
+	if o.GetOtlpEndpoint() != "" && !o.GetOtlpInsecure() {
+		t.Error("本地无 TLS collector 配置应显式启用 otlp_insecure")
+	}
 	// 指标端点必须与业务端口分开：它不经过认证鉴权中间件，
 	// 与业务共用端口就等于给业务服务开了个免鉴权的口子
 	bc := loadConfig(t)
 	if o.GetMetricsAddr() == bc.GetServer().GetHttp().GetAddr() {
 		t.Error("metrics_addr 与业务 HTTP 端口相同，指标端点会绕过鉴权暴露业务接口")
-	}
-}
-
-// 缓存 TTL 为零会导致缓存立即过期，退化成每次请求都打库。
-func TestCacheTTLIsPositive(t *testing.T) {
-	ttl := loadConfig(t).GetAuth().GetDictCacheTtl().AsDuration()
-	if ttl <= 0 {
-		t.Errorf("dict_cache_ttl = %v, 应为正值否则缓存形同虚设", ttl)
-	}
-	if ttl > 24*time.Hour {
-		t.Errorf("dict_cache_ttl = %v 过长，字典变更后失效不及时", ttl)
 	}
 }

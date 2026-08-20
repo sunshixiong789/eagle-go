@@ -46,7 +46,7 @@ type DictServiceClient interface {
 	UpdateDictData(ctx context.Context, in *UpdateDictDataRequest, opts ...grpc.CallOption) (*UpdateDictDataResponse, error)
 	DeleteDictData(ctx context.Context, in *DeleteDictDataRequest, opts ...grpc.CallOption) (*DeleteDictDataResponse, error)
 	// 按类型取字典项，供前端渲染下拉框。任何登录用户都要用，
-	// 所以不挂权限码，只校验登录态；结果走 Redis 缓存。
+	// 所以不挂权限码，只校验登录态；结果直接读取权威数据库。
 	GetDictDataByType(ctx context.Context, in *GetDictDataByTypeRequest, opts ...grpc.CallOption) (*GetDictDataByTypeResponse, error)
 }
 
@@ -164,7 +164,7 @@ type DictServiceServer interface {
 	UpdateDictData(context.Context, *UpdateDictDataRequest) (*UpdateDictDataResponse, error)
 	DeleteDictData(context.Context, *DeleteDictDataRequest) (*DeleteDictDataResponse, error)
 	// 按类型取字典项，供前端渲染下拉框。任何登录用户都要用，
-	// 所以不挂权限码，只校验登录态；结果走 Redis 缓存。
+	// 所以不挂权限码，只校验登录态；结果直接读取权威数据库。
 	GetDictDataByType(context.Context, *GetDictDataByTypeRequest) (*GetDictDataByTypeResponse, error)
 	mustEmbedUnimplementedDictServiceServer()
 }

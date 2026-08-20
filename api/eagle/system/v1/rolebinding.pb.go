@@ -27,7 +27,7 @@ const (
 // RoleBinding 是一个角色及其被授予的权限码。
 type RoleBinding struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// 角色名，必须与 Keycloak realm/client role 一致
+	// 带来源命名空间的角色键：realm:<role> 或 client:<client-id>:<role>
 	Role            string   `protobuf:"bytes,1,opt,name=role,proto3" json:"role,omitempty"`
 	PermissionCodes []string `protobuf:"bytes,2,rep,name=permission_codes,json=permissionCodes,proto3" json:"permission_codes,omitempty"`
 	Revision        int64    `protobuf:"varint,3,opt,name=revision,proto3" json:"revision,omitempty"`
@@ -817,25 +817,21 @@ const file_eagle_system_v1_rolebinding_proto_rawDesc = "" +
 	"\x15ListBoundRolesRequest\"y\n" +
 	"\x16ListBoundRolesResponse\x128\n" +
 	"\bbindings\x18\x01 \x03(\v2\x1c.eagle.system.v1.RoleBindingR\bbindings\x12%\n" +
-	"\x0epolicy_version\x18\x02 \x01(\x03R\rpolicyVersion\";\n" +
-	"\x19GetRolePermissionsRequest\x12\x1e\n" +
-	"\x04role\x18\x01 \x01(\tB\n" +
-	"\xbaH\ar\x05\x10\x01\x18\x80\x01R\x04role\"T\n" +
+	"\x0epolicy_version\x18\x02 \x01(\x03R\rpolicyVersion\"_\n" +
+	"\x19GetRolePermissionsRequest\x12B\n" +
+	"\x04role\x18\x01 \x01(\tB.\xbaH+r)\x10\x01\x18\x80\x012\"^(realm:[^:]+|client:[^:]+:[^:]+)$R\x04role\"T\n" +
 	"\x1aGetRolePermissionsResponse\x126\n" +
-	"\abinding\x18\x01 \x01(\v2\x1c.eagle.system.v1.RoleBindingR\abinding\"\xb4\x01\n" +
-	"\x19SetRolePermissionsRequest\x12\x1e\n" +
-	"\x04role\x18\x01 \x01(\tB\n" +
-	"\xbaH\ar\x05\x10\x01\x18\x80\x01R\x04role\x12)\n" +
+	"\abinding\x18\x01 \x01(\v2\x1c.eagle.system.v1.RoleBindingR\abinding\"\xd8\x01\n" +
+	"\x19SetRolePermissionsRequest\x12B\n" +
+	"\x04role\x18\x01 \x01(\tB.\xbaH+r)\x10\x01\x18\x80\x012\"^(realm:[^:]+|client:[^:]+:[^:]+)$R\x04role\x12)\n" +
 	"\x10permission_codes\x18\x02 \x03(\tR\x0fpermissionCodes\x127\n" +
 	"\x10expected_version\x18\x03 \x01(\x03B\a\xbaH\x04\"\x02 \x00H\x00R\x0fexpectedVersion\x88\x01\x01B\x13\n" +
 	"\x11_expected_version\"C\n" +
 	"\x1aSetRolePermissionsResponse\x12%\n" +
-	"\x0epolicy_version\x18\x01 \x01(\x03R\rpolicyVersion\"\xaf\x01\n" +
-	"\x19AddRoleInheritanceRequest\x12 \n" +
-	"\x05child\x18\x01 \x01(\tB\n" +
-	"\xbaH\ar\x05\x10\x01\x18\x80\x01R\x05child\x12\"\n" +
-	"\x06parent\x18\x02 \x01(\tB\n" +
-	"\xbaH\ar\x05\x10\x01\x18\x80\x01R\x06parent\x127\n" +
+	"\x0epolicy_version\x18\x01 \x01(\x03R\rpolicyVersion\"\xf7\x01\n" +
+	"\x19AddRoleInheritanceRequest\x12D\n" +
+	"\x05child\x18\x01 \x01(\tB.\xbaH+r)\x10\x01\x18\x80\x012\"^(realm:[^:]+|client:[^:]+:[^:]+)$R\x05child\x12F\n" +
+	"\x06parent\x18\x02 \x01(\tB.\xbaH+r)\x10\x01\x18\x80\x012\"^(realm:[^:]+|client:[^:]+:[^:]+)$R\x06parent\x127\n" +
 	"\x10expected_version\x18\x03 \x01(\x03B\a\xbaH\x04\"\x02 \x00H\x00R\x0fexpectedVersion\x88\x01\x01B\x13\n" +
 	"\x11_expected_version\"C\n" +
 	"\x1aAddRoleInheritanceResponse\x12%\n" +
@@ -846,12 +842,10 @@ const file_eagle_system_v1_rolebinding_proto_rawDesc = "" +
 	"\x1bListRoleInheritancesRequest\"\x8b\x01\n" +
 	"\x1cListRoleInheritancesResponse\x12D\n" +
 	"\finheritances\x18\x01 \x03(\v2 .eagle.system.v1.RoleInheritanceR\finheritances\x12%\n" +
-	"\x0epolicy_version\x18\x02 \x01(\x03R\rpolicyVersion\"\xb2\x01\n" +
-	"\x1cDeleteRoleInheritanceRequest\x12 \n" +
-	"\x05child\x18\x01 \x01(\tB\n" +
-	"\xbaH\ar\x05\x10\x01\x18\x80\x01R\x05child\x12\"\n" +
-	"\x06parent\x18\x02 \x01(\tB\n" +
-	"\xbaH\ar\x05\x10\x01\x18\x80\x01R\x06parent\x127\n" +
+	"\x0epolicy_version\x18\x02 \x01(\x03R\rpolicyVersion\"\xfa\x01\n" +
+	"\x1cDeleteRoleInheritanceRequest\x12D\n" +
+	"\x05child\x18\x01 \x01(\tB.\xbaH+r)\x10\x01\x18\x80\x012\"^(realm:[^:]+|client:[^:]+:[^:]+)$R\x05child\x12F\n" +
+	"\x06parent\x18\x02 \x01(\tB.\xbaH+r)\x10\x01\x18\x80\x012\"^(realm:[^:]+|client:[^:]+:[^:]+)$R\x06parent\x127\n" +
 	"\x10expected_version\x18\x03 \x01(\x03B\a\xbaH\x04\"\x02 \x00H\x00R\x0fexpectedVersion\x88\x01\x01B\x13\n" +
 	"\x11_expected_version\"F\n" +
 	"\x1dDeleteRoleInheritanceResponse\x12%\n" +

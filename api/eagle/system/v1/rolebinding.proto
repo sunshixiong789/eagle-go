@@ -72,7 +72,7 @@ service RoleBindingService {
 
 // RoleBinding 是一个角色及其被授予的权限码。
 message RoleBinding {
-  // 角色名，必须与 Keycloak realm/client role 一致
+  // 带来源命名空间的角色键：realm:<role> 或 client:<client-id>:<role>
   string role = 1;
   repeated string permission_codes = 2;
   int64 revision = 3;
@@ -89,6 +89,7 @@ message GetRolePermissionsRequest {
   string role = 1 [(buf.validate.field).string = {
     min_len: 1
     max_len: 128
+    pattern: "^(realm:[^:]+|client:[^:]+:[^:]+)$"
   }];
 }
 
@@ -100,6 +101,7 @@ message SetRolePermissionsRequest {
   string role = 1 [(buf.validate.field).string = {
     min_len: 1
     max_len: 128
+    pattern: "^(realm:[^:]+|client:[^:]+:[^:]+)$"
   }];
   // 全量覆盖。传空数组表示收回该角色的全部权限。
   repeated string permission_codes = 2;
@@ -114,10 +116,12 @@ message AddRoleInheritanceRequest {
   string child = 1 [(buf.validate.field).string = {
     min_len: 1
     max_len: 128
+    pattern: "^(realm:[^:]+|client:[^:]+:[^:]+)$"
   }];
   string parent = 2 [(buf.validate.field).string = {
     min_len: 1
     max_len: 128
+    pattern: "^(realm:[^:]+|client:[^:]+:[^:]+)$"
   }];
   optional int64 expected_version = 3 [(buf.validate.field).int64.gt = 0];
 }
@@ -139,8 +143,8 @@ message ListRoleInheritancesResponse {
 }
 
 message DeleteRoleInheritanceRequest {
-  string child = 1 [(buf.validate.field).string = {min_len: 1, max_len: 128}];
-  string parent = 2 [(buf.validate.field).string = {min_len: 1, max_len: 128}];
+  string child = 1 [(buf.validate.field).string = {min_len: 1, max_len: 128, pattern: "^(realm:[^:]+|client:[^:]+:[^:]+)$"}];
+  string parent = 2 [(buf.validate.field).string = {min_len: 1, max_len: 128, pattern: "^(realm:[^:]+|client:[^:]+:[^:]+)$"}];
   optional int64 expected_version = 3 [(buf.validate.field).int64.gt = 0];
 }
 

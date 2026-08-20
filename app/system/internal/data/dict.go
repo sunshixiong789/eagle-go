@@ -3,7 +3,6 @@ package data
 import (
 	"context"
 	"fmt"
-	"log/slog"
 
 	"github.com/eagle-go/eagle/app/system/internal/domain"
 	"github.com/eagle-go/eagle/ent"
@@ -83,19 +82,6 @@ func (r *dictRepo) GetTypeByID(ctx context.Context, id int64) (*domain.DictType,
 	return toDomainDictType(t), nil
 }
 
-func (r *dictRepo) GetTypeByCode(ctx context.Context, code string) (*domain.DictType, error) {
-	t, err := r.data.client.DictType.Query().
-		Where(dicttype.TypeEQ(code)).
-		Only(ctx)
-	if err != nil {
-		if isNotFound(err) {
-			return nil, domain.ErrDictTypeNotFound
-		}
-		return nil, fmt.Errorf("get dict type %q: %w", code, err)
-	}
-	return toDomainDictType(t), nil
-}
-
 func (r *dictRepo) ListTypes(ctx context.Context, q domain.ListDictTypesQuery) ([]*domain.DictType, int64, error) {
 	query := r.data.client.DictType.Query()
 	if q.Keyword != "" {
@@ -132,10 +118,6 @@ func (r *dictRepo) ListTypes(ctx context.Context, q domain.ListDictTypesQuery) (
 }
 
 func (r *dictRepo) UpdateType(ctx context.Context, t *domain.DictType) (*domain.DictType, error) {
-	current, err := r.GetTypeByID(ctx, t.ID)
-	if err != nil {
-		return nil, err
-	}
 	updated, err := r.data.client.DictType.UpdateOneID(t.ID).
 		SetName(t.Name).
 		SetStatus(int32(t.Status)).
@@ -147,22 +129,16 @@ func (r *dictRepo) UpdateType(ctx context.Context, t *domain.DictType) (*domain.
 		}
 		return nil, fmt.Errorf("update dict type %d: %w", t.ID, err)
 	}
-	r.invalidateCache(ctx, current.Type)
 	return toDomainDictType(updated), nil
 }
 
 func (r *dictRepo) DeleteType(ctx context.Context, id int64) error {
-	current, err := r.GetTypeByID(ctx, id)
-	if err != nil {
-		return err
-	}
 	if err := r.data.client.DictType.DeleteOneID(id).Exec(ctx); err != nil {
 		if isNotFound(err) {
 			return domain.ErrDictTypeNotFound
 		}
 		return fmt.Errorf("delete dict type %d: %w", id, err)
 	}
-	r.invalidateCache(ctx, current.Type)
 	return nil
 }
 
@@ -190,7 +166,6 @@ func (r *dictRepo) CreateData(ctx context.Context, d *domain.DictData) (*domain.
 		}
 		return nil, fmt.Errorf("create dict data: %w", err)
 	}
-	r.invalidateCache(ctx, d.DictType)
 	return toDomainDictData(created), nil
 }
 
@@ -238,26 +213,22 @@ func (r *dictRepo) ListData(ctx context.Context, q domain.ListDictDataQuery) ([]
 	return out, int64(total), nil
 }
 
-// ListDataByType 是前端下拉框的主要来源，命中率高，走缓存。
 func (r *dictRepo) ListDataByType(ctx context.Context, dictType string) ([]*domain.DictData, error) {
-	return r.data.dictCache.Get(ctx, dictDataKey(dictType),
-		func(ctx context.Context) ([]*domain.DictData, error) {
-			rows, err := r.data.client.DictData.Query().
-				Where(
-					dictdata.DictTypeEQ(dictType),
-					dictdata.StatusEQ(int32(domain.StatusEnabled)),
-				).
-				Order(ent.Asc(dictdata.FieldSort), ent.Asc(dictdata.FieldID)).
-				All(ctx)
-			if err != nil {
-				return nil, fmt.Errorf("list dict data of type %q: %w", dictType, err)
-			}
-			out := make([]*domain.DictData, 0, len(rows))
-			for _, row := range rows {
-				out = append(out, toDomainDictData(row))
-			}
-			return out, nil
-		})
+	rows, err := r.data.client.DictData.Query().
+		Where(
+			dictdata.DictTypeEQ(dictType),
+			dictdata.StatusEQ(int32(domain.StatusEnabled)),
+		).
+		Order(ent.Asc(dictdata.FieldSort), ent.Asc(dictdata.FieldID)).
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list dict data of type %q: %w", dictType, err)
+	}
+	out := make([]*domain.DictData, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, toDomainDictData(row))
+	}
+	return out, nil
 }
 
 func (r *dictRepo) UpdateData(ctx context.Context, d *domain.DictData) (*domain.DictData, error) {
@@ -279,38 +250,15 @@ func (r *dictRepo) UpdateData(ctx context.Context, d *domain.DictData) (*domain.
 		}
 		return nil, fmt.Errorf("update dict data %d: %w", d.ID, err)
 	}
-	r.invalidateCache(ctx, d.DictType)
 	return toDomainDictData(updated), nil
 }
 
 func (r *dictRepo) DeleteData(ctx context.Context, id int64) error {
-	current, err := r.GetDataByID(ctx, id)
-	if err != nil {
-		return err
-	}
 	if err := r.data.client.DictData.DeleteOneID(id).Exec(ctx); err != nil {
 		if isNotFound(err) {
 			return domain.ErrDictDataNotFound
 		}
 		return fmt.Errorf("delete dict data %d: %w", id, err)
 	}
-	r.invalidateCache(ctx, current.DictType)
 	return nil
-}
-
-// InvalidateCache 保留为测试和运维工具入口；领域接口不再暴露缓存概念。
-func (r *dictRepo) InvalidateCache(ctx context.Context, dictTypes ...string) error {
-	keys := make([]string, 0, len(dictTypes))
-	for _, t := range dictTypes {
-		keys = append(keys, dictDataKey(t))
-	}
-	return r.data.dictCache.Invalidate(ctx, keys...)
-}
-
-func (r *dictRepo) invalidateCache(ctx context.Context, dictTypes ...string) {
-	if err := r.InvalidateCache(ctx, dictTypes...); err != nil {
-		// 数据库写入已经提交，不能把缓存删除失败伪装成整次业务失败。
-		// Redis 恢复前读取会自动回源；恢复后最迟在 TTL 到期时收敛。
-		slog.Default().WarnContext(ctx, "字典数据已提交，但缓存失效失败", "dict_types", dictTypes, "error", err)
-	}
 }

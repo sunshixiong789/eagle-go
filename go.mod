@@ -2,10 +2,16 @@ module github.com/eagle-go/eagle
 
 go 1.26.5
 
+tool (
+	github.com/go-kratos/kratos/cmd/protoc-gen-go-http/v3
+	github.com/google/gnostic/cmd/protoc-gen-openapi
+	google.golang.org/grpc/cmd/protoc-gen-go-grpc
+	google.golang.org/protobuf/cmd/protoc-gen-go
+)
+
 require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.11-20260415201107-50325440f8f2.1
 	entgo.io/ent v0.14.6
-	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/casbin/casbin/v2 v2.135.0
 	github.com/coreos/go-oidc/v3 v3.20.0
 	github.com/fergusstrange/embedded-postgres v1.34.0
@@ -13,12 +19,10 @@ require (
 	github.com/go-kratos/kratos/contrib/middleware/validate/v3 v3.0.0-20260626125723-668db92c2c00
 	github.com/go-kratos/kratos/contrib/otel/v3 v3.0.0-20260626125723-668db92c2c00
 	github.com/go-kratos/kratos/v3 v3.0.0
-	github.com/google/wire v0.7.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/lib/pq v1.10.9
 	github.com/pressly/goose/v3 v3.27.3
 	github.com/prometheus/client_golang v1.24.1
-	github.com/redis/go-redis/v9 v9.22.0
 	go.opentelemetry.io/otel v1.45.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.45.0
 	go.opentelemetry.io/otel/exporters/prometheus v0.67.0
@@ -27,7 +31,6 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.45.0
 	go.opentelemetry.io/otel/trace v1.45.0
 	go.uber.org/automaxprocs v1.6.0
-	golang.org/x/sync v0.22.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20260803160001-6ac0973c030d
 	google.golang.org/grpc v1.83.0
 	google.golang.org/protobuf v1.36.11
@@ -47,11 +50,14 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
+	github.com/go-kratos/kratos/cmd/protoc-gen-go-http/v3 v3.0.0-20260626125723-668db92c2c00 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/inflect v0.19.0 // indirect
 	github.com/go-playground/form/v4 v4.3.0 // indirect
 	github.com/google/cel-go v0.28.1 // indirect
+	github.com/google/gnostic v0.7.1 // indirect
+	github.com/google/gnostic-models v0.7.0 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
@@ -70,21 +76,21 @@ require (
 	github.com/prometheus/procfs v0.21.1 // indirect
 	github.com/sethvargo/go-retry v0.4.0 // indirect
 	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect
-	github.com/yuin/gopher-lua v1.1.1 // indirect
 	github.com/zclconf/go-cty v1.14.4 // indirect
 	github.com/zclconf/go-cty-yaml v1.1.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.45.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.11.0 // indirect
-	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/exp v0.0.0-20260718201538-764159d718ef // indirect
 	golang.org/x/mod v0.38.0 // indirect
 	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
+	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260803160001-6ac0973c030d // indirect
+	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.6.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

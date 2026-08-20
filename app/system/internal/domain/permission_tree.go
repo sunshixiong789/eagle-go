@@ -19,13 +19,6 @@ func NewPermissionTree(perms []*Permission) *PermissionTree {
 	return &PermissionTree{byID: byID, all: perms}
 }
 
-func (t *PermissionTree) All() []*Permission { return t.all }
-
-func (t *PermissionTree) Get(id int64) (*Permission, bool) {
-	p, ok := t.byID[id]
-	return p, ok
-}
-
 // EnsureNoCycle 校验把 id 挂到 newParentID 之下不会形成环。
 //
 // 上溯 newParentID 的祖先链，遇到 id 即说明 newParentID 是 id 的后代。
@@ -100,15 +93,4 @@ func grantedCovers(granted []PermissionCode, target PermissionCode) bool {
 	return slices.ContainsFunc(granted, func(g PermissionCode) bool {
 		return g.Covers(target)
 	})
-}
-
-// KnownCodes 返回树中全部非空权限码，用于校验授权时引用的权限码是否存在。
-func (t *PermissionTree) KnownCodes() map[string]struct{} {
-	out := make(map[string]struct{}, len(t.all))
-	for _, p := range t.all {
-		if !p.code.IsZero() {
-			out[p.code.String()] = struct{}{}
-		}
-	}
-	return out
 }

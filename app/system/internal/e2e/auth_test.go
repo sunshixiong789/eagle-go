@@ -8,7 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eagle-go/eagle/pkg/authn"
+	jose "github.com/go-jose/go-jose/v4"
+
+	"github.com/eagle-go/eagle/pkg/identity"
 )
 
 // get 带可选 token 发起请求，返回状态码与响应体。
@@ -77,6 +79,14 @@ func TestUnauthenticatedIsRejected(t *testing.T) {
 		{"aud 不匹配", env.kc.mint(t, tokenOpts{
 			subject: "s3", username: "alice",
 			realmRole: []string{adminRole}, audience: []string{"another-service"},
+		})},
+		{"尚未生效", env.kc.mint(t, tokenOpts{
+			subject: "s4", username: "alice",
+			realmRole: []string{adminRole}, notBefore: 10 * time.Minute,
+		})},
+		{"非白名单签名算法", env.kc.mint(t, tokenOpts{
+			subject: "s5", username: "alice",
+			realmRole: []string{adminRole}, algorithm: jose.PS256,
 		})},
 	}
 
@@ -160,7 +170,7 @@ func TestSuperAdminBypassesPolicy(t *testing.T) {
 // 这类错误不会报错，只会表现为「配了权限却还是 403」。
 func TestClientRolesFromResourceAccess(t *testing.T) {
 	env := newTestEnv(t)
-	env.grantRole(t, "client-viewer", "system:permission:list")
+	env.grantRole(t, identity.ClientRoleKey(clientID, "client-viewer"), "system:permission:list")
 
 	token := env.kc.mint(t, tokenOpts{
 		subject:  "sub-crv",
@@ -196,29 +206,21 @@ func TestOtherClientRolesAreIgnored(t *testing.T) {
 	}
 }
 
-// 撤销黑名单：登出或踢人后，未过期的 token 也必须立即失效。
-func TestRevokedTokenIsRejected(t *testing.T) {
+func TestRealmAndClientRoleNamesDoNotCollide(t *testing.T) {
 	env := newTestEnv(t)
-	env.grantRole(t, "viewer", "system:permission:list")
+	env.grantRole(t, identity.ClientRoleKey(clientID, "operator"), "system:permission:list")
 
-	token := env.kc.mint(t, tokenOpts{
-		subject: "sub-revoke", username: "rick",
-		realmRole: []string{"viewer"}, jti: "jti-to-revoke",
+	realmToken := env.kc.userToken(t, "realm-operator", "operator")
+	if code, body := env.get(t, "/v1/system/permissions", realmToken); code != http.StatusForbidden {
+		t.Fatalf("同名 realm role = %d (%s), want 403", code, body)
+	}
+
+	clientToken := env.kc.mint(t, tokenOpts{
+		subject: "sub-client-operator", username: "client-operator",
+		clientRoles: map[string][]string{clientID: {"operator"}},
 	})
-
-	// 撤销前可用
-	if code, body := env.get(t, "/v1/system/permissions", token); code != http.StatusOK {
-		t.Fatalf("撤销前 = %d (%s), want 200", code, body)
-	}
-
-	// 用导出的前缀常量而不是硬编码字符串：
-	// 键格式一旦改动，这里会跟着变，不会出现「测试仍绿但撤销已失效」
-	if err := env.redis.Set(authn.RevocationKeyPrefix+"jti-to-revoke", "1"); err != nil {
-		t.Fatalf("写入黑名单: %v", err)
-	}
-
-	if code, _ := env.get(t, "/v1/system/permissions", token); code != http.StatusUnauthorized {
-		t.Errorf("撤销后 = %d, want 401", code)
+	if code, body := env.get(t, "/v1/system/permissions", clientToken); code != http.StatusOK {
+		t.Fatalf("目标 client role = %d (%s), want 200", code, body)
 	}
 }
 

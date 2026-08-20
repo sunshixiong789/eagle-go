@@ -2,7 +2,34 @@
 // 认证中间件写入，业务与鉴权中间件只从这里读取。
 package identity
 
-import "context"
+import (
+	"context"
+	"strings"
+)
+
+const (
+	realmRolePrefix  = "realm:"
+	clientRolePrefix = "client:"
+)
+
+func RealmRoleKey(role string) string { return realmRolePrefix + role }
+
+func ClientRoleKey(clientID, role string) string {
+	return clientRolePrefix + clientID + ":" + role
+}
+
+func ValidRoleKey(key string) bool {
+	switch {
+	case strings.HasPrefix(key, realmRolePrefix):
+		role := strings.TrimPrefix(key, realmRolePrefix)
+		return role != "" && !strings.Contains(role, ":")
+	case strings.HasPrefix(key, clientRolePrefix):
+		parts := strings.Split(strings.TrimPrefix(key, clientRolePrefix), ":")
+		return len(parts) == 2 && parts[0] != "" && parts[1] != ""
+	default:
+		return false
+	}
+}
 
 type ctxKey struct{}
 
@@ -26,7 +53,7 @@ type Principal struct {
 	// Scopes 是 token 携带的 scope。
 	Scopes []string
 
-	// Roles 汇总了 realm 角色与本服务的 client 角色。
+	// Roles 汇总了带命名空间的 realm 角色与本服务 client 角色。
 	// 普通 Casbin 策略判定基于它。
 	Roles []string
 
@@ -34,24 +61,8 @@ type Principal struct {
 	// 高影响的管理员短路必须基于它，防止 realm 级同名角色跨服务扩权。
 	ClientRoles []string
 
-	// TokenID 是 jti，登出/踢人时写入黑名单的键。
-	TokenID string
-
 	// IsService 标记这是服务账号令牌，背后没有真实用户。
 	IsService bool
-}
-
-// HasRole 判断主体是否具备某个角色。
-func (p *Principal) HasRole(role string) bool {
-	if p == nil {
-		return false
-	}
-	for _, r := range p.Roles {
-		if r == role {
-			return true
-		}
-	}
-	return false
 }
 
 // HasClientRole 判断主体是否拥有本资源服务器命名空间内的角色。
@@ -67,19 +78,6 @@ func (p *Principal) HasClientRole(role string) bool {
 	return false
 }
 
-// HasScope 判断 token 是否携带某个 scope。
-func (p *Principal) HasScope(scope string) bool {
-	if p == nil {
-		return false
-	}
-	for _, s := range p.Scopes {
-		if s == scope {
-			return true
-		}
-	}
-	return false
-}
-
 // NewContext 把主体放入 context。仅认证中间件应调用。
 func NewContext(ctx context.Context, p *Principal) context.Context {
 	return context.WithValue(ctx, ctxKey{}, p)
@@ -89,24 +87,4 @@ func NewContext(ctx context.Context, p *Principal) context.Context {
 func FromContext(ctx context.Context) (*Principal, bool) {
 	p, ok := ctx.Value(ctxKey{}).(*Principal)
 	return p, ok && p != nil
-}
-
-// Subject 是取当前用户标识的便捷方法。
-// 服务令牌或未认证时返回空串——服务账号不代表任何真实用户，
-// 「查我自己的菜单」这类接口对它就不该有结果。
-func Subject(ctx context.Context) string {
-	p, ok := FromContext(ctx)
-	if !ok || p.IsService {
-		return ""
-	}
-	return p.Subject
-}
-
-// Roles 返回当前主体的角色，未认证时为 nil。
-func Roles(ctx context.Context) []string {
-	p, ok := FromContext(ctx)
-	if !ok {
-		return nil
-	}
-	return p.Roles
 }

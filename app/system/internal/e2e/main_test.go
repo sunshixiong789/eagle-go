@@ -3,10 +3,10 @@
 //
 // 与 data 包的集成测试的区别：那里验证的是仓储实现与 SQL，
 // 这里验证的是「服务作为一个整体能不能起来并正确响应」——
-// 配置解析、wire 装配、中间件顺序、认证与授权判定、错误码映射。
+// 配置解析、依赖装配、中间件顺序、认证与授权判定、错误码映射。
 //
 // 不依赖 Docker：PostgreSQL 由 embedded-postgres 在进程内拉起，
-// Redis 用 miniredis，Keycloak 用一个签发真实 RS256 token 的替身。
+// Keycloak 用一个签发真实 RS256 token 的替身。
 package e2e
 
 import (
@@ -16,13 +16,13 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/alicebob/miniredis/v2"
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 	_ "github.com/lib/pq"
 	"github.com/pressly/goose/v3"
@@ -31,21 +31,21 @@ import (
 	"github.com/eagle-go/eagle/app/system/internal/biz"
 	"github.com/eagle-go/eagle/app/system/internal/conf"
 	"github.com/eagle-go/eagle/app/system/internal/data"
+	"github.com/eagle-go/eagle/app/system/internal/domain"
 	"github.com/eagle-go/eagle/app/system/internal/server"
 	"github.com/eagle-go/eagle/app/system/internal/service"
 	"github.com/eagle-go/eagle/pkg/authz"
+	"github.com/eagle-go/eagle/pkg/identity"
 )
 
 const (
-	testPGPort = 55435
-	clientID   = "eagle-system"
-	adminRole  = "admin"
+	clientID  = "eagle-system"
+	adminRole = "admin"
 )
 
 var (
-	testPG    *embeddedpostgres.EmbeddedPostgres
-	testRedis *miniredis.Miniredis
-	testDSN   string
+	testPG  *embeddedpostgres.EmbeddedPostgres
+	testDSN string
 )
 
 func TestMain(m *testing.M) {
@@ -70,13 +70,22 @@ func run(m *testing.M) (int, error) {
 	// 独立于其他测试包的运行目录：go test ./... 并行执行不同包，
 	// 共用解压目录会互相踩（详见 data 包 main_test.go 的说明）
 	runtimeDir := filepath.Join(home, ".embedded-postgres-go", "eagle-e2e")
+	dataDir, err := os.MkdirTemp("", "eagle-e2e-postgres-")
+	if err != nil {
+		return 0, fmt.Errorf("创建 PostgreSQL 临时数据目录: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(dataDir) }()
+	port, err := availablePort()
+	if err != nil {
+		return 0, err
+	}
 
 	testPG = embeddedpostgres.NewDatabase(
 		embeddedpostgres.DefaultConfig().
 			Username("eagle").Password("eagle").Database("eagle_e2e").
-			Port(testPGPort).
+			Port(port).
 			RuntimePath(runtimeDir).
-			DataPath(filepath.Join(runtimeDir, "data")).
+			DataPath(dataDir).
 			Logger(io.Discard),
 	)
 	if err := testPG.Start(); err != nil {
@@ -85,19 +94,25 @@ func run(m *testing.M) (int, error) {
 	defer func() { _ = testPG.Stop() }()
 
 	testDSN = fmt.Sprintf(
-		"postgres://eagle:eagle@127.0.0.1:%d/eagle_e2e?sslmode=disable", testPGPort)
+		"postgres://eagle:eagle@127.0.0.1:%d/eagle_e2e?sslmode=disable", port)
 
 	if err := migrate(testDSN); err != nil {
 		return 0, err
 	}
 
-	testRedis, err = miniredis.Run()
-	if err != nil {
-		return 0, fmt.Errorf("启动 miniredis: %w", err)
-	}
-	defer testRedis.Close()
-
 	return m.Run(), nil
+}
+
+func availablePort() (uint32, error) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return 0, fmt.Errorf("分配 PostgreSQL 测试端口: %w", err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	if err := listener.Close(); err != nil {
+		return 0, fmt.Errorf("释放 PostgreSQL 测试端口: %w", err)
+	}
+	return uint32(port), nil
 }
 
 func migrate(dsn string) error {
@@ -148,12 +163,12 @@ type testEnv struct {
 	http     *httptest.Server
 	kc       *fakeKeycloak
 	enforcer *authz.Enforcer
-	redis    *miniredis.Miniredis
+	policy   domain.PolicyRepo
 }
 
 // newTestEnv 用与生产完全相同的构造函数装配服务。
 //
-// 刻意不走 wireApp：那个函数返回 *kratos.App，会真正监听端口。
+// 刻意不走 buildApp：那个函数返回 *kratos.App，会真正监听端口。
 // 这里逐个调用同样的 provider，把 http.Server 交给 httptest——
 // 装配路径与生产一致，但不占用固定端口，测试可以并行。
 func newTestEnv(t *testing.T) *testEnv {
@@ -164,50 +179,41 @@ func newTestEnv(t *testing.T) *testEnv {
 
 	kc := newFakeKeycloak(t)
 
-	// 每个用例用独立的 Redis 库，避免撤销黑名单相互干扰
-	redisAddr := testRedis.Addr()
-
 	dataConf := &conf.Data{
-		Database: &conf.Data_Database{Dsn: testDSN, MaxConns: 4, MinConns: 1},
-		Redis:    &conf.Data_Redis{Addr: redisAddr},
+		Database: &conf.Data_Database{Dsn: testDSN, MaxConns: 4, MaxIdleConns: 1},
 	}
 	authConf := &conf.Auth{
 		Issuer:         kc.issuer(),
 		ClientId:       clientID,
 		Audience:       clientID,
 		SuperAdminRole: adminRole,
-		DictCacheTtl:   durationpb.New(time.Minute),
 	}
 
-	d, cleanup, err := data.NewData(dataConf, authConf)
+	d, cleanup, err := data.NewData(dataConf)
 	if err != nil {
 		t.Fatalf("构造 Data: %v", err)
 	}
 	t.Cleanup(cleanup)
 
 	entClient := data.NewEntClient(d)
-	rdb := data.NewRedisClient(d)
+	store := data.NewPolicyStore(entClient)
 
-	enforcer, err := data.NewEnforcer(entClient)
+	enforcer, err := data.NewEnforcer(store)
 	if err != nil {
 		t.Fatalf("构造 Casbin enforcer: %v", err)
 	}
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	verifier := server.NewVerifier(authConf, rdb)
+	verifier := server.NewVerifier(authConf)
 	middlewares, err := server.NewMiddlewares(logger, verifier, enforcer, authConf)
 	if err != nil {
 		t.Fatalf("构造中间件链: %v", err)
 	}
 
-	watcher, watcherCleanup, err := data.NewPolicyWatcher(rdb, enforcer, logger)
-	if err != nil {
-		t.Fatalf("构造策略广播器: %v", err)
-	}
-	t.Cleanup(watcherCleanup)
+	t.Cleanup(data.NewPolicyReconciler(store, enforcer, logger))
 
 	permRepo := data.NewPermissionRepo(d)
-	policyRepo := data.NewPolicyRepo(enforcer, entClient, watcher)
+	policyRepo := data.NewPolicyRepo(enforcer, store)
 	dictRepo := data.NewDictRepo(d)
 
 	permSvc := service.NewPermissionService(biz.NewPermissionUsecase(permRepo, policyRepo))
@@ -222,20 +228,28 @@ func newTestEnv(t *testing.T) *testEnv {
 	ts := httptest.NewServer(srv)
 	t.Cleanup(ts.Close)
 
-	return &testEnv{http: ts, kc: kc, enforcer: enforcer, redis: testRedis}
+	return &testEnv{http: ts, kc: kc, enforcer: enforcer, policy: policyRepo}
 }
 
 // grantRole 给角色授予权限码，并让判定器立即生效。
 func (e *testEnv) grantRole(t *testing.T, role string, perms ...string) {
 	t.Helper()
-	adapter, ok := e.enforcer.EntAdapter()
-	if !ok {
-		t.Fatal("e2e 判定器必须使用 EntAdapter")
+	if !identity.ValidRoleKey(role) {
+		role = identity.RealmRoleKey(role)
 	}
-	if _, err := adapter.ReplaceRolePermissions(context.Background(), role, perms, authz.PolicyMutationMeta{}); err != nil {
+	roleValue, err := domain.NewRole(role)
+	if err != nil {
+		t.Fatalf("构造角色 %s: %v", role, err)
+	}
+	codes, err := domain.ParsePermissionCodes(perms)
+	if err != nil {
+		t.Fatalf("解析权限码: %v", err)
+	}
+	binding, err := domain.NewRoleBinding(roleValue, codes)
+	if err != nil {
+		t.Fatalf("构造角色绑定: %v", err)
+	}
+	if _, err := e.policy.SaveBinding(context.Background(), binding, nil); err != nil {
 		t.Fatalf("授予角色 %s 权限: %v", role, err)
-	}
-	if err := e.enforcer.ReloadPolicy(context.Background()); err != nil {
-		t.Fatalf("重载角色 %s 权限: %v", role, err)
 	}
 }

@@ -33,7 +33,7 @@
 目前仓库里只有一个真正跑起来的服务，叫 `system`，位于 `app/system/`。
 以后如果要加新的服务（比如订单、库存），会在 `app/` 下再建一个同级目录。
 
-一句话概括技术栈：**Go + Kratos 框架 + PostgreSQL 存数据 + Redis 做缓存
+一句话概括技术栈：**Go + Kratos 框架 + PostgreSQL 存数据
 + Keycloak 管用户 + Casbin 判权限**。下一节会逐个简单解释这些是什么。
 
 ## 2. 开始之前：几个会反复出现的名词
@@ -50,9 +50,7 @@
 | **Keycloak** | 一个开源的"账号中心"（IAM），管理用户名、密码、角色 | 本项目**不**自己存用户密码，登录、发 token 这些事全部交给 Keycloak |
 | **OIDC / JWT / token** | OIDC 是基于 OAuth2 的登录协议；登录成功后拿到一个 JWT（一段自包含、带签名的字符串），后续请求带着它证明"我是谁" | 你调接口时要在请求头里带 `Authorization: Bearer <token>` |
 | **Casbin** | 一个权限判定引擎：给定"谁"和"要做什么"，回答"允许还是拒绝" | Keycloak 回答"你是谁、有什么角色"，Casbin 回答"这个角色能不能调这个接口" |
-| **Redis** | 内存数据库，常用作缓存 | 本项目用它做字典数据缓存、以及"token 已登出"的黑名单 |
 | **DDD / Clean Architecture** | 一种代码分层方式，核心思想是"业务规则"和"技术细节"（数据库、框架）互相不依赖 | 体现在 `app/system/internal/` 下 `domain`/`biz`/`data`/`service`/`server` 这几层目录，第 6 节会展开讲 |
-| **wire** | Google 出的依赖注入代码生成工具 | `app/system/cmd/server/wire_gen.go` 就是它生成的——把整个服务"怎么组装"的代码自动写出来，你不用手写一大坨 `New(...)` 的调用链 |
 
 ## 3. 环境准备
 
@@ -62,7 +60,7 @@
   较新的 Go 会在编译时自动下载匹配的工具链（需要联网），不用你手动升级。
   用 `go version` 确认当前版本。
 - **Docker Desktop**（或者其他能跑 `docker compose` 的环境）：
-  PostgreSQL、Redis、Keycloak 都用它启动，不需要在本机分别装这三个软件。
+  PostgreSQL、Keycloak 都用它启动，不需要在本机分别安装。
 - **Git**，以及能跑 bash 脚本的终端。本项目的 `Makefile` 和文档里的命令
   都按 bash 语法写的；Windows 用户建议装 **Git Bash**（装 Git 时自带）
   或者用 WSL，不建议直接用 PowerShell/cmd 跟着抄命令。
@@ -94,12 +92,13 @@ cd eagle-go
 make init
 ```
 
-它会装 `wire`（依赖注入代码生成）、`buf`（proto 代码生成）、
-`goose`（数据库迁移工具）、`golangci-lint`（静态检查）。装完之后，
+它会装 `buf`（proto 代码生成）、`goose`（数据库迁移工具）、
+`golangci-lint`（静态检查）。protobuf 插件由 `go.mod` 锁定并通过
+`go tool` 自动运行。装完之后，
 确认它们都能被找到：
 
 ```bash
-wire --help >/dev/null && buf --version && goose --version && echo "工具链就绪"
+buf --version && goose --version && echo "工具链就绪"
 ```
 
 如果提示命令找不到，通常是 `$GOPATH/bin`（一般是 `~/go/bin`）没加进
@@ -110,30 +109,27 @@ wire --help >/dev/null && buf --version && goose --version && echo "工具链就
 这是新手最容易懵的一步——"为什么还要生成代码，代码不是已经在仓库里了吗"。
 
 答案是：**大部分生成结果确实已经提交在仓库里了**（比如 `api/*/v1/*.pb.go`、
-`ent/` 下的绝大多数文件、`wire_gen.go`），你其实不跑这一步也能直接
+`ent/` 下的绝大多数文件），你其实不跑这一步也能直接
 `go build` 成功。只有当你**修改了** `.proto` 文件或者 `ent/schema/`
 下的表结构定义时，才需要重新跑生成，让生成结果和你的修改保持同步。
 
 第一次跑起来项目，建议还是完整跑一遍，确认工具链没问题：
 
 ```bash
-buf generate --template buf.gen.yaml        # 生成 api/ 下的接口代码
-buf generate --template buf.gen.config.yaml # 生成 app/system/internal/conf 下的配置代码
-go generate ./ent                            # 生成 ent/ 下的数据库访问代码
-cd app/system/cmd/server && wire && cd -     # 生成依赖注入代码 wire_gen.go
+make generate # 生成 API、内部配置与 Ent 数据访问代码
 ```
 
 跑完用 `git status` 看一下——正常情况下应该**没有任何文件变化**
 （因为生成结果本来就和仓库里的一致）。如果有变化，说明生成结果和
-仓库里的不一致，一般是工具版本不对，检查 `go.mod` 里 `wire`/`ent`
-的版本是否和你本机装的工具版本匹配。
+仓库里的不一致，一般是工具版本不对；生成插件和 Ent 版本都由
+`go.mod` 固定，不要改用全局安装的插件绕过它。
 
 ### 第 4 步：启动依赖服务
 
-用 Docker 把 PostgreSQL、Redis、Keycloak 拉起来：
+用 Docker 把 PostgreSQL、Keycloak 拉起来：
 
 ```bash
-docker compose -f deploy/docker-compose.yml up -d postgres redis keycloak
+docker compose -f deploy/docker-compose.yml up -d postgres keycloak
 ```
 
 第一次拉镜像会花几分钟。用下面的命令确认三个容器都健康：
@@ -189,7 +185,7 @@ go run ./app/system/cmd/server -conf app/system/configs
 curl http://127.0.0.1:9100/healthz
 ```
 
-返回 `ok` 就说明 HTTP/gRPC 服务器、数据库连接、Redis 连接都已经成功
+返回 `ok` 就说明 HTTP/gRPC 服务器和数据库连接都已经成功
 建立起来了（这几步任何一个失败，服务在启动阶段就会直接崩溃退出，
 不会跑到能响应请求的状态）。
 
@@ -224,10 +220,9 @@ docker exec eagle-keycloak /opt/keycloak/bin/kcadm.sh add-roles -r eagle \
   --uusername alice --rolename admin
 ```
 
-给 `alice` 授予的是 `admin` 角色——这个角色在本项目里是"超管"
-（见 `app/system/configs/config.yaml` 里的 `super_admin_role`），
-会跳过 Casbin 的细粒度判定，用它来做第一次尝试最省事，不用先去
-后台配权限策略。
+给 `alice` 授予的是 realm `admin` 角色。它不会触发 client role 的
+超管短路，但数据库种子已经给对应策略键 `realm:admin` 授予 `system:*`，
+所以适合用来做第一次尝试，不用先去后台配权限策略。
 
 ### 第 9 步：换取 token，调用第一个接口
 
@@ -271,8 +266,7 @@ go test ./...
 这条命令**不需要 Docker**——集成测试用的是
 [embedded-postgres](https://github.com/fergusstrange/embedded-postgres)，
 会在进程内自己拉起一个真实的 PostgreSQL（第一次跑要下载约 100MB 的
-数据库二进制，之后会缓存在 `~/.embedded-postgres-go/`，几秒就能起来）；
-Redis 那部分用的是纯 Go 实现的 miniredis，同样不需要外部依赖。
+数据库二进制，之后会缓存在 `~/.embedded-postgres-go/`，几秒就能起来）。
 
 只想跑快的单元测试、跳过需要拉数据库的集成测试：
 
@@ -286,7 +280,7 @@ go test -short ./...
 |---|---|---|
 | `app/system/internal/domain/` | 纯业务规则（权限码格式、防环逻辑……），零外部依赖 | 不要，0.4 秒跑完 |
 | `pkg/authz/` | Casbin 判定逻辑、鉴权中间件 | 不要（内存 Casbin） |
-| `app/system/internal/data/` | 数据库/缓存的真实读写 | 要（embedded-postgres + miniredis，自动拉起） |
+| `app/system/internal/data/` | 数据库的真实读写 | 要（embedded-postgres 自动拉起） |
 | `app/system/internal/e2e/` | 真实 HTTP 服务器 + 真实签名的 JWT，端到端验证 401/403/200 | 要 |
 
 Windows 上如果想跑 `go test -race`（CI 就是这么跑的），需要 cgo，
@@ -305,12 +299,12 @@ eagle-go/
 │   ├── annotations/v1/     #   自定义的权限注解（给接口标注需要什么权限码）
 │   └── system/v1/          #   system 服务的接口：权限树、字典、角色权限绑定
 ├── app/system/              # system 服务
-│   ├── cmd/server/         #   程序入口 main.go，以及 wire 依赖注入的装配代码
+│   ├── cmd/server/         #   程序入口 main.go，以及显式依赖装配代码
 │   ├── configs/             #   本地开发用的配置文件
 │   └── internal/
 │       ├── domain/         #   业务规则本身：实体、值对象、不变量。不依赖任何数据库/框架
 │       ├── biz/             #   用例编排："先查这个、再校验那个、最后落库"，胶水逻辑
-│       ├── data/             #   domain 里定义的仓储接口的具体实现（ent 读写数据库、Redis 缓存）
+│       ├── data/             #   domain 里定义的仓储接口的具体实现（ent 读写数据库）
 │       ├── service/         #   proto 消息 <-> domain 对象的互相转换
 │       ├── server/           #   组装 HTTP/gRPC 服务器、串中间件链
 │       ├── conf/             #   配置的 proto 定义和生成代码
@@ -322,8 +316,7 @@ eagle-go/
 │   ├── authn/                #   验证 Keycloak 签发的 token
 │   ├── authz/                #   Casbin 判定器 + 鉴权中间件
 │   ├── identity/               #   "当前登录者是谁"这个信息在 context 里怎么传
-│   ├── db/                    #   数据库连接、事务封装
-│   └── redisx/                 #   缓存的通用读写逻辑
+│   └── db/                    #   PostgreSQL database/sql 连接池
 ├── db/migrations/            # 数据库迁移脚本（goose 管理，纯 SQL，可以直接读）
 ├── docs/                      # 给人看的说明：怎么加接口、分层为什么这样
 ├── .agents/rules/             # 给 AI 的编码约束（人一般不用看）
@@ -337,7 +330,7 @@ eagle-go/
 - **要改一个数据库表的结构** → `ent/schema/`，然后在 `db/migrations/`
   里手写一条新的迁移 SQL（ent 生成的建表能力在本项目**没有**被使用，
   见 README 的说明——迁移统一走 goose）
-- **要改缓存策略、SQL 查询写法** → `internal/data/`
+- **要改 SQL 查询写法** → `internal/data/`
 - **要改中间件链、启动流程** → `internal/server/`、`cmd/server/main.go`
 
 ## 7. 接下来：怎么用这个底座
@@ -348,7 +341,7 @@ eagle-go/
 - 加一个需要权限的接口（改 proto → 写入权限目录 → 生成代码 → 补分层）
 - 给角色授权、查自己的菜单和权限码
 - 业务代码里怎么取出当前登录人
-- 加一整块 CRUD 要改哪些文件、什么时候才需要动 `wire`
+- 加一整块 CRUD 要改哪些文件、什么时候需要改显式装配
 - 从别的语言转过来最容易做错的几件事
 
 权限码怎么进目录、为什么不能在建菜单时发明新码，也在那份文档里。

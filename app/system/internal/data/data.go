@@ -1,91 +1,53 @@
 // Package data 是 system 服务的基础设施层：domain 层仓储接口的具体实现。
 //
-// 承担三件事：ent 生成类型与领域模型之间的转换、
-// ent 错误到领域错误的映射、以及 Redis 缓存的读写与失效。
+// 承担 ent 生成类型与领域模型之间的转换、事务和错误映射。
 package data
 
 import (
 	"context"
 	"errors"
 	"log/slog"
-	"time"
 
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
 	"github.com/go-kratos/kratos/v3/log"
-	"github.com/google/wire"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/redis/go-redis/v9"
 
 	"github.com/eagle-go/eagle/app/system/internal/conf"
-	"github.com/eagle-go/eagle/app/system/internal/domain"
 	"github.com/eagle-go/eagle/ent"
 	"github.com/eagle-go/eagle/pkg/authz"
 	"github.com/eagle-go/eagle/pkg/db"
 	"github.com/eagle-go/eagle/pkg/healthx"
-	"github.com/eagle-go/eagle/pkg/redisx"
-)
-
-// ProviderSet 是 data 层的 wire provider 集合。
-var ProviderSet = wire.NewSet(
-	NewData,
-	NewEntClient,
-	NewRedisClient,
-	NewEnforcer,
-	NewPolicyWatcher,
-	NewPolicyRepo,
-	NewPermissionRepo,
-	NewDictRepo,
 )
 
 // Data 持有所有外部资源句柄。
 type Data struct {
-	client *ent.Client
-	// rdb 同时服务 token 撤销、字典缓存和策略 pub/sub。
-	// go-redis 的 Subscribe 会从池里独占一条连接，不必再为通知单独建 Client。
-	rdb            *redis.Client
-	dictCache      *redisx.Cache[[]*domain.DictData]
+	client         *ent.Client
 	healthCleanups []func()
 }
 
-// NewData 建立数据库与 Redis 连接。
-// 返回的 cleanup 由 wire 串进应用退出流程。
-func NewData(c *conf.Data, ac *conf.Auth) (*Data, func(), error) {
+// NewData 建立数据库连接。
+// 返回的 cleanup 由应用装配层在退出时调用。
+func NewData(c *conf.Data) (*Data, func(), error) {
 	ctx := context.Background()
 
-	client, dbCleanup, err := db.New(ctx, db.Config{
+	sqlDB, dbCleanup, err := db.New(ctx, db.Config{
 		DSN:             c.GetDatabase().GetDsn(),
 		MaxConns:        c.GetDatabase().GetMaxConns(),
-		MinConns:        c.GetDatabase().GetMinConns(),
+		MaxIdleConns:    c.GetDatabase().GetMaxIdleConns(),
 		MaxConnLifetime: c.GetDatabase().GetMaxConnLifetime().AsDuration(),
 		MaxConnIdleTime: c.GetDatabase().GetMaxConnIdleTime().AsDuration(),
 	})
 	if err != nil {
 		return nil, nil, err
 	}
+	client := ent.NewClient(ent.Driver(entsql.OpenDB(dialect.Postgres, sqlDB)))
 
-	redisCfg := redisx.Config{
-		Addr:         c.GetRedis().GetAddr(),
-		Password:     c.GetRedis().GetPassword(),
-		DB:           int(c.GetRedis().GetDb()),
-		DialTimeout:  c.GetRedis().GetDialTimeout().AsDuration(),
-		ReadTimeout:  c.GetRedis().GetReadTimeout().AsDuration(),
-		WriteTimeout: c.GetRedis().GetWriteTimeout().AsDuration(),
-	}
-	rdb, redisCleanup, err := redisx.New(ctx, redisCfg)
-	if err != nil {
-		dbCleanup()
-		return nil, nil, err
-	}
-
-	dictTTL := orDefault(ac.GetDictCacheTtl().AsDuration(), 30*time.Minute)
-	d := &Data{client: client, rdb: rdb}
-	d.dictCache = redisx.NewCache[[]*domain.DictData](rdb, dictTTL, redisx.JSONCodec[[]*domain.DictData]{})
+	d := &Data{client: client}
 	d.healthCleanups = append(d.healthCleanups,
 		healthx.Default.Register("postgres", func(ctx context.Context) error {
 			_, err := client.PolicyState.Query().Exist(ctx)
 			return err
-		}),
-		healthx.Default.Register("redis", func(ctx context.Context) error {
-			return rdb.Ping(ctx).Err()
 		}),
 	)
 
@@ -94,7 +56,6 @@ func NewData(c *conf.Data, ac *conf.Auth) (*Data, func(), error) {
 		for _, unregister := range d.healthCleanups {
 			unregister()
 		}
-		redisCleanup()
 		dbCleanup()
 	}
 	return d, cleanup, nil
@@ -103,34 +64,33 @@ func NewData(c *conf.Data, ac *conf.Auth) (*Data, func(), error) {
 // NewEntClient 暴露 ent 客户端，供 Casbin 适配器复用同一连接池。
 func NewEntClient(d *Data) *ent.Client { return d.client }
 
-// NewRedisClient 把 Redis 句柄暴露给 server 层构造 token 撤销存储，
-// 以及策略 watcher。连接生命周期仍归 Data 管理。
-func NewRedisClient(d *Data) *redis.Client { return d.rdb }
-
 // NewEnforcer 构造 Casbin 判定器，策略存储复用项目自身的 ent 客户端。
-func NewEnforcer(client *ent.Client) (*authz.Enforcer, error) {
-	adapter := authz.NewEntAdapter(client)
-	codes, err := adapter.PermissionCatalogCodes(context.Background())
+func NewEnforcer(store *policyStore) (*authz.Enforcer, error) {
+	codes, err := store.PermissionCatalogCodes(context.Background())
 	if err != nil {
 		return nil, err
 	}
 	if err := authz.ValidateRegisteredPolicies(codes); err != nil {
 		return nil, err
 	}
-	enforcer, err := authz.NewEnforcer(adapter)
+	enforcer, err := authz.NewEnforcer(authz.NewStorageAdapter(store))
 	if err != nil {
 		return nil, err
 	}
-	healthx.Default.Register("authz-policy", func(ctx context.Context) error {
-		return checkAuthzPolicyReady(ctx, adapter, enforcer)
-	})
 	return enforcer, nil
+}
+
+// RegisterPolicyHealth 把策略存储探活绑定到应用生命周期。
+func RegisterPolicyHealth(store *policyStore, enforcer *authz.Enforcer) func() {
+	return healthx.Default.Register("authz-policy", func(ctx context.Context) error {
+		return checkAuthzPolicyReady(ctx, store, enforcer)
+	})
 }
 
 // checkAuthzPolicyReady 是服务就绪检查里注册的策略探活。
 // 读不到数据库版本视为不健康；内存版本落后只记指标，不挡流量。
-func checkAuthzPolicyReady(ctx context.Context, adapter *authz.EntAdapter, enforcer *authz.Enforcer) error {
-	version, err := adapter.PolicyVersion(ctx)
+func checkAuthzPolicyReady(ctx context.Context, store *policyStore, enforcer *authz.Enforcer) error {
+	version, err := store.PolicyVersion(ctx)
 	if err != nil {
 		return err
 	}
@@ -138,62 +98,26 @@ func checkAuthzPolicyReady(ctx context.Context, adapter *authz.EntAdapter, enfor
 	return nil
 }
 
-// NewPolicyWatcher 构造策略广播器，并在后台启动订阅循环，
-// 使多副本部署下各实例的内存 Casbin 模型保持同步。
-//
-// 没有这层同步，策略写入只重载处理该次请求的那个副本：
-// 后台改角色权限只有命中的副本立即生效，其余副本要等进程重启才追上，
-// 且不会有任何报错——只会表现为「改了权限，一部分用户生效一部分不生效」。
-//
-// 返回的 cleanup 停止订阅循环并等它真正退出，由 wire 串进应用退出流程。
-//
-// 等待退出而不是取消了事：cleanup 之间是有序的（wire 按构造的反序执行），
-// cleanup 一返回，后续 cleanup 就可能去关数据库连接池。如果这里只是
-// cancel 而不等 goroutine 真正停下来，它手上可能还有一次正在跑的
-// ReloadPolicy，会撞上刚被关闭的连接——现象是退出时打一条无害但唬人的
-// 错误日志。等 goroutine 确认退出后再返回，就不存在这个时间窗口。
-func NewPolicyWatcher(
-	rdb *redis.Client,
+// NewPolicyReconciler starts the database-version reconciliation loop used by
+// every replica and returns a cleanup that waits for it to stop.
+func NewPolicyReconciler(
+	store *policyStore,
 	enforcer *authz.Enforcer,
 	logger *slog.Logger,
-) (*authz.RedisWatcher, func(), error) {
+) func() {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	w := authz.NewRedisWatcher(rdb, "", logger)
-
 	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{}, 2)
+	done := make(chan struct{})
 	go func() {
-		defer func() { done <- struct{}{} }()
-		w.Watch(ctx, enforcer)
+		defer close(done)
+		runPolicyReconciler(ctx, store, enforcer, logger)
 	}()
-	go func() {
-		defer func() { done <- struct{}{} }()
-		runPolicyReconciler(ctx, enforcer, logger)
-	}()
-
-	cleanup := func() {
+	return func() {
 		cancel()
 		<-done
-		<-done
 	}
-	return w, cleanup, nil
-}
-
-func orDefault(v, def time.Duration) time.Duration {
-	if v <= 0 {
-		return def
-	}
-	return v
-}
-
-// ── 缓存键 ────────────────────────────────────────────────
-
-const keyPrefixDictData = "eagle:dict:"
-
-func dictDataKey(dictType string) string {
-	return keyPrefixDictData + dictType
 }
 
 // ── 错误映射 ──────────────────────────────────────────────

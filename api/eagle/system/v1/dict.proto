@@ -73,7 +73,7 @@ service DictService {
   }
 
   // 按类型取字典项，供前端渲染下拉框。任何登录用户都要用，
-  // 所以不挂权限码，只校验登录态；结果走 Redis 缓存。
+  // 所以不挂权限码，只校验登录态；结果直接读取权威数据库。
   rpc GetDictDataByType(GetDictDataByTypeRequest) returns (GetDictDataByTypeResponse) {
     option (google.api.http) = {get: "/v1/system/dict/data/type/{dict_type}"};
     option (eagle.annotations.v1.access) = ACCESS_LEVEL_AUTHENTICATED;

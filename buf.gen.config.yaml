@@ -6,6 +6,6 @@ inputs:
   - directory: app
 
 plugins:
-  - local: ["go", "run", "google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11"]
+  - local: ["go", "tool", "protoc-gen-go"]
     out: app
     opt: paths=source_relative
