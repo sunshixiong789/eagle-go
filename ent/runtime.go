@@ -8,6 +8,8 @@ import (
 	"github.com/eagle-go/eagle/ent/casbinrule"
 	"github.com/eagle-go/eagle/ent/dictdata"
 	"github.com/eagle-go/eagle/ent/dicttype"
+	"github.com/eagle-go/eagle/ent/file"
+	"github.com/eagle-go/eagle/ent/notification"
 	"github.com/eagle-go/eagle/ent/permission"
 	"github.com/eagle-go/eagle/ent/permissiondefinition"
 	"github.com/eagle-go/eagle/ent/permissiontreestate"
@@ -178,6 +180,66 @@ func init() {
 	dicttype.DefaultUpdatedAt = dicttypeDescUpdatedAt.Default.(func() time.Time)
 	// dicttype.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	dicttype.UpdateDefaultUpdatedAt = dicttypeDescUpdatedAt.UpdateDefault.(func() time.Time)
+	fileFields := schema.File{}.Fields()
+	_ = fileFields
+	// fileDescOwnerSubject is the schema descriptor for owner_subject field.
+	fileDescOwnerSubject := fileFields[1].Descriptor()
+	// file.OwnerSubjectValidator is a validator for the "owner_subject" field. It is called by the builders before save.
+	file.OwnerSubjectValidator = fileDescOwnerSubject.Validators[0].(func(string) error)
+	// fileDescName is the schema descriptor for name field.
+	fileDescName := fileFields[2].Descriptor()
+	// file.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	file.NameValidator = fileDescName.Validators[0].(func(string) error)
+	// fileDescStorageKey is the schema descriptor for storage_key field.
+	fileDescStorageKey := fileFields[3].Descriptor()
+	// file.StorageKeyValidator is a validator for the "storage_key" field. It is called by the builders before save.
+	file.StorageKeyValidator = fileDescStorageKey.Validators[0].(func(string) error)
+	// fileDescContentType is the schema descriptor for content_type field.
+	fileDescContentType := fileFields[4].Descriptor()
+	// file.DefaultContentType holds the default value on creation for the content_type field.
+	file.DefaultContentType = fileDescContentType.Default.(string)
+	// file.ContentTypeValidator is a validator for the "content_type" field. It is called by the builders before save.
+	file.ContentTypeValidator = fileDescContentType.Validators[0].(func(string) error)
+	// fileDescSize is the schema descriptor for size field.
+	fileDescSize := fileFields[5].Descriptor()
+	// file.SizeValidator is a validator for the "size" field. It is called by the builders before save.
+	file.SizeValidator = fileDescSize.Validators[0].(func(int64) error)
+	// fileDescSha256 is the schema descriptor for sha256 field.
+	fileDescSha256 := fileFields[6].Descriptor()
+	// file.Sha256Validator is a validator for the "sha256" field. It is called by the builders before save.
+	file.Sha256Validator = fileDescSha256.Validators[0].(func(string) error)
+	// fileDescCreatedAt is the schema descriptor for created_at field.
+	fileDescCreatedAt := fileFields[7].Descriptor()
+	// file.DefaultCreatedAt holds the default value on creation for the created_at field.
+	file.DefaultCreatedAt = fileDescCreatedAt.Default.(func() time.Time)
+	// fileDescID is the schema descriptor for id field.
+	fileDescID := fileFields[0].Descriptor()
+	// file.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	file.IDValidator = fileDescID.Validators[0].(func(string) error)
+	notificationFields := schema.Notification{}.Fields()
+	_ = notificationFields
+	// notificationDescRecipientSubject is the schema descriptor for recipient_subject field.
+	notificationDescRecipientSubject := notificationFields[1].Descriptor()
+	// notification.RecipientSubjectValidator is a validator for the "recipient_subject" field. It is called by the builders before save.
+	notification.RecipientSubjectValidator = notificationDescRecipientSubject.Validators[0].(func(string) error)
+	// notificationDescSenderSubject is the schema descriptor for sender_subject field.
+	notificationDescSenderSubject := notificationFields[2].Descriptor()
+	// notification.DefaultSenderSubject holds the default value on creation for the sender_subject field.
+	notification.DefaultSenderSubject = notificationDescSenderSubject.Default.(string)
+	// notification.SenderSubjectValidator is a validator for the "sender_subject" field. It is called by the builders before save.
+	notification.SenderSubjectValidator = notificationDescSenderSubject.Validators[0].(func(string) error)
+	// notificationDescTitle is the schema descriptor for title field.
+	notificationDescTitle := notificationFields[3].Descriptor()
+	// notification.TitleValidator is a validator for the "title" field. It is called by the builders before save.
+	notification.TitleValidator = notificationDescTitle.Validators[0].(func(string) error)
+	// notificationDescContent is the schema descriptor for content field.
+	notificationDescContent := notificationFields[4].Descriptor()
+	// notification.ContentValidator is a validator for the "content" field. It is called by the builders before save.
+	notification.ContentValidator = notificationDescContent.Validators[0].(func(string) error)
+	// notificationDescCreatedAt is the schema descriptor for created_at field.
+	notificationDescCreatedAt := notificationFields[6].Descriptor()
+	// notification.DefaultCreatedAt holds the default value on creation for the created_at field.
+	notification.DefaultCreatedAt = notificationDescCreatedAt.Default.(func() time.Time)
 	permissionFields := schema.Permission{}.Fields()
 	_ = permissionFields
 	// permissionDescName is the schema descriptor for name field.

@@ -1,6 +1,6 @@
 // Package db 构造可复用的 PostgreSQL database/sql 连接池。
 //
-// 只依赖一个朴素的 Config 结构体而不是某个服务的 conf proto，
+// 只依赖一个朴素的 Config 结构体而不是进程内部的 config proto，
 // 使多个服务能共用同一份实现，pkg 不反向依赖 app。
 package db
 

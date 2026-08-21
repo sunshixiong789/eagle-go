@@ -39,7 +39,7 @@ jobs:
       # 破坏性改动一旦合入，下游要到运行时才会发现。
       - name: buf breaking
         if: github.event_name == 'pull_request'
-        run: buf breaking --against ".git#branch=${{ github.base_ref }}"
+        run: buf breaking api --against ".git#branch=${{ github.base_ref }},subdir=api"
 
       # 生成代码必须与 proto 保持同步。不检查的话，
       # 改了 proto 却忘记重新生成的提交会一路合进主干。

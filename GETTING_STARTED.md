@@ -30,8 +30,8 @@
 这个人能不能调这个接口（授权）、以及一个通用的"字典"模块（下拉框选项这类
 配置数据）。
 
-目前仓库里只有一个真正跑起来的服务，叫 `system`，位于 `app/system/`。
-以后如果要加新的服务（比如订单、库存），会在 `app/` 下再建一个同级目录。
+目前仓库里只有一个可部署进程，入口是 `cmd/server`。权限、字典、文件、
+通知是同一进程里的业务模块，位于 `internal/modules/`，不是四个微服务。
 
 一句话概括技术栈：**Go + Kratos 框架 + PostgreSQL 存数据
 + Keycloak 管用户 + Casbin 判权限**。下一节会逐个简单解释这些是什么。
@@ -43,14 +43,14 @@
 | 名词 | 是什么 | 在这个项目里的角色 |
 |---|---|---|
 | **Go module** | Go 的依赖管理机制，`go.mod`/`go.sum` 就是它的产物 | 本仓库所有第三方库的版本都锁在这里 |
-| **Protobuf / buf** | 一种"接口描述语言"，先写 `.proto` 文件定义接口长什么样，再用工具生成代码 | 本项目所有对外接口（`api/` 目录）和内部配置结构（`conf.proto`）都先写 proto，再生成 Go 代码。`buf` 是管理 proto 文件的工具链 |
+| **Protobuf / buf** | 一种"接口描述语言"，先写 `.proto` 文件定义接口长什么样，再用工具生成代码 | 本项目所有对外接口（`api/` 目录）和内部配置结构（`config.proto`）都先写 proto，再生成 Go 代码。`buf` 是管理 proto 文件的工具链 |
 | **gRPC / HTTP** | 两种网络协议。本项目的每个接口同时支持这两种——写一份 proto，两种协议的代码都生成好了 | 你用 `curl` 调的是 HTTP；服务之间互相调用更常用 gRPC |
 | **ent** | 用 Go 代码描述数据库表结构（见 `ent/schema/`），再生成类型安全的查询代码 | `ent/` 目录下 90% 以上的代码都是自动生成的，你不需要看懂，只需要知道改 `ent/schema/*.go` 然后重新生成即可 |
-| **Kratos** | 一个 Go 服务框架（B站开源），负责 HTTP/gRPC 怎么启动、中间件怎么串、日志和链路怎么接 | 本仓库每个服务的入口都在 `app/<name>/cmd/server` |
+| **Kratos** | 一个 Go 服务框架（B站开源），负责 HTTP/gRPC 怎么启动、中间件怎么串、日志和链路怎么接 | 当前进程入口在 `cmd/server` |
 | **Keycloak** | 一个开源的"账号中心"（IAM），管理用户名、密码、角色 | 本项目**不**自己存用户密码，登录、发 token 这些事全部交给 Keycloak |
 | **OIDC / JWT / token** | OIDC 是基于 OAuth2 的登录协议；登录成功后拿到一个 JWT（一段自包含、带签名的字符串），后续请求带着它证明"我是谁" | 你调接口时要在请求头里带 `Authorization: Bearer <token>` |
 | **Casbin** | 一个权限判定引擎：给定"谁"和"要做什么"，回答"允许还是拒绝" | Keycloak 回答"你是谁、有什么角色"，Casbin 回答"这个角色能不能调这个接口" |
-| **DDD / Clean Architecture** | 一种代码分层方式，核心思想是"业务规则"和"技术细节"（数据库、框架）互相不依赖 | 体现在 `app/system/internal/` 下 `domain`/`biz`/`data`/`service`/`server` 这几层目录，第 6 节会展开讲 |
+| **DDD / Clean Architecture** | 一种代码组织方式，核心思想是按业务模块隔离，并让业务规则不依赖数据库和框架 | 每个模块内部使用 `domain`/`application`/`infrastructure`/`interfaces` 四层，第 6 节会展开讲 |
 
 ## 3. 环境准备
 
@@ -161,19 +161,19 @@ goose -dir db/migrations postgres "postgres://eagle:eagle@127.0.0.1:5432/eagle?s
 看到几行 `OK` 就说明迁移成功了。这一步会建好权限树、字典、Casbin
 策略表，并且种入一些初始数据（比如种子权限节点）。
 
-### 第 6 步：启动 system 服务
+### 第 6 步：启动后端服务
 
 ```bash
-go run ./app/system/cmd/server -conf app/system/configs
+go run ./cmd/server -conf configs
 ```
 
 正常会看到几行 JSON 格式的启动日志，进程会一直挂在前台（这是正常的，
 这是个长期运行的服务，不是跑一次就退出的脚本）。开一个新终端标签页
 继续后面的步骤。
 
-`-conf app/system/configs` 指向配置文件目录，实际读的是
-`app/system/configs/config.yaml`。这个文件里的地址（`127.0.0.1:5432`、
-`127.0.0.1:6379`、`127.0.0.1:8080`）都对应第 4 步用 Docker 起的服务，
+`-conf configs` 指向配置文件目录，实际读的是
+`configs/config.yaml`。这个文件里的地址（`127.0.0.1:5432`、
+`127.0.0.1:8080`）都对应第 4 步用 Docker 起的服务，
 不需要改就能直接用。
 
 ### 第 7 步：确认服务活着
@@ -278,10 +278,10 @@ go test -short ./...
 
 | 位置 | 测什么 | 要不要外部依赖 |
 |---|---|---|
-| `app/system/internal/domain/` | 纯业务规则（权限码格式、防环逻辑……），零外部依赖 | 不要，0.4 秒跑完 |
+| `internal/modules/access/domain/` | 纯业务规则（权限码格式、防环逻辑……），零外部依赖 | 不要，0.4 秒跑完 |
 | `pkg/authz/` | Casbin 判定逻辑、鉴权中间件 | 不要（内存 Casbin） |
-| `app/system/internal/data/` | 数据库的真实读写 | 要（embedded-postgres 自动拉起） |
-| `app/system/internal/e2e/` | 真实 HTTP 服务器 + 真实签名的 JWT，端到端验证 401/403/200 | 要 |
+| `internal/modules/*/infrastructure/` | 数据库和文件存储的真实读写 | 要（embedded-postgres / 临时目录） |
+| `tests/e2e/` | 真实 HTTP 服务器 + 真实签名的 JWT，端到端验证 401/403/200 | 要 |
 
 Windows 上如果想跑 `go test -race`（CI 就是这么跑的），需要 cgo，
 也就是需要装 C 编译器（比如 MinGW）。不想在本机装的话，可以用容器跑：
@@ -297,22 +297,20 @@ docker run --rm -v "$PWD:/src" -w /src golang:1.26 sh -c \
 eagle-go/
 ├── api/eagle/              # 对外接口的 proto 定义（"契约"），改这里要跑 buf generate
 │   ├── annotations/v1/     #   自定义的权限注解（给接口标注需要什么权限码）
-│   └── system/v1/          #   system 服务的接口：权限树、字典、角色权限绑定
-├── app/system/              # system 服务
-│   ├── cmd/server/         #   程序入口 main.go，以及显式依赖装配代码
-│   ├── configs/             #   本地开发用的配置文件
-│   └── internal/
-│       ├── domain/         #   业务规则本身：实体、值对象、不变量。不依赖任何数据库/框架
-│       ├── biz/             #   用例编排："先查这个、再校验那个、最后落库"，胶水逻辑
-│       ├── data/             #   domain 里定义的仓储接口的具体实现（ent 读写数据库）
-│       ├── service/         #   proto 消息 <-> domain 对象的互相转换
-│       ├── server/           #   组装 HTTP/gRPC 服务器、串中间件链
-│       ├── conf/             #   配置的 proto 定义和生成代码
-│       └── e2e/               #   端到端测试
+│   ├── access/v1/          #   权限与角色绑定契约
+│   ├── dictionary/v1/      #   字典契约
+│   ├── file/v1/            #   文件契约
+│   └── notification/v1/    #   站内通知契约
+├── cmd/server/             # 程序入口 main.go，以及显式依赖装配代码
+├── configs/                # 本地开发配置
+├── internal/
+│   ├── modules/            #   access、dictionary、file、notification
+│   └── platform/           #   config、database、server
+├── tests/                  # architecture、e2e、testkit
 ├── ent/
 │   ├── schema/              #   数据库表结构定义（手写），改这里要跑 go generate ./ent
 │   └── ...                  #   其余都是生成代码，不需要手改
-├── pkg/                       # 多个服务将来会共用的基础设施代码
+├── pkg/                     # 可被未来多个进程复用的技术原语
 │   ├── authn/                #   验证 Keycloak 签发的 token
 │   ├── authz/                #   Casbin 判定器 + 鉴权中间件
 │   ├── identity/               #   "当前登录者是谁"这个信息在 context 里怎么传
@@ -326,12 +324,12 @@ eagle-go/
 拿到一个具体任务时，可以按"这个改动的性质"去定位：
 
 - **要改一个接口的入参/返回字段** → 从 `api/eagle/*/v1/*.proto` 开始
-- **要改一条业务规则**（比如"权限码格式要求"）→ `internal/domain/`
+- **要改一条业务规则**（比如"权限码格式要求"）→ 对应模块的 `internal/modules/<module>/domain/`
 - **要改一个数据库表的结构** → `ent/schema/`，然后在 `db/migrations/`
   里手写一条新的迁移 SQL（ent 生成的建表能力在本项目**没有**被使用，
   见 README 的说明——迁移统一走 goose）
-- **要改 SQL 查询写法** → `internal/data/`
-- **要改中间件链、启动流程** → `internal/server/`、`cmd/server/main.go`
+- **要改 SQL 查询写法** → 对应模块的 `internal/modules/<module>/infrastructure/`
+- **要改中间件链、启动流程** → `internal/platform/server/`、`cmd/server/main.go`
 
 ## 7. 接下来：怎么用这个底座
 
@@ -375,7 +373,7 @@ A: `-race` 需要 cgo，也就是需要 C 编译器。本机没装 MinGW 的话�
 
 **Q: 调接口一直 401，我确定 token 是对的。**
 
-A: 先看 `app/system/configs/config.yaml` 里 `auth.issuer` 的值是否和
+A: 先看 `configs/config.yaml` 里 `auth.issuer` 的值是否和
 Keycloak 实际的 issuer 完全一致（协议、端口、有没有尾部斜杠都要对上）。
 容器化部署时还要注意 `jwks_url`：token 里公开的 issuer 地址
 （外网能访问的域名）和资源服务器实际该访问的地址（集群内地址）
@@ -385,7 +383,7 @@ Keycloak 实际的 issuer 完全一致（协议、端口、有没有尾部斜杠
 
 A: 常见原因有两个：一是这个角色确实没在 Casbin 里配对应的权限码
 （用 `RoleBindingService` 相关接口查一下）；二是权限码本身写错了
-（比如三段式的 `system:user:add` 少写了一段）。`internal/domain/`
+（比如三段式的 `system:user:add` 少写了一段）。`internal/modules/access/domain/`
 下有针对权限码格式和通配符边界的单元测试，读一下能快速建立起
 "什么样的权限码是合法的"这个概念。
 

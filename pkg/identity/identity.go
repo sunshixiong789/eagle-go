@@ -88,3 +88,13 @@ func FromContext(ctx context.Context) (*Principal, bool) {
 	p, ok := ctx.Value(ctxKey{}).(*Principal)
 	return p, ok && p != nil
 }
+
+// Subject returns the authenticated subject or an empty string when the
+// context is unauthenticated. Protected handlers normally receive a value.
+func Subject(ctx context.Context) string {
+	p, ok := FromContext(ctx)
+	if !ok {
+		return ""
+	}
+	return p.Subject
+}

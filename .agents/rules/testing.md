@@ -2,12 +2,12 @@
 
 | 位置 | 测什么 | 依赖 |
 |---|---|---|
-| `domain/` | 不变量、权限码、防环、覆盖关系 | 无 |
+| `internal/modules/<module>/domain/` | 不变量、权限码、防环、覆盖关系 | 无 |
 | `pkg/authz/` | Casbin 与 `PermissionCode.Covers` 对齐、中间件 | 内存 Casbin |
-| `data/` | 真实 SQL、事务、乐观锁、缓存 | embedded-postgres + miniredis |
-| `service/` | 错误映射 | 无 |
-| `architecture/` | 层依赖、禁依赖 | `go list` |
-| `e2e/` | 401 / 403 / 200 | 进程内 HTTP + 自签 JWT |
+| `internal/modules/<module>/infrastructure/` | 真实 SQL、事务、乐观锁、存储适配 | embedded-postgres / 临时目录 |
+| `internal/platform/server/` | 错误映射和服务器装配 | 无 |
+| `tests/architecture/` | 层依赖、禁依赖 | `go list` |
+| `tests/e2e/` | 401 / 403 / 200 | 进程内 HTTP + 自签 JWT |
 
 - 单测/集成测试不启 Docker。
 - e2e 必须走真实验签。禁止塞假 `Principal` 绕过 `authn`。

@@ -15,6 +15,8 @@ import (
 	"github.com/eagle-go/eagle/ent/casbinrule"
 	"github.com/eagle-go/eagle/ent/dictdata"
 	"github.com/eagle-go/eagle/ent/dicttype"
+	"github.com/eagle-go/eagle/ent/file"
+	"github.com/eagle-go/eagle/ent/notification"
 	"github.com/eagle-go/eagle/ent/permission"
 	"github.com/eagle-go/eagle/ent/permissiondefinition"
 	"github.com/eagle-go/eagle/ent/permissiontreestate"
@@ -83,6 +85,8 @@ func checkColumn(t, c string) error {
 			casbinrule.Table:           casbinrule.ValidColumn,
 			dictdata.Table:             dictdata.ValidColumn,
 			dicttype.Table:             dicttype.ValidColumn,
+			file.Table:                 file.ValidColumn,
+			notification.Table:         notification.ValidColumn,
 			permission.Table:           permission.ValidColumn,
 			permissiondefinition.Table: permissiondefinition.ValidColumn,
 			permissiontreestate.Table:  permissiontreestate.ValidColumn,

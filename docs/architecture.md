@@ -1,47 +1,76 @@
 # Eagle 架构边界
 
-本仓库是 Go 模块化单体：当前一个进程、一个 `system` 服务，按业务域保留可拆边界。不移植其它语言的框架分层或 starter 体系。加接口、配权限的步骤见 [usage.md](usage.md)。
+本仓库是模块化单体：当前只有一个 `server` 进程，业务代码先按模块隔离；只有独立扩缩容、故障域或发布周期成立时，才把模块迁成独立服务。
 
-服务内依赖方向固定为：
+## 顶层目录表达什么
 
-`transport/service → biz → domain ← data`
+- `cmd/server` 是唯一可执行程序和组合根。
+- `internal` 是 Go 的编译器可见性边界，表示仓库私有实现，不表示“内部服务”。
+- `internal/modules` 放业务能力；每个一级目录是一个业务模块。
+- `internal/platform` 放配置、数据库连接和网络服务器等进程级能力，不是业务模块。
+- `tests` 放跨模块架构测试、端到端测试和测试工具。
+- `api/eagle/<module>/v1` 按业务模块保存对外契约，HTTP 路径可独立保持兼容。
 
-- `domain` 只包含领域模型、规则和仓储接口，不依赖 Kratos、protobuf、Ent 或 Casbin。
-- `biz` 负责编排跨聚合用例，不处理 HTTP/gRPC 错误。
-- `service` 是传输适配层，统一把领域错误映射为外部错误契约。
-- `data` 是唯一允许直接依赖 Ent 的包，负责事务、并发控制和持久化适配。
-- `pkg` 只放无业务语义的技术能力（验签、鉴权中间件、数据库连接、健康检查、身份 context），禁止反向依赖任何 `app` 包或项目 Ent 模型。
+## 模块优先，模块内四层
 
-这些规则由 `app/system/internal/architecture/dependencies_test.go` 在 CI 中检查。
+每个业务模块的依赖方向固定为：
 
-## 底座怎么长
+`interfaces → application → domain ← infrastructure`
 
-底座只提供业务服务反复会用到的能力，新域直接复用，不复制一份：
+- `domain`：模型、不变量、领域错误和端口，只依赖标准库。
+- `application`：用例编排，只依赖 domain。
+- `infrastructure`：Ent、事务、Casbin、文件系统等端口实现。
+- `interfaces`：protobuf 与领域对象转换，将当前主体交给用例。
+- `internal/platform/server`：HTTP/gRPC 注册、中间件链和统一错误映射。
+- `internal/platform/database`：共享数据库连接生命周期，不包含业务仓储。
 
-| 层 | 放什么 | 不放什么 |
-|---|---|---|
-| `pkg/authn` + `pkg/identity` | OIDC 验签、主体进 context | 用户表、口令、角色归属 |
-| `pkg/authz` | proto 注解、中间件、Casbin 判定 | 菜单树、字典、业务校验 |
-| `pkg/db` / `pkg/healthx` / `pkg/otelx` | 数据库连接、探活、链路 | 业务仓储 |
-| `app/<service>` | 该域的用例与表 | 其它服务的 internal 或表 |
+这些边界由 `tests/architecture/dependencies_test.go` 检查。
 
-原则：
+当前模块：
 
-1. **先单体，后拆分。** 新域先加在本仓库 `app/` 下同进程；只有独立扩缩、独立失败域或独立发布周期成立时才拆进程。
-2. **有不变量才进 domain。** 权限码、权限树、角色绑定有规则要守；字典是 CRUD，保持贫血，不为统一骨架硬套聚合根。
-3. **契约即策略。** 访问级别写在 proto 的 `access` / `perm` 上，启动时校验，运行时 fail-closed。handler 里不写鉴权 if。
-4. **身份外置，授权内聚。** Keycloak 回答「谁、有哪些角色」；本库只存「角色 → 权限」和角色继承，本地 JWKS 验签，不回调 IdP。
-5. **策略同步保持简单。** 事务内 version++ 与审计，各副本按数据库版本周期对账。不为单库策略同步再加 Redis、消息队列或 outbox。
-6. **测试即基础设施。** 单测不启 Docker：embedded-postgres 跑真实迁移，自签 JWT 替 Keycloak。e2e 覆盖 401/403/200，不拿假 Principal 绕过验签。
+| 模块 | 边界 |
+|---|---|
+| `access` | 权限目录、导航树、角色权限与继承 |
+| `dictionary` | 字典类型和字典项 |
+| `file` | 小文件元数据、所有者隔离、BlobStore 端口 |
+| `notification` | 站内通知、未读计数和已读状态 |
 
-新增能力之前先问：这是所有服务都会用的技术原语，还是某个域的业务？前者进 `pkg`，后者进对应 `app/<service>`。没有调用方的预埋件（表、连接池、写路径、API）不进底座。
+`access` 有真实不变量，使用聚合根和值对象；字典和通知保持简单实体。DDD 四层是依赖边界，不是要求每个模块都创建领域事件、工厂和领域服务。
 
-## 数据与授权边界
+## 身份与授权
 
-- `permission_definition` 是授权契约目录，与 proto 上的 `perm` 在启动时对齐。`navigation_node` 是前端导航，只能引用目录中已启用的码；建菜单不会发明契约，删菜单也不会删契约。
-- 超管短路只认本服务 client role，不认 realm 同名角色。
-- 权限树用 revision、策略用 version 做乐观并发。Casbin 适配器只加载，写入走 versioned Replace/Add。
+- Keycloak 负责登录、用户身份、角色归属和 token 签发，本仓库不建用户表、不存口令。
+- `pkg/authn` 本地验证 OIDC/JWT 并把主体放入 context。
+- `access` 保存角色到权限的映射以及角色继承。
+- 每个 RPC 在 proto 上声明 `access`；需要权限时同时声明严格三段 `perm`。
+- `permission_definition` 是后端授权契约目录；`navigation_node` 是前端导航，二者不能互相代替。
+- 策略更新使用数据库 version、审计和周期对账，不引入 Redis、MQ 或 outbox。
 
-## 服务拆分规则
+## 文件与通知的当前边界
 
-新增服务必须自带 `app/<service>/internal/{domain,biz,data,service}`，只通过 API 契约或事件交换数据。禁止跨服务 import 对方的 `internal`，也禁止直接读写对方拥有的表。迁移可以同一条流水线执行，表所有权必须在所属服务里唯一声明。
+文件模块默认使用本地磁盘适配器，适合开发和单实例部署：
+
+- HTTP 上传/下载使用原始二进制 body，不做 JSON base64。
+- 元数据存 PostgreSQL，BlobStore 端口隔离具体存储。
+- 读取和删除按 token `sub` 做所有者隔离。
+- 单文件大小由 `file.max_size_bytes` 限制。
+
+生产需要多副本时，实现同一个 BlobStore 端口接 S3/OSS/MinIO，再切换装配；不要让业务层依赖厂商 SDK。
+
+通知模块当前只做站内通知。短信、邮件、Push 只有在真实渠道、重试和吞吐需求出现后再扩展，届时通常值得独立部署；当前不预埋 MQ、模板中心和通道表。
+
+## 何时拆成服务
+
+代码模块不等于部署服务。满足至少一项再拆：
+
+- 需要独立扩缩容或资源模型明显不同；
+- 需要独立故障隔离；
+- 有独立团队和发布周期；
+- 被多个系统跨边界复用；
+- 文件流量或通知异步吞吐已影响当前 server 进程。
+
+拆分后为新进程建立独立入口和仓库边界，通过 API 或事件交互，禁止跨服务 import 对方内部实现或直接读写对方拥有的表。
+
+## `pkg` 与业务模块
+
+`pkg` 只放无业务语义且会被多个服务复用的技术原语，例如验签、鉴权中间件、数据库连接、探活和追踪。菜单、文件元数据、通知、字典等业务概念必须留在模块内。

@@ -1,6 +1,6 @@
 # eagle-go
 
-Go 模块化单体底座：**认证 + RBAC 授权 + 字典**。业务域按 `app/<service>` 增量添加，默认同进程部署。
+Go 模块化单体底座：**OIDC 认证、RBAC 授权、字典、文件与站内通知**。业务先作为独立模块在同一进程演进，达到明确拆分条件后再独立部署。
 
 **Kratos v3** · **ent** · **Keycloak** · **Casbin** · PostgreSQL 17。
 
@@ -22,7 +22,7 @@ Go 模块化单体底座：**认证 + RBAC 授权 + 字典**。业务域按 `app
                            │ OIDC token（realm_access.roles）
                            ↓
                   ┌────────────────────┐
-                  │   system 服务       │
+                  │   server 进程       │
                   │  ┌──────────────┐  │
                   │  │ authn 验签    │  │ ← 本地 JWKS，不回调 Keycloak
                   │  ├──────────────┤  │
@@ -137,7 +137,7 @@ go test ./...
 集成测试用 [embedded-postgres](https://github.com/fergusstrange/embedded-postgres) 下载并在进程内拉起真实 PostgreSQL，
 跑 `db/migrations` 下的真实迁移。首次运行会下载 PG 二进制（约 100MB），之后从本地缓存启动。
 
-端到端测试（`app/system/internal/e2e`）更进一步：真实 HTTP 服务器、
+端到端测试（`tests/e2e`）更进一步：真实 HTTP 服务器、
 与生产一致的中间件链，外加一个签发**真实 RS256 JWT** 的 Keycloak 替身——
 严格按 Keycloak 的 claim 结构下发，含 `realm_access.roles` 与
 `resource_access.<client>.roles`——据此验证完整的 401 / 403 / 200 语义。
@@ -183,7 +183,7 @@ goose -dir db/migrations postgres "postgres://eagle:eagle@127.0.0.1:5432/eagle?s
 ```
 
 ```bash
-go run ./app/system/cmd/server -conf app/system/configs
+go run ./cmd/server -conf configs
 ```
 
 要看链路和指标，再启可观测性栈（Grafana 已预置 Prometheus + Tempo 数据源）：
@@ -240,26 +240,26 @@ Go 风格的 `1h` / `30m` / `500ms` 会解析失败并让服务在启动阶段�
 
 这个坑真实踩过——配置里写了 `30m`，服务起不来，而报错信息只说
 `invalid google.protobuf.Duration value`，不指向具体字段。
-`conf_test.go` 现在会真实加载配置文件，把这类错误挡在 CI。
+`config_test.go` 现在会真实加载配置文件，把这类错误挡在 CI。
 
 ---
 
-## 分层：DDD Lite + Clean Architecture + Kratos
+## 分层：模块优先 + 模块内 DDD 四层
 
-依赖方向自外向内单向流动，`domain` 处在最内层且不依赖任何东西：
+先按业务能力定位模块，再沿四层依赖进入领域：
 
 ```
-server ──→ service ──→ biz(用例) ──→ domain
-                          data ────────┘   （实现 domain 定义的仓储接口）
+interfaces ──→ application ──→ domain
+infrastructure ──────────────────┘
 ```
 
 | 层 | 职责 | 允许依赖 |
 |---|---|---|
-| `server` | HTTP/gRPC 装配、中间件链 | service, conf |
-| `service` | proto ↔ 领域对象互转，领域错误映射为传输错误 | biz, domain |
-| `biz` | 用例编排 | domain |
+| `platform/server` | HTTP/gRPC 注册、中间件链、统一错误映射 | interfaces, config |
+| `interfaces` | proto ↔ 领域对象互转 | application, domain |
+| `application` | 用例编排 | domain |
 | **`domain`** | **实体（含不变量）· 值对象 · 仓储接口** | **无** |
-| `data` | 仓储实现：ent + Casbin 持久化适配 | domain |
+| `infrastructure` | Ent、事务、Casbin、文件存储适配 | domain, platform |
 
 ### 战术 DDD 只用在有不变量的地方
 
@@ -280,7 +280,7 @@ server ──→ service ──→ biz(用例) ──→ domain
 回报是领域规则可以完全脱离数据库单测：
 
 ```bash
-go test ./app/system/internal/domain/...
+go test ./internal/modules/access/domain/...
 ```
 
 0.4 秒跑完，不启动任何外部依赖。
@@ -291,16 +291,16 @@ go test ./app/system/internal/domain/...
 eagle-go/
 ├── api/eagle/
 │   ├── annotations/v1/     # 自定义权限注解 (perm / public)
-│   └── system/v1/          # 权限树 · 字典 · 角色权限绑定
-├── app/system/
-│   ├── cmd/server/         # 入口 + 显式依赖装配
-│   └── internal/
-│       ├── server/         # HTTP/gRPC 装配、中间件链
-│       ├── service/        # proto ↔ 领域对象转换
-│       ├── biz/            # 用例编排 + 错误映射
-│       ├── domain/         # 实体 · 值对象 · 仓储接口（零依赖）
-│       ├── data/           # 仓储实现：ent + Casbin 持久化适配
-│       └── conf/           # 配置契约
+│   ├── access/v1/          # 权限与角色绑定契约
+│   ├── dictionary/v1/      # 字典契约
+│   ├── file/v1/            # 文件契约
+│   └── notification/v1/    # 站内通知契约
+├── cmd/server/             # 进程入口 + 显式依赖装配
+├── configs/                # 部署配置
+├── internal/
+│   ├── modules/            # access · dictionary · file · notification
+│   └── platform/           # config · database · server
+├── tests/                  # architecture · e2e · testkit
 ├── ent/schema/             # ent Schema as Code
 ├── pkg/
 │   ├── authn/              # Keycloak OIDC/JWKS 验签
@@ -333,6 +333,8 @@ eagle-go/
 | 工具链与代码生成（buf / ent） | ✅ 已验证 |
 | 数据库迁移与种子数据 | ✅ 真实 PG 上 up→down→up 往返验证 |
 | 权限树 · 字典 · 角色权限绑定 | ✅ 数据层已验证 |
+| 文件上传/下载与所有者隔离 | ✅ 本地存储适配器 + 真实 HTTP e2e |
+| 站内通知 | ✅ 发送、列表、未读、已读 e2e |
 | Casbin 鉴权中间件 | ✅ 已验证（401/403/200、通配边界、角色继承、失败关闭） |
 | 可观测性（OTel 链路 + Prometheus 指标） | ✅ 已装配，配置解析有回归测试 |
 | 部署（Dockerfile · compose · Keycloak realm） | ✅ 已就绪 |

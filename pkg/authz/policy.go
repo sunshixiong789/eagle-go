@@ -35,7 +35,7 @@ type Policy struct {
 // 而 operation 集合是有限且固定的，所以查一次就缓存住。
 var policyCache sync.Map // operation(string) -> Policy
 
-// PolicyFor 解析 Kratos 的 operation（形如 "/eagle.system.v1.UserService/CreateUser"）
+// PolicyFor 解析 Kratos 的 operation（形如 "/eagle.access.v1.PermissionService/CreatePermission"）
 // 并返回该方法的访问策略。
 func PolicyFor(operation string) Policy {
 	if v, ok := policyCache.Load(operation); ok {

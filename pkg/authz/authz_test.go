@@ -7,7 +7,7 @@ import (
 	kratoserrors "github.com/go-kratos/kratos/v3/errors"
 	"github.com/go-kratos/kratos/v3/transport"
 
-	_ "github.com/eagle-go/eagle/api/eagle/system/v1"
+	_ "github.com/eagle-go/eagle/api/eagle/access/v1"
 	"github.com/eagle-go/eagle/pkg/identity"
 )
 
@@ -49,7 +49,7 @@ func newTestEnforcer(t *testing.T, policies map[string][]string) *Enforcer {
 	return e
 }
 
-const opCreatePermission = "/eagle.system.v1.PermissionService/CreatePermission"
+const opCreatePermission = "/eagle.access.v1.PermissionService/CreatePermission"
 
 func TestServerRejectsAnonymous(t *testing.T) {
 	var called bool
@@ -283,7 +283,7 @@ func TestServerAllowsAuthenticatedWhenNoPermDeclared(t *testing.T) {
 
 	// GetMyMenus 未声明权限码，登录即可
 	ctx := identity.NewContext(
-		serverCtx("/eagle.system.v1.PermissionService/GetMyMenus"),
+		serverCtx("/eagle.access.v1.PermissionService/GetMyMenus"),
 		&identity.Principal{Subject: "u-1"},
 	)
 	if _, err := mw(probeHandler(&called))(ctx, nil); err != nil {

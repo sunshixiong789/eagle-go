@@ -18,15 +18,15 @@ api:
 	buf generate --template buf.gen.yaml
 
 .PHONY: config
-# 生成各服务内部配置代码（app/*/internal/conf）
+# 生成进程内部配置代码（internal/platform/config）
 config:
 	buf generate --template buf.gen.config.yaml
 
 .PHONY: lint-proto
-# proto 风格检查 + 兼容性检查（against main）
+# proto 风格检查 + 兼容性检查（against master）
 lint-proto:
 	buf lint
-	buf breaking --against '.git#branch=main'
+	buf breaking api --against '.git#branch=master,subdir=api'
 
 .PHONY: ent
 # 生成 Ent 数据访问代码
@@ -53,10 +53,10 @@ generate: api config ent
 	go mod tidy
 
 .PHONY: build
-# 编译所有服务到 bin/
+# 编译服务到 bin/
 build:
 	mkdir -p bin/
-	go build -ldflags "$(LDFLAGS)" -o ./bin/ ./app/...
+	go build -ldflags "$(LDFLAGS)" -o ./bin/server ./cmd/server
 
 .PHONY: lint
 lint:

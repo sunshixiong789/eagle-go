@@ -60,7 +60,7 @@ Keycloak          本服务中间件              本库 Casbin
 1. HTTP 进 Kratos，中间件从左到右执行。
 2. `authn` 验 JWT，把登录人放进 `context`（`pkg/identity`）。
 3. `authz` 读 proto 上的 `access` + `perm`，拿 token 里的角色问 Casbin。
-4. 通过之后才进入 `service` → `biz` → `data`。
+4. 通过之后才进入模块的 `interfaces` → `application` → `infrastructure`。
 5. 你的业务代码里**不要**再判一次权限。需要「当前是谁」时，从 context 取。
 
 中间件判定顺序（记这个就够排 401/403）：
@@ -82,7 +82,7 @@ Keycloak          本服务中间件              本库 Casbin
 
 ### 第 1 步：在 proto 上声明接口和权限
 
-打开 `api/eagle/system/v1/dict.proto`，在 `service DictService` 里加：
+打开 `api/eagle/dictionary/v1/dictionary.proto`，在 `service DictService` 里加：
 
 ```protobuf
 rpc ExportDictData(ExportDictDataRequest) returns (ExportDictDataResponse) {
@@ -143,16 +143,17 @@ goose -dir db/migrations postgres "postgres://eagle:eagle@127.0.0.1:5432/eagle?s
 buf generate --template buf.gen.yaml
 ```
 
-会更新 `api/eagle/system/v1/dict.pb.go`、`*_http.pb.go`、`*_grpc.pb.go`。
+会更新 `api/eagle/dictionary/v1/dictionary.pb.go`、`*_http.pb.go`、`*_grpc.pb.go`。
 这些文件不要手改。
 
-### 第 4 步：补 service / biz / data
+### 第 4 步：补模块内四层
 
 对照已有的 `ListDictData` 抄一遍：
 
-1. `app/system/internal/service/dict.go`：把 proto 请求转成领域对象，调 usecase
-2. `app/system/internal/biz/dict.go`：编排（字典这种 CRUD 往往就是一行 `return repo.Xxx()`）
-3. `app/system/internal/data/dict.go`：真正查库
+1. `internal/modules/dictionary/interfaces/dict.go`：把 proto 请求转成领域对象，调 usecase
+2. `internal/modules/dictionary/application/dict.go`：编排（字典这种 CRUD 往往就是一行 `return repo.Xxx()`）
+3. `internal/modules/dictionary/infrastructure/dict.go`：真正查库
+4. `internal/modules/dictionary/domain/`：只在需要模型、端口或规则时修改
 
 handler 里不要出现鉴权 `if`。需要当前用户时：
 
@@ -181,14 +182,14 @@ id := identity.Subject(ctx) // 服务账号或未登录时是空串
 
 只有当你新建了 `XxxService`（一个新的 proto `service`）时，才需要：
 
-- `internal/server/http.go`、`grpc.go` 里 `RegisterXxxService...`
+- `internal/platform/server/http.go`、`grpc.go` 里 `RegisterXxxService...`
 - 若新增了顶层组件，在 `cmd/server/app.go` 显式装配
 
 ### 第 6 步：跑测试
 
 ```bash
-go test ./app/system/internal/domain ./pkg/authz          # 很快，不启数据库
-go test ./app/system/internal/data ./app/system/internal/e2e
+go test ./internal/modules/access/domain ./pkg/authz   # 很快，不启数据库
+go test ./internal/modules/dictionary/infrastructure ./tests/e2e
 ```
 
 ---
@@ -254,19 +255,20 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 1. `ent/schema/` 里用 Go 描述表字段
 2. `go generate ./ent`（只改 `ent/schema/`，不要手改生成文件）
 3. `db/migrations/` 写 SQL（真正建表靠 goose，**不用** ent 自动迁移）
-4. `api/eagle/system/v1/*.proto` 定义接口，每个 RPC 写 `access` + 需要时写 `perm`
+4. `api/eagle/<module>/v1/*.proto` 定义接口，每个 RPC 写 `access` + 需要时写 `perm`
 5. `buf generate --template buf.gen.yaml`
 6. 新权限码写入 `permission_definition`（见第 4 节第 2 步）
-7. `internal/domain/` 放对象和仓储接口。字典这种没有复杂规则的，做成普通结构体即可
-8. `internal/data/` 实现仓储，这里才能 import `ent`
-9. `internal/biz/` 编排用例
-10. `internal/service/` 做 proto ↔ 领域对象转换，错误不用你转，中间件会把领域错误映射成 HTTP/gRPC
-11. 新的 proto `service` 才去改 `server` + `cmd/server/app.go`
+7. 建 `internal/modules/<module>/`，不要继续往全局横向目录堆代码
+8. `<module>/domain/` 放对象和端口。字典这种没有复杂规则的，做成普通结构体即可
+9. `<module>/infrastructure/` 实现仓储，这里才能 import `ent`
+10. `<module>/application/` 编排用例
+11. `<module>/interfaces/` 做 proto ↔ 领域对象转换，错误由 `server.ErrorMapping` 统一映射
+12. 新的 proto `service` 才去改 `server` + `cmd/server/app.go`
 
 有「必须守住的规则」时（权限码格式、树不能成环、按钮必须有码），把规则写进 `domain`，用测试锁住：
 
 ```bash
-go test ./app/system/internal/domain/...
+go test ./internal/modules/<module>/domain/...
 ```
 
 没有这种规则时，不要为了「看起来像 DDD」去造聚合根。
@@ -280,11 +282,11 @@ go test ./app/system/internal/domain/...
 | 目录 | 放什么 | 类比 |
 |---|---|---|
 | `api/` | 接口长什么样 | 接口文档的源文件，改完要生成代码 |
-| `service/` | proto 和内部对象互转 | Controller 里「接请求、调应用服务」那几行 |
-| `biz/` | 先做什么再做什么 | 应用服务 / 用例 |
-| `domain/` | 规则本身 | 和数据库、HTTP 无关的业务语言 |
-| `data/` | 怎么存怎么读 | Repository 实现 |
-| `pkg/` | 每个服务都会用的技术能力 | 验签、鉴权中间件、数据库连接。**禁止**依赖 `app/` 和项目 Ent 模型 |
+| `<module>/interfaces/` | proto 和内部对象互转 | Controller 里「接请求、调应用服务」那几行 |
+| `<module>/application/` | 先做什么再做什么 | 应用服务 / 用例 |
+| `<module>/domain/` | 规则与端口 | 和数据库、HTTP 无关的业务语言 |
+| `<module>/infrastructure/` | 怎么存怎么读 | Repository / 外部存储实现 |
+| `pkg/` | 可跨进程复用的技术能力 | 验签、鉴权中间件、数据库连接。**禁止**依赖 `internal/` 和项目 Ent 模型 |
 
 ---
 
@@ -303,7 +305,7 @@ make generate      # proto + 配置 + Ent
 go generate ./ent  # 只在改了 ent/schema 之后
 make migrate-up    # 执行迁移
 go test ./...      # 不需要 Docker
-go run ./app/system/cmd/server -conf app/system/configs
+go run ./cmd/server -conf configs
 ```
 
 ---

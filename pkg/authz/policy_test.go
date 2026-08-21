@@ -4,9 +4,10 @@ import (
 	"testing"
 
 	annotationsv1 "github.com/eagle-go/eagle/api/eagle/annotations/v1"
-	// 空导入以触发 init()，把 system 的文件描述符注册进全局 registry。
+	// 空导入以触发 init()，把各模块的文件描述符注册进全局 registry。
 	// 没有它，PolicyFor 一律解析不到方法——这正是本测试要守住的前提。
-	_ "github.com/eagle-go/eagle/api/eagle/system/v1"
+	_ "github.com/eagle-go/eagle/api/eagle/access/v1"
+	_ "github.com/eagle-go/eagle/api/eagle/dictionary/v1"
 )
 
 func TestPolicyFor(t *testing.T) {
@@ -20,35 +21,35 @@ func TestPolicyFor(t *testing.T) {
 	}{
 		{
 			name:       "声明了权限码的方法",
-			operation:  "/eagle.system.v1.PermissionService/CreatePermission",
+			operation:  "/eagle.access.v1.PermissionService/CreatePermission",
 			wantPerm:   "system:permission:add",
 			wantKnown:  true,
 			wantAccess: annotationsv1.AccessLevel_ACCESS_LEVEL_PERMISSION_REQUIRED,
 		},
 		{
 			name:       "只需登录、未声明权限码的方法",
-			operation:  "/eagle.system.v1.PermissionService/GetMyMenus",
+			operation:  "/eagle.access.v1.PermissionService/GetMyMenus",
 			wantPerm:   "",
 			wantKnown:  true,
 			wantAccess: annotationsv1.AccessLevel_ACCESS_LEVEL_AUTHENTICATED,
 		},
 		{
 			name:       "角色权限分配",
-			operation:  "/eagle.system.v1.RoleBindingService/SetRolePermissions",
+			operation:  "/eagle.access.v1.RoleBindingService/SetRolePermissions",
 			wantPerm:   "system:role:assign",
 			wantKnown:  true,
 			wantAccess: annotationsv1.AccessLevel_ACCESS_LEVEL_PERMISSION_REQUIRED,
 		},
 		{
 			name:       "查自己的权限只需登录",
-			operation:  "/eagle.system.v1.RoleBindingService/GetMyPermissions",
+			operation:  "/eagle.access.v1.RoleBindingService/GetMyPermissions",
 			wantPerm:   "",
 			wantKnown:  true,
 			wantAccess: annotationsv1.AccessLevel_ACCESS_LEVEL_AUTHENTICATED,
 		},
 		{
 			name:       "字典按类型查询只需登录",
-			operation:  "/eagle.system.v1.DictService/GetDictDataByType",
+			operation:  "/eagle.dictionary.v1.DictService/GetDictDataByType",
 			wantPerm:   "",
 			wantKnown:  true,
 			wantAccess: annotationsv1.AccessLevel_ACCESS_LEVEL_AUTHENTICATED,
@@ -93,7 +94,7 @@ func TestRegisteredPoliciesAreExplicit(t *testing.T) {
 }
 
 func TestPolicyForIsCached(t *testing.T) {
-	const op = "/eagle.system.v1.PermissionService/DeletePermission"
+	const op = "/eagle.access.v1.PermissionService/DeletePermission"
 
 	first := PolicyFor(op)
 	second := PolicyFor(op)
@@ -116,8 +117,8 @@ func TestSplitOperation(t *testing.T) {
 		wantMethod  string
 		wantOK      bool
 	}{
-		{"/eagle.system.v1.DictService/CreateDictType", "eagle.system.v1.DictService", "CreateDictType", true},
-		{"eagle.system.v1.DictService/CreateDictType", "eagle.system.v1.DictService", "CreateDictType", true},
+		{"/eagle.dictionary.v1.DictService/CreateDictType", "eagle.dictionary.v1.DictService", "CreateDictType", true},
+		{"eagle.dictionary.v1.DictService/CreateDictType", "eagle.dictionary.v1.DictService", "CreateDictType", true},
 		{"/OnlyService", "", "", false},
 		{"/trailing/", "", "", false},
 		{"", "", "", false},
