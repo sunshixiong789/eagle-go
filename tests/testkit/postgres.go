@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 	_ "github.com/lib/pq"
@@ -20,9 +21,10 @@ type Postgres struct {
 	DSN     string
 	server  *embeddedpostgres.EmbeddedPostgres
 	dataDir string
+	port    uint32
 }
 
-func StartPostgres(instance, database string) (*Postgres, error) {
+func StartPostgres(instance, database string, migrationService ...string) (*Postgres, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("locate user directory: %w", err)
@@ -46,9 +48,13 @@ func StartPostgres(instance, database string) (*Postgres, error) {
 	}
 	p := &Postgres{
 		DSN:    fmt.Sprintf("postgres://eagle:eagle@127.0.0.1:%d/%s?sslmode=disable", port, database),
-		server: server, dataDir: dataDir,
+		server: server, dataDir: dataDir, port: port,
 	}
-	if err := RunMigrations(p.DSN); err != nil {
+	service := "admin"
+	if len(migrationService) > 0 {
+		service = migrationService[0]
+	}
+	if err := RunMigrations(p.DSN, service); err != nil {
 		_ = p.Close()
 		return nil, err
 	}
@@ -67,7 +73,29 @@ func (p *Postgres) Close() error {
 	return removeErr
 }
 
-func RunMigrations(dsn string) error {
+var databaseNamePattern = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+
+func (p *Postgres) CreateDatabase(database, migrationService string) (string, error) {
+	if !databaseNamePattern.MatchString(database) {
+		return "", fmt.Errorf("invalid test database name %q", database)
+	}
+	db, err := sql.Open("postgres", p.DSN)
+	if err != nil {
+		return "", err
+	}
+	if _, err := db.Exec(`CREATE DATABASE ` + database); err != nil {
+		_ = db.Close()
+		return "", fmt.Errorf("create database %s: %w", database, err)
+	}
+	_ = db.Close()
+	dsn := fmt.Sprintf("postgres://eagle:eagle@127.0.0.1:%d/%s?sslmode=disable", p.port, database)
+	if err := RunMigrations(dsn, migrationService); err != nil {
+		return "", err
+	}
+	return dsn, nil
+}
+
+func RunMigrations(dsn, service string) error {
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return fmt.Errorf("open migration database: %w", err)
@@ -81,7 +109,7 @@ func RunMigrations(dsn string) error {
 	if err != nil {
 		return err
 	}
-	if err := goose.Up(db, filepath.Join(root, "db", "migrations")); err != nil {
+	if err := goose.Up(db, filepath.Join(root, "app", service, "migrations")); err != nil {
 		return fmt.Errorf("run migrations: %w", err)
 	}
 	return nil
@@ -93,12 +121,12 @@ func RepoRoot() (string, error) {
 		return "", err
 	}
 	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+		if _, err := os.Stat(filepath.Join(dir, "go.work")); err == nil {
 			return dir, nil
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return "", errors.New("go.mod not found")
+			return "", errors.New("go.work not found")
 		}
 		dir = parent
 	}

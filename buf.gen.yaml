@@ -1,20 +1,20 @@
 version: v2
 
-# 插件由 go.mod 的 tool 指令固定版本，通过 `go tool` 运行。
+# 插件由 tools/go.mod 的 tool 指令固定版本，通过 `go -C tools tool` 运行。
 # 不依赖全局 PATH，也不会让 `go run module@version` 在每次生成时重新解析模块。
 inputs:
   - directory: api
 
 plugins:
-  - local: ["go", "tool", "protoc-gen-go"]
+  - local: ["go", "-C", "tools", "tool", "protoc-gen-go"]
     out: api
     opt: paths=source_relative
 
-  - local: ["go", "tool", "protoc-gen-go-grpc"]
+  - local: ["go", "-C", "tools", "tool", "protoc-gen-go-grpc"]
     out: api
     opt: paths=source_relative
 
-  - local: ["go", "tool", "protoc-gen-go-http"]
+  - local: ["go", "-C", "tools", "tool", "protoc-gen-go-http"]
     out: api
     opt: paths=source_relative
 
@@ -23,7 +23,7 @@ plugins:
   # 错误原因用普通 enum 声明，在 Go 侧配 errors.NotFound(reason.String(), msg)
   # 构造即可——官方 kratos-layout 也是这个做法。
 
-  - local: ["go", "tool", "protoc-gen-openapi"]
+  - local: ["go", "-C", "tools", "tool", "protoc-gen-openapi"]
     out: .
     strategy: all
     opt:

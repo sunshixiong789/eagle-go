@@ -8,7 +8,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"time"
+
+	"github.com/eagle-go/eagle/pkg/healthx"
 
 	// 注册 pgx 的 database/sql 驱动。
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -53,4 +56,24 @@ func New(ctx context.Context, cfg Config) (*sql.DB, func(), error) {
 	}
 
 	return sqlDB, func() { _ = sqlDB.Close() }, nil
+}
+
+// NewMonitored 建立连接池并把 PostgreSQL 就绪状态注册到进程健康检查。
+func NewMonitored(ctx context.Context, cfg Config, health *healthx.Registry) (*sql.DB, func(), error) {
+	sqlDB, closeDB, err := New(ctx, cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+	unregister := func() {}
+	if health != nil {
+		unregister = health.Register("postgres", func(ctx context.Context) error {
+			return sqlDB.PingContext(ctx)
+		})
+	}
+	cleanup := func() {
+		unregister()
+		slog.Info("closing database")
+		closeDB()
+	}
+	return sqlDB, cleanup, nil
 }

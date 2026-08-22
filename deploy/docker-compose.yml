@@ -1,32 +1,35 @@
 name: eagle
 
+x-service-environment: &service-environment
+  EAGLE_SERVER_HTTP_ADDR: 0.0.0.0:8000
+  EAGLE_SERVER_GRPC_ADDR: 0.0.0.0:9000
+  EAGLE_OBSERVABILITY_METRICS_ADDR: 0.0.0.0:9100
+  EAGLE_OBSERVABILITY_OTLP_ENDPOINT: otel-collector:4317
+  EAGLE_AUTH_ISSUER: http://127.0.0.1:8080/realms/eagle
+  EAGLE_AUTH_JWKS_URL: http://keycloak:8080/realms/eagle/protocol/openid-connect/certs
+  EAGLE_UPSTREAM_AUTHORIZATION_ENDPOINT: admin:9000
+  EAGLE_UPSTREAM_PRODUCT_ENDPOINT: product:9000
+
 services:
   postgres:
     image: postgres:17-alpine
-    container_name: eagle-postgres
     environment:
       POSTGRES_USER: eagle
       POSTGRES_PASSWORD: eagle
       POSTGRES_DB: eagle
-      # 本地开发用，生产务必换成真实口令并经 Secret 注入
       POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
-    ports:
-      - "5432:5432"
+    ports: ["5432:5432"]
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./postgres/init-keycloak-db.sh:/docker-entrypoint-initdb.d/10-keycloak.sh:ro
+      - ./postgres/init-databases.sh:/docker-entrypoint-initdb.d/10-databases.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U eagle -d eagle"]
       interval: 5s
       timeout: 3s
       retries: 10
 
-  # 认证中心：用户、口令、角色的唯一来源。
-  # 与业务库共用同一个 PostgreSQL 实例但使用独立的 database——
-  # 本地省一个容器，生产应各自独立部署。
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
-    container_name: eagle-keycloak
     command: ["start-dev", "--import-realm"]
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
@@ -36,55 +39,129 @@ services:
       KC_DB_USERNAME: eagle
       KC_DB_PASSWORD: eagle
       KC_HTTP_PORT: 8080
-      # 关闭严格 hostname 校验，否则容器内外访问同一 issuer 会对不上，
-      # 导致资源服务器验签时 iss 不匹配
       KC_HOSTNAME_STRICT: "false"
       KC_HEALTH_ENABLED: "true"
-    ports:
-      - "8080:8080"
+    ports: ["8080:8080"]
     volumes:
       - ./keycloak/realm-eagle.json:/opt/keycloak/data/import/realm-eagle.json:ro
     depends_on:
       postgres:
         condition: service_healthy
 
-  # 可观测性栈：默认不启动，需要时
-  #   docker compose --profile obs up -d
+  admin-migrate:
+    image: eagle/admin:dev
+    build:
+      context: ..
+      args: {SERVICE: admin, VERSION: dev}
+    entrypoint: ["/app/migrate"]
+    command: ["-dir", "/app/migrations"]
+    environment:
+      EAGLE_DATABASE_DSN: postgres://eagle:eagle@postgres:5432/eagle_admin?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  product-migrate:
+    image: eagle/product:dev
+    build:
+      context: ..
+      args: {SERVICE: product, VERSION: dev}
+    entrypoint: ["/app/migrate"]
+    command: ["-dir", "/app/migrations"]
+    environment:
+      EAGLE_DATABASE_DSN: postgres://eagle:eagle@postgres:5432/eagle_product?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  order-migrate:
+    image: eagle/order:dev
+    build:
+      context: ..
+      args: {SERVICE: order, VERSION: dev}
+    entrypoint: ["/app/migrate"]
+    command: ["-dir", "/app/migrations"]
+    environment:
+      EAGLE_DATABASE_DSN: postgres://eagle:eagle@postgres:5432/eagle_order?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  admin:
+    image: eagle/admin:dev
+    environment:
+      <<: *service-environment
+      EAGLE_DATABASE_DSN: postgres://eagle:eagle@postgres:5432/eagle_admin?sslmode=disable
+      EAGLE_AUTH_CLIENT_ID: eagle-admin
+      EAGLE_AUTH_AUDIENCE: eagle-admin
+      EAGLE_FILE_LOCAL_DIR: /data/uploads
+    ports: ["8001:8000", "9001:9000", "9101:9100"]
+    volumes: [filedata:/data/uploads]
+    depends_on:
+      admin-migrate: {condition: service_completed_successfully}
+      keycloak: {condition: service_started}
+
+  product:
+    image: eagle/product:dev
+    environment:
+      <<: *service-environment
+      EAGLE_DATABASE_DSN: postgres://eagle:eagle@postgres:5432/eagle_product?sslmode=disable
+      EAGLE_AUTH_CLIENT_ID: eagle-product
+      EAGLE_AUTH_AUDIENCE: eagle-product
+    ports: ["8002:8000", "9002:9000", "9102:9100"]
+    depends_on:
+      product-migrate: {condition: service_completed_successfully}
+      admin: {condition: service_healthy}
+
+  order:
+    image: eagle/order:dev
+    environment:
+      <<: *service-environment
+      EAGLE_DATABASE_DSN: postgres://eagle:eagle@postgres:5432/eagle_order?sslmode=disable
+      EAGLE_AUTH_CLIENT_ID: eagle-order
+      EAGLE_AUTH_AUDIENCE: eagle-order
+    ports: ["8003:8000", "9003:9000", "9103:9100"]
+    depends_on:
+      order-migrate: {condition: service_completed_successfully}
+      product: {condition: service_healthy}
+
+  gateway:
+    image: nginx:1.27-alpine
+    ports: ["8000:8000"]
+    volumes:
+      - ./gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./gateway/proxy.conf:/etc/nginx/proxy.conf:ro
+    depends_on:
+      admin: {condition: service_healthy}
+      product: {condition: service_healthy}
+      order: {condition: service_healthy}
+
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.121.0
-    container_name: eagle-otel
     profiles: ["obs"]
     command: ["--config=/etc/otel/config.yaml"]
     volumes:
       - ./observability/otel-collector.yaml:/etc/otel/config.yaml:ro
-    ports:
-      - "4317:4317"   # OTLP gRPC
-      - "4318:4318"   # OTLP HTTP
-    depends_on:
-      - tempo
+    ports: ["4317:4317", "4318:4318"]
+    depends_on: [tempo]
 
   tempo:
     image: grafana/tempo:2.7.2
-    container_name: eagle-tempo
     profiles: ["obs"]
     command: ["-config.file=/etc/tempo/tempo.yaml"]
     volumes:
       - ./observability/tempo.yaml:/etc/tempo/tempo.yaml:ro
-    ports:
-      - "3200:3200"
+    ports: ["3200:3200"]
 
   prometheus:
     image: prom/prometheus:v3.2.1
-    container_name: eagle-prometheus
     profiles: ["obs"]
     volumes:
       - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-    ports:
-      - "9090:9090"
+    ports: ["9090:9090"]
 
   grafana:
     image: grafana/grafana:11.6.0
-    container_name: eagle-grafana
     profiles: ["obs"]
     environment:
       GF_AUTH_ANONYMOUS_ENABLED: "true"
@@ -92,11 +169,9 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: admin
     volumes:
       - ./observability/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/ds.yaml:ro
-    ports:
-      - "3000:3000"
-    depends_on:
-      - prometheus
-      - tempo
+    ports: ["3000:3000"]
+    depends_on: [prometheus, tempo]
 
 volumes:
   pgdata:
+  filedata:

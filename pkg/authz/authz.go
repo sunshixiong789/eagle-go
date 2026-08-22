@@ -33,8 +33,15 @@ const (
 )
 
 type options struct {
-	enforcer       *Enforcer
+	authorizer     Authorizer
 	superAdminRole string
+}
+
+// Authorizer is the narrow policy decision port used by the middleware. The
+// admin service supplies a local Casbin enforcer; other services use the
+// access-service gRPC client.
+type Authorizer interface {
+	AllowContext(context.Context, []string, string) (bool, error)
 }
 
 // Option 配置鉴权中间件。
@@ -43,7 +50,12 @@ type Option func(*options)
 // WithEnforcer 注入 Casbin 判定器。
 // 不设置时，所有声明了权限码的方法都会被拒绝（fail closed）。
 func WithEnforcer(e *Enforcer) Option {
-	return func(o *options) { o.enforcer = e }
+	return WithAuthorizer(e)
+}
+
+// WithAuthorizer injects either a local or remote policy decision point.
+func WithAuthorizer(a Authorizer) Option {
+	return func(o *options) { o.authorizer = a }
 }
 
 // WithSuperAdminRole 设置超管角色，具备该角色的主体跳过 Casbin 判定。
@@ -104,7 +116,7 @@ func (o *options) check(ctx context.Context, p *identity.Principal, perm string)
 		return nil
 	}
 
-	if o.enforcer == nil {
+	if o.authorizer == nil {
 		// 没配 enforcer 却要求权限码，属于装配错误。
 		// 这里拒绝而不是放行——鉴权组件的失败方向必须是关闭的。
 		return errors.Forbidden(ReasonForbidden, "鉴权未正确装配：缺少判定器")
@@ -113,7 +125,7 @@ func (o *options) check(ctx context.Context, p *identity.Principal, perm string)
 	// 服务账号与终端用户走同一套判定：两者的角色都由 Keycloak 下发，
 	// 在 Casbin 眼里没有区别。为服务账号单开一条 scope 判定分支
 	// 会形成第二套授权语义，日后必然出现两边配置不一致。
-	allowed, err := o.enforcer.AllowContext(ctx, p.Roles, perm)
+	allowed, err := o.authorizer.AllowContext(ctx, p.Roles, perm)
 	if err != nil {
 		// 判定失败时拒绝。放行会让策略存储抖动直接变成越权。
 		return errors.Forbidden(ReasonForbidden, "权限校验失败")

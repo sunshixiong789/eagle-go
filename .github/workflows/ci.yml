@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.26"
+  GO_VERSION: "1.27.0"
 
 jobs:
   proto:
@@ -27,19 +27,18 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
-
-      - uses: bufbuild/buf-action@v1
-        with:
-          setup_only: true
+          cache-dependency-path: |
+            go.work.sum
+            **/go.sum
 
       - name: buf lint
-        run: buf lint
+        run: go tool buf lint
 
       # PR 上拦截破坏性契约变更。契约是跨服务、跨语言的公共依赖，
       # 破坏性改动一旦合入，下游要到运行时才会发现。
       - name: buf breaking
         if: github.event_name == 'pull_request'
-        run: buf breaking api --against ".git#branch=${{ github.base_ref }},subdir=api"
+        run: go tool buf breaking api --against ".git#branch=${{ github.base_ref }},subdir=api"
 
       # 生成代码必须与 proto 保持同步。不检查的话，
       # 改了 proto 却忘记重新生成的提交会一路合进主干。
@@ -61,6 +60,9 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+          cache-dependency-path: |
+            go.work.sum
+            **/go.sum
 
       # 集成测试用 embedded-postgres 在进程内拉起真实 PostgreSQL，
       # 因此 CI 不需要声明 services，本地也不需要 Docker。
@@ -72,19 +74,27 @@ jobs:
           key: embedded-postgres-${{ runner.os }}
 
       - name: 构建
-        run: go build ./...
+        run: make build
 
       - name: go vet
-        run: go vet ./...
+        run: |
+          for module in api pkg app/admin app/product app/order tests tools; do
+            go vet "./$module/..."
+          done
 
       - name: 测试
-        run: go test -race -coverprofile=coverage.out ./...
+        run: |
+          mkdir -p coverage
+          for module in api pkg app/admin app/product app/order tests tools; do
+            profile="${module//\//-}"
+            go test -race -coverprofile="coverage/$profile.out" "./$module/..."
+          done
 
       - name: 上传覆盖率报告
         uses: actions/upload-artifact@v4
         with:
           name: coverage
-          path: coverage.out
+          path: coverage/
 
   lint:
     name: 静态检查
@@ -96,10 +106,12 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+          cache-dependency-path: |
+            go.work.sum
+            **/go.sum
 
-      - uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
+      - name: golangci-lint
+        run: go tool golangci-lint run ./api/... ./pkg/... ./app/admin/... ./app/product/... ./app/order/... ./tests/... ./tools/...
 
   migrations:
     name: 迁移可回滚性
@@ -124,9 +136,9 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
-
-      - name: 安装 goose
-        run: go install github.com/pressly/goose/v3/cmd/goose@v3.27.3
+          cache-dependency-path: |
+            go.work.sum
+            **/go.sum
 
       # up 能跑通不代表 down 也能。回滚脚本平时没人执行，
       # 等到线上真要回滚时才发现写错，代价极高。
@@ -134,7 +146,10 @@ jobs:
         env:
           DSN: postgres://eagle:eagle@127.0.0.1:5432/eagle?sslmode=disable
         run: |
-          goose -dir db/migrations postgres "$DSN" up
-          goose -dir db/migrations postgres "$DSN" down-to 0
-          goose -dir db/migrations postgres "$DSN" up
-          goose -dir db/migrations postgres "$DSN" status
+          for service in admin product order; do
+            go tool goose -dir "app/$service/migrations" postgres "$DSN" up
+            go tool goose -dir "app/$service/migrations" postgres "$DSN" down-to 0
+            go tool goose -dir "app/$service/migrations" postgres "$DSN" up
+            go tool goose -dir "app/$service/migrations" postgres "$DSN" status
+            go tool goose -dir "app/$service/migrations" postgres "$DSN" down-to 0
+          done

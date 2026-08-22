@@ -26,7 +26,12 @@
         "name": "user",
         "description": "普通用户，仅只读权限"
       }
-    ]
+    ],
+    "client": {
+      "eagle-admin": [{"name": "admin"}],
+      "eagle-product": [{"name": "admin"}],
+      "eagle-order": [{"name": "admin"}]
+    }
   },
 
   "clients": [
@@ -56,12 +61,66 @@
             "included.client.audience": "eagle-system",
             "access.token.claim": "true"
           }
+        },
+        {
+          "name": "audience-eagle-admin",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "eagle-admin",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience-eagle-product",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "eagle-product",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience-eagle-order",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "eagle-order",
+            "access.token.claim": "true"
+          }
         }
       ]
     },
     {
       "clientId": "eagle-system",
       "name": "Eagle System 服务（资源服务器）",
+      "enabled": true,
+      "bearerOnly": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": false
+    },
+    {
+      "clientId": "eagle-admin",
+      "name": "Eagle Admin 服务",
+      "enabled": true,
+      "bearerOnly": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": false
+    },
+    {
+      "clientId": "eagle-product",
+      "name": "Eagle Product 服务",
+      "enabled": true,
+      "bearerOnly": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": false
+    },
+    {
+      "clientId": "eagle-order",
+      "name": "Eagle Order 服务",
       "enabled": true,
       "bearerOnly": true,
       "publicClient": false,

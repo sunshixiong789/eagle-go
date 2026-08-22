@@ -61,7 +61,7 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	}
 	goose.SetLogger(goose.NopLogger())
 
-	dir, err := filepath.Abs(filepath.Join("..", "..", "db", "migrations"))
+	dir, err := filepath.Abs(filepath.Join("..", "..", "app", "admin", "migrations"))
 	if err != nil {
 		t.Fatalf("resolve dir: %v", err)
 	}
@@ -94,6 +94,28 @@ func TestMigrationsRoundTrip(t *testing.T) {
 		t.Fatalf("回滚后重新 up: %v", err)
 	}
 	assertSeedData(t, sqlDB)
+	if err := goose.DownTo(sqlDB, dir, 0); err != nil {
+		t.Fatalf("清理 admin 迁移: %v", err)
+	}
+
+	for _, service := range []string{"product", "order"} {
+		serviceDir, err := filepath.Abs(filepath.Join("..", "..", "app", service, "migrations"))
+		if err != nil {
+			t.Fatalf("resolve %s dir: %v", service, err)
+		}
+		if err := goose.Up(sqlDB, serviceDir); err != nil {
+			t.Fatalf("%s up: %v", service, err)
+		}
+		if err := goose.DownTo(sqlDB, serviceDir, 0); err != nil {
+			t.Fatalf("%s down: %v", service, err)
+		}
+		if err := goose.Up(sqlDB, serviceDir); err != nil {
+			t.Fatalf("%s second up: %v", service, err)
+		}
+		if err := goose.DownTo(sqlDB, serviceDir, 0); err != nil {
+			t.Fatalf("%s final down: %v", service, err)
+		}
+	}
 }
 
 func assertPolicyRole(t *testing.T, db *sql.DB, role string, want bool) {
@@ -147,6 +169,7 @@ func assertSeedData(t *testing.T, db *sql.DB) {
 	for _, code := range []string{
 		"system:permission:add", "system:permission:edit",
 		"system:role:assign", "system:dict:query",
+		"product:product:add", "product:product:edit", "product:product:remove",
 	} {
 		var exists bool
 		err := db.QueryRow(`SELECT EXISTS(SELECT 1 FROM permission_definition WHERE code = $1)`, code).Scan(&exists)

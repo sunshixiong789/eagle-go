@@ -1,76 +1,113 @@
-# Eagle 架构边界
+# Eagle 微服务架构
 
-本仓库是模块化单体：当前只有一个 `server` 进程，业务代码先按模块隔离；只有独立扩缩容、故障域或发布周期成立时，才把模块迁成独立服务。
+本仓库是 Go Workspace 组织的多模块微服务单仓库，不是模块化单体。每个 `app/<service>` 都有独立 `go.mod`、Ent Client、迁移、配置和进程入口；共享源码只限技术运行时和明确的 API 契约。
 
-## 顶层目录表达什么
+## 服务边界
 
-- `cmd/server` 是唯一可执行程序和组合根。
-- `internal` 是 Go 的编译器可见性边界，表示仓库私有实现，不表示“内部服务”。
-- `internal/modules` 放业务能力；每个一级目录是一个业务模块。
-- `internal/platform` 放配置、数据库连接和网络服务器等进程级能力，不是业务模块。
-- `tests` 放跨模块架构测试、端到端测试和测试工具。
-- `api/eagle/<module>/v1` 按业务模块保存对外契约，HTTP 路径可独立保持兼容。
+| 进程 | 拥有的模块 | 拥有的数据 | 依赖 |
+|---|---|---|---|
+| admin | access、dictionary、file、notification | 权限、字典、文件元数据、站内通知 | Keycloak、BlobStore |
+| product | product | 商品 | admin 授权判定 |
+| order | order | 订单与商品快照 | product 查询 |
 
-## 模块优先，模块内四层
+Keycloak 是独立认证中心，负责用户、口令、角色和 token。本仓库不建用户表。
 
-每个业务模块的依赖方向固定为：
+admin 不是业务流量网关。它组合四个基础模块，是因为这些能力当前都属于低流量管理/支撑面，没有独立扩缩容、团队或故障隔离需求。模块边界仍然保留；将来出现真实拆分信号时可以迁出，而不是现在就为每个模块维护一套镜像和数据库。
 
-`interfaces → application → domain ← infrastructure`
+## 目录表达什么
 
-- `domain`：模型、不变量、领域错误和端口，只依赖标准库。
-- `application`：用例编排，只依赖 domain。
-- `infrastructure`：Ent、事务、Casbin、文件系统等端口实现。
-- `interfaces`：protobuf 与领域对象转换，将当前主体交给用例。
-- `internal/platform/server`：HTTP/gRPC 注册、中间件链和统一错误映射。
-- `internal/platform/database`：共享数据库连接生命周期，不包含业务仓储。
+    api/eagle/<module>/v1                         跨进程契约（独立 Go module）
+    app/<service>/cmd/<service>                   进程入口和唯一组合根
+    app/<service>/internal/<module>               服务拥有的业务模块
+    app/<service>/internal/platform/database/ent  服务独占的 Ent Client
+    app/<service>/migrations                      服务独占的数据库迁移
+    app/<service>/configs                         服务配置
+    pkg                                           无业务语义的共享技术模块
+    tools                                         生成器和迁移程序模块
+    tests                                         架构测试与跨模块测试工具
+    deploy                                        本地与生产部署资源
 
-这些边界由 `tests/architecture/dependencies_test.go` 检查。
+`app/<service>/internal` 是 Go 的编译器可见性边界：其他服务连实现包都无法 import。服务边界同时由独立 module、入口、Ent Client、数据库、API 调用和架构测试保证。根 `go.work` 只组合本地开发工作区，每个模块的依赖仍由自己的 `go.mod/go.sum` 管理。
 
-当前模块：
+## 模块内四层
 
-| 模块 | 边界 |
-|---|---|
-| `access` | 权限目录、导航树、角色权限与继承 |
-| `dictionary` | 字典类型和字典项 |
-| `file` | 小文件元数据、所有者隔离、BlobStore 端口 |
-| `notification` | 站内通知、未读计数和已读状态 |
+每个模块固定使用：
 
-`access` 有真实不变量，使用聚合根和值对象；字典和通知保持简单实体。DDD 四层是依赖边界，不是要求每个模块都创建领域事件、工厂和领域服务。
+    service → application → domain ← infrastructure
 
-## 身份与授权
+- domain：模型、不变量、领域错误和端口，只依赖标准库。
+- application：编排用例，只依赖本模块 domain。
+- infrastructure：实现数据库、文件存储和跨服务客户端端口。
+- service：实现 protobuf Service，完成 protobuf 与 domain 转换并传递当前主体。
 
-- Keycloak 负责登录、用户身份、角色归属和 token 签发，本仓库不建用户表、不存口令。
-- `pkg/authn` 本地验证 OIDC/JWT 并把主体放入 context。
-- `access` 保存角色到权限的映射以及角色继承。
-- 每个 RPC 在 proto 上声明 `access`；需要权限时同时声明严格三段 `perm`。
-- `permission_definition` 是后端授权契约目录；`navigation_node` 是前端导航，二者不能互相代替。
-- 策略更新使用数据库 version、审计和周期对账，不引入 Redis、MQ 或 outbox。
+DDD 是依赖边界，不是代码数量指标。商品是简单 CRUD；订单有“商品不可用、重复商品、金额快照和总额”这些真实不变量，才使用聚合根。不要为了四层引入工厂、领域事件或通用 DTO 体系。
 
-## 文件与通知的当前边界
+## 数据所有权
 
-文件模块默认使用本地磁盘适配器，适合开发和单实例部署：
+本地 Docker Compose 只复用一个 PostgreSQL 实例以节省资源，但创建三个独立 database。生产可以复用数据库集群，仍必须做到：
 
-- HTTP 上传/下载使用原始二进制 body，不做 JSON base64。
-- 元数据存 PostgreSQL，BlobStore 端口隔离具体存储。
-- 读取和删除按 token `sub` 做所有者隔离。
-- 单文件大小由 `file.max_size_bytes` 限制。
+- 每个服务使用独立 database 和账号；
+- 迁移只执行 `app/<service>/migrations`；
+- 禁止跨服务查询、外键和事务；
+- 其他服务的数据只能通过 API 或已定义事件读取。
 
-生产需要多副本时，实现同一个 BlobStore 端口接 S3/OSS/MinIO，再切换装配；不要让业务层依赖厂商 SDK。
+订单不会读取商品表，也不会把客户端报价当真。创建订单时通过 product gRPC 批量读取商品，将 SKU、名称和单价保存为订单快照，再只在订单库内提交一次事务。商品以后改名或改价不会篡改历史订单。
 
-通知模块当前只做站内通知。短信、邮件、Push 只有在真实渠道、重试和吞吐需求出现后再扩展，届时通常值得独立部署；当前不预埋 MQ、模板中心和通道表。
+当前示例没有库存扣减、支付和取消流程，因此不引入分布式事务、Saga、outbox 或 MQ。等出现真实的异步一致性需求再增加。
 
-## 何时拆成服务
+## 认证与授权
 
-代码模块不等于部署服务。满足至少一项再拆：
+    用户 token
+       ↓ 每个服务本地验签
+    资源服务 ──gRPC CheckPermission──> admin
+       ↓                                  ↓
+    业务用例                         本地 Casbin 快照
 
-- 需要独立扩缩容或资源模型明显不同；
-- 需要独立故障隔离；
-- 有独立团队和发布周期；
-- 被多个系统跨边界复用；
-- 文件流量或通知异步吞吐已影响当前 server 进程。
+- 所有服务本地校验 JWT，admin 不成为认证代理。
+- 权限要求声明在 proto 的 access / perm 上，handler 不写鉴权分支。
+- admin 是策略写入方和判定点；其他服务不连接权限库。
+- 远程判定失败时 fail closed，只影响 PERMISSION_REQUIRED 接口；公开或只要求登录的接口不依赖 admin。
+- admin 的判定 gRPC 只读，不提供策略写接口；生产只在集群网络内暴露 gRPC。
 
-拆分后为新进程建立独立入口和仓库边界，通过 API 或事件交互，禁止跨服务 import 对方内部实现或直接读写对方拥有的表。
+当判定吞吐成为瓶颈时，可以增加带版本号的本地策略缓存，但不应提前引入 MQ 或把权限表开放给所有服务。
 
-## `pkg` 与业务模块
+## 同步调用
 
-`pkg` 只放无业务语义且会被多个服务复用的技术原语，例如验签、鉴权中间件、数据库连接、探活和追踪。菜单、文件元数据、通知、字典等业务概念必须留在模块内。
+只有两条同步服务依赖：
+
+- product → admin：权限判定；
+- order → product：批量获取下单商品。
+
+客户端在调用方业务模块的 infrastructure，application/domain 不依赖 protobuf。开发环境使用静态地址，Compose/Kubernetes 通过服务 DNS 解析，不嵌入注册中心 SDK。
+
+## 部署拓扑
+
+本地：
+
+    Browser → nginx:8000
+                ├─ admin
+                ├─ product ← order
+                └─ order
+                     │
+            PostgreSQL（每服务独立 database）
+                     │
+                  Keycloak
+
+docker compose -f deploy/docker-compose.yml up -d --build 会先执行每个服务的迁移任务，再启动服务和网关。OTel、Prometheus、Tempo、Grafana 通过 --profile obs 按需启动。
+
+生产推荐 Kubernetes：
+
+- 网关/Ingress 只暴露 HTTP；gRPC、metrics 和数据库保持集群内可达；
+- 每个服务独立 Deployment、Service、HPA 和 PodDisruptionBudget；
+- 迁移使用一次性 Job，成功后再滚动 Deployment；
+- 配置进 ConfigMap，DSN/凭据进 Secret；
+- file 多副本时把本地 BlobStore 替换为 S3/OSS/MinIO；
+- NetworkPolicy 限制 order→product、资源服务→admin 和 Prometheus→metrics。
+
+当前阶段不强制上 Kubernetes、Helm、服务网格或注册中心。三个镜像的可部署边界已经建立，基础设施应随真实规模增加。具体打包命令和发布顺序见 [部署说明](deployment.md)。
+
+## 共享代码边界
+
+pkg 只放无业务语义、能被任意服务使用的技术原语，例如 JWT 验签、授权中间件、健康检查、配置、进程生命周期和传输运行时。业务模型不能进 pkg，服务也不能 import 其他服务拥有的模块；跨服务只 import `api` 契约。
+
+这些约束由 tests/architecture/dependencies_test.go 持续检查。

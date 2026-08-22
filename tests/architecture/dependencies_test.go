@@ -16,20 +16,32 @@ func TestLayerDependencies(t *testing.T) {
 	_, file, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
 
-	modules := []string{"access", "dictionary", "file", "notification"}
+	modules := []struct {
+		service string
+		module  string
+	}{
+		{service: "admin", module: "access"},
+		{service: "admin", module: "dictionary"},
+		{service: "admin", module: "file"},
+		{service: "admin", module: "notification"},
+		{service: "product", module: "product"},
+		{service: "order", module: "order"},
+	}
 	var tests []struct {
 		pkg       string
 		forbidden []string
 		allowed   []string
 	}
 	for _, module := range modules {
+		basePath := "./app/" + module.service + "/internal/" + module.module
+		baseImport := "github.com/eagle-go/eagle/app/" + module.service + "/internal/" + module.module
 		tests = append(tests,
 			struct {
 				pkg       string
 				forbidden []string
 				allowed   []string
 			}{
-				pkg:       "./internal/modules/" + module + "/domain",
+				pkg:       basePath + "/domain",
 				forbidden: []string{"github.com/eagle-go/eagle/", "github.com/go-kratos/", "entgo.io/", "github.com/redis/"},
 			},
 			struct {
@@ -37,9 +49,9 @@ func TestLayerDependencies(t *testing.T) {
 				forbidden []string
 				allowed   []string
 			}{
-				pkg:       "./internal/modules/" + module + "/application",
+				pkg:       basePath + "/application",
 				forbidden: []string{"github.com/eagle-go/eagle/", "github.com/go-kratos/", "entgo.io/", "github.com/redis/"},
-				allowed:   []string{"github.com/eagle-go/eagle/internal/modules/" + module + "/domain"},
+				allowed:   []string{baseImport + "/domain"},
 			},
 		)
 	}
@@ -64,6 +76,26 @@ func TestLayerDependencies(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestServiceCompositionBoundaries(t *testing.T) {
+	_, file, _, _ := runtime.Caller(0)
+	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
+	services := []string{"admin", "product", "order"}
+	for _, service := range services {
+		for _, pkg := range listPackages(t, root, "./app/"+service+"/...") {
+			for _, imp := range pkg.Imports {
+				const appPrefix = "github.com/eagle-go/eagle/app/"
+				if !strings.HasPrefix(imp, appPrefix) {
+					continue
+				}
+				owner := strings.Split(strings.TrimPrefix(imp, appPrefix), "/")[0]
+				if owner != service {
+					t.Errorf("service %s imports service %s implementation package %s", service, owner, imp)
+				}
+			}
+		}
 	}
 }
 
@@ -101,23 +133,23 @@ func TestInfrastructureBoundaries(t *testing.T) {
 
 	for _, pkg := range listPackages(t, root, "./pkg/...") {
 		for _, imp := range pkg.Imports {
-			if strings.HasPrefix(imp, "github.com/eagle-go/eagle/internal/") {
+			if strings.HasPrefix(imp, "github.com/eagle-go/eagle/app/") {
 				t.Errorf("shared package %s must not depend on application package %s", pkg.ImportPath, imp)
-			}
-			if imp == "github.com/eagle-go/eagle/ent" || strings.HasPrefix(imp, "github.com/eagle-go/eagle/ent/") {
-				t.Errorf("shared package %s must not depend on project persistence package %s", pkg.ImportPath, imp)
 			}
 		}
 	}
 
-	for _, pkg := range listPackages(t, root, "./internal/...") {
-		if strings.Contains(pkg.ImportPath, "/infrastructure") ||
-			pkg.ImportPath == "github.com/eagle-go/eagle/internal/platform/database" {
-			continue
-		}
-		for _, imp := range pkg.Imports {
-			if imp == "github.com/eagle-go/eagle/ent" || strings.HasPrefix(imp, "github.com/eagle-go/eagle/ent/") {
-				t.Errorf("%s imports persistence package %s outside infrastructure", pkg.ImportPath, imp)
+	for _, service := range []string{"admin", "product", "order"} {
+		for _, pkg := range listPackages(t, root, "./app/"+service+"/...") {
+			if strings.Contains(pkg.ImportPath, "/infrastructure") ||
+				strings.Contains(pkg.ImportPath, "/internal/platform/database") ||
+				strings.Contains(pkg.ImportPath, "/tests/") {
+				continue
+			}
+			for _, imp := range pkg.Imports {
+				if strings.Contains(imp, "/internal/platform/database/ent") {
+					t.Errorf("%s imports persistence package %s outside infrastructure", pkg.ImportPath, imp)
+				}
 			}
 		}
 	}

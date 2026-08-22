@@ -48,14 +48,15 @@ token 黑名单；会话撤销由 Keycloak 管理，已签发 access token 最�
 | clientId | 用途 | 关键配置 |
 |---|---|---|
 | `eagle-web` | 管理后台前端（SPA） | 公共客户端，强制 PKCE（S256）。SPA 无法安全保存 secret，因此不发 secret |
-| `eagle-system` | 资源服务器 | `bearerOnly`，只验证 token 不发起登录流程 |
+| `eagle-admin/product/order` | 三个资源服务器 | 各自 `bearerOnly`，audience 和 client role 命名空间相互隔离 |
+| `eagle-system` | 兼容旧本地配置 | 新部署使用上面三个 client |
 | `eagle-worker` | 服务间调用 | 机密客户端，`client_credentials` 授权 |
 
 ### audience mapper 是必需的
 
 Keycloak 默认把 access token 的 `aud` 设成 `account`，对资源服务器毫无意义。
-两个会签发 token 的客户端都配了 `oidc-audience-mapper`，把 `eagle-system`
-写进 `aud`，`config.yaml` 里的 `audience: eagle-system` 校验才有实际作用。
+`eagle-web` 配置了 audience mapper，把三个资源服务都写进 `aud`；
+Compose 为每个服务配置对应 audience，因此 token 不能被错误的资源服务接受。
 
 不配这个 mapper 的话，要么校验永远失败，要么只能关掉 `aud` 校验——
 后者等于放弃了「这个 token 是发给我的」这层保证。
@@ -83,7 +84,9 @@ docker exec eagle-keycloak /opt/keycloak/bin/kcadm.sh config credentials --serve
 ```
 
 ```bash
-docker exec eagle-keycloak /opt/keycloak/bin/kcadm.sh create users -r eagle -s username=alice -s enabled=true
+docker exec eagle-keycloak /opt/keycloak/bin/kcadm.sh create users -r eagle \
+  -s username=alice -s enabled=true \
+  -s firstName=Alice -s lastName=Admin -s email=alice@example.com
 ```
 
 ```bash
