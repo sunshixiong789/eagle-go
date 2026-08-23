@@ -1,15 +1,11 @@
-# Go 写法
+# Go 代码约定
 
-本仓库已落地的约束。不复述 Effective Go（`context` 第一参数、`gofmt`、值/指针接收器等模型已会）。
+仅补充本项目特有约束，不复述 Effective Go。
 
-- 标准库优先：`slices`、`maps`、`cmp`、`encoding/json`、`errors`、`fmt.Errorf("%w")`、`log/slog`。
-- 禁止新增直接依赖：`samber/lo`、`lancet`、`jinzhu/copier`、`mapstructure`、`spf13/cast`、`pkg/errors`、`logrus`、`zap`、`gorm`、Kratos v2。由 `TestBannedDependencies` 检查直接依赖。
-- 类型映射写本层小函数（`toProtoPermission` / `toDomainPermission`），不上通用 mapper。
-- domain/application 只用标准库 `error`。Kratos 错误和 `ErrorReason` 只出现在 server/service。判断用 `errors.Is` / `errors.As`。
-- 值对象只用于「写错会静默失败」的概念（当前：`PermissionCode`）。角色用 `type Role string` + `NewRole`，不要再套 struct。
-- 参数 ≥ 4 个且同类型易传错时用 `XxxParams`。
-- 注释只写非显而易见的约束。禁止 `// ID 返回 ID`。`revive` 的 `exported` 已关，不要为过 lint 补空话。不留占位 TODO。
-- 包名不要 `utils` / `common` / `helpers` / `models`。不要 `XxxDTO` / `XxxDO` 进 domain。
-- 日志用 `log/slog`。不要抄网上 Kratos v2 的 `log.Helper`。
-- 手改 `*.proto`、服务内 `ent/schema`、`migrations`、`cmd/<service>/wire.go` 与 `providers.go`。禁止手改 `*.pb.go`、`ent/` 与 `wire_gen.go` 生成文件。组合根用 Wire，`github.com/google/wire` 只允许出现在 `app/<service>/cmd/<service>`。
-- `goimports` 前缀按当前模块选择：`github.com/eagle-go/eagle/api`、`.../pkg` 或 `.../app/<service>`。
+- 标准库优先，尤其使用 `slices`、`maps`、`cmp`、`errors`、`fmt.Errorf("%w")` 和 `log/slog`。架构测试列出的禁用依赖不得新增。
+- 映射逻辑写成所在边界的小函数，例如 `toProtoXxx` / `toDomainXxx`，不引入通用 mapper、反射复制或 `XxxDTO` / `XxxDO` 体系。
+- domain/application 使用标准库错误；框架错误只存在于 service/server 边界。判断错误使用 `errors.Is` / `errors.As`。
+- 值对象只用于能显著防止非法状态或静默错误的业务概念；参数多且同类型易传错时使用明确的 `XxxParams`。
+- 包名表达业务或技术职责，不使用 `utils`、`common`、`helpers`、`models` 作为兜底包。
+- 注释解释不明显的业务约束或设计原因，不复述代码，不添加占位 TODO。
+- 日志统一使用 `log/slog`；Wire 仅用于服务组合根；生成文件通过 Make 目标更新，不直接编辑。

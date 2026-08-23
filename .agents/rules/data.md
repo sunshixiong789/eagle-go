@@ -1,10 +1,11 @@
-# 数据、Ent、迁移
+# 数据、Ent 与迁移
 
-- 改表：`app/<service>/internal/platform/database/ent/schema` → 手写 `app/<service>/migrations/NNNNN_*.sql` → `make ent`。生产只认 goose，不用 ent 自动迁移。
-- 每个服务使用独立 database 和迁移目录。禁止跨服务查询、外键、事务或把别人的表复制进自己的迁移。
-- 迁移必须可回滚（CI 会 `up → down-to 0 → up`）。`down` 不能是空操作，除非变更不可逆并在 SQL 注释写明。
-- 权限树 revision、策略 version：冲突返回 `domain.ErrConcurrentModification`。
-- 模块 infrastructure 把 Ent/SQL 错误译成领域错误（`NotFound` / 唯一约束）。不要把 `ent.NotFound` 漏到 service。
-- 根节点 parent 用 `0` 而不是 SQL NULL。
-- 手改服务内 `ent/schema`、`migrations`。禁止手改服务 `ent/` 下生成文件。
-- 不要为策略同步加 outbox / 消息队列；现有路径是 version++ 与数据库周期对账。
+仅在修改表结构、事务、迁移、缓存或存储适配时读取。
+
+- 每个服务独占数据库、Ent Client 和 `app/<service>/migrations`；禁止跨服务查询、外键、事务或复制对方表结构。
+- 改表时同步维护服务内 `internal/platform/database/ent/schema` 和 goose SQL，再运行 `make ent`。生产只执行 goose，不使用 Ent 自动迁移。
+- 迁移必须支持 CI 的 `up -> down-to 0 -> up`；除非确实不可逆且已在 SQL 注释说明，`down` 不能是空操作。
+- 必须依赖锁、唯一约束或数据库当前状态的不变量，在 infrastructure 的一个事务内检查并写入，避免 application 预检造成 TOCTOU。
+- infrastructure 将 Ent/SQL 的 not found、唯一冲突和并发冲突翻译成稳定的领域错误，不把 Ent 类型泄漏到上层。
+- 缓存、Outbox/Inbox 和对象存储都是 infrastructure 适配；只有任务确有一致性或可靠投递需求时才引入，不作为默认 CRUD 模板。
+- 可以修改 schema 和迁移，禁止手改 `internal/platform/database/ent/` 下的生成文件。
