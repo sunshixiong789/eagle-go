@@ -1,8 +1,8 @@
 # eagle-go
 
-基于 Go Workspace 的 Kratos 微服务开发底座，提供 OIDC 认证、集中 RBAC、字典、文件与站内通知，并用商品、订单演示服务独立数据库和同步调用。
+基于 Go Workspace 的 Kratos 微服务开发底座，提供 OIDC 认证、集中 RBAC、服务间认证、缓存、可靠事件、对象存储与完整可观测性，并用商品、订单演示服务独立数据库、同步调用和异步事件。
 
-技术栈：Go 1.27、Kratos v3、Protobuf、buf、Ent、PostgreSQL 17、Keycloak、Casbin、OpenTelemetry。
+技术栈：Go 1.27、Kratos v3、Protobuf、buf、Ent、PostgreSQL 17、Keycloak、Casbin、Redis、RabbitMQ、S3、OpenTelemetry、Prometheus、Loki、Tempo、Grafana、Kubernetes Gateway API。
 
 ## 项目现状
 
@@ -10,16 +10,20 @@
 
 | 服务 | 业务能力 | 数据库 | 依赖 |
 |---|---|---|---|
-| `admin` | 权限、字典、文件、站内通知 | `eagle_admin` | Keycloak、BlobStore |
-| `product` | 商品 | `eagle_product` | admin 权限判定 |
-| `order` | 订单和商品快照 | `eagle_order` | product 商品查询 |
+| `admin` | 权限、字典、文件、站内通知 | `eagle_admin` | Keycloak、S3、RabbitMQ |
+| `product` | 商品 | `eagle_product` | admin 权限判定、Redis |
+| `order` | 订单和商品快照 | `eagle_order` | product 商品查询、RabbitMQ |
 
 每个服务都有自己的 `go.mod`、配置、Ent Client、迁移、二进制和镜像。根目录的 `go.work` 只负责把这些模块组合成本地开发工作区，不集中管理各服务依赖。
 
 ```text
-Client -> Gateway -> admin
-                  -> product --gRPC--> admin
-                  -> order   --gRPC--> product
+Client -> Gateway API/nginx -> admin
+                            -> product --gRPC + client credentials--> admin
+                            -> order   --gRPC + client credentials--> product
+
+order --Transactional Outbox--> RabbitMQ --> admin Inbox --> notification
+product --cache aside--> Redis
+admin   --BlobStore--> S3/MinIO
 
 Keycloak：用户、口令、角色、token
 admin/Casbin：角色到权限码的映射与权限判定
@@ -95,6 +99,8 @@ Compose 会构建三个独立服务镜像，依次完成各自数据库迁移，
 | 统一 HTTP 网关 | `http://127.0.0.1:8000` |
 | Keycloak | `http://127.0.0.1:8080` |
 | Keycloak 管理员 | 本地开发账号 `admin/admin` |
+| RabbitMQ 管理台 | `http://127.0.0.1:15672`，本地账号 `eagle/eagle` |
+| MinIO Console | `http://127.0.0.1:9005`，本地账号 `eagle/eagle-local-secret` |
 | admin metrics/health | `http://127.0.0.1:9101` |
 | product metrics/health | `http://127.0.0.1:9102` |
 | order metrics/health | `http://127.0.0.1:9103` |
@@ -187,6 +193,7 @@ make migrate-up SERVICE=product        # 执行指定服务迁移
 make run SERVICE=product               # 在宿主机运行指定服务
 make image SERVICE=product VERSION=dev # 构建单服务镜像
 make images VERSION=dev                # 分别构建三个镜像
+make validate-deploy                   # 校验 Compose 与 Kustomize 清单
 ```
 
 `make test` 不需要 Docker。集成测试会用 embedded-postgres 启动真实 PostgreSQL；首次运行需要联网下载约 100 MB 的数据库二进制，之后复用本地缓存。
@@ -222,13 +229,14 @@ rpc CreatePermission(CreatePermissionRequest) returns (CreatePermissionResponse)
 }
 ```
 
-访问级别只有三种：
+访问级别有四种：
 
 | `access` | 含义 | `perm` |
 |---|---|---|
 | `ACCESS_LEVEL_PUBLIC` | 无需登录 | 禁止填写 |
 | `ACCESS_LEVEL_AUTHENTICATED` | 登录即可 | 禁止填写 |
 | `ACCESS_LEVEL_PERMISSION_REQUIRED` | 登录且拥有指定权限 | 必须填写 |
+| `ACCESS_LEVEL_INTERNAL` | 仅允许白名单中的服务身份 | 禁止填写 |
 
 遗漏 `access` 会在服务启动时失败。handler 中不再写鉴权 `if`，权限由中间件从方法描述符读取并统一判定。
 
@@ -283,6 +291,10 @@ subject := identity.Subject(ctx)
 
 Keycloak 负责“你是谁、有哪些角色”，Casbin 负责“角色能不能调用接口”。所有服务本地验证 JWT；admin 维护权限策略并提供只读 gRPC 判定，product 不连接权限数据库。
 
+服务间调用使用 Keycloak OAuth2 Client Credentials。调用方缓存短期 access token，公共客户端中间件负责注入 Bearer token；内部 RPC 只接受 `ACCESS_LEVEL_INTERNAL`，并校验 token 的服务身份及 `internal_client_ids` 白名单。开发用的 `eagle-worker` secret 只存在于本地配置，生产必须由 Secret Manager 注入并为每个调用方使用独立 client。
+
+同步调用默认启用 tracing、客户端指标、metadata 传播和熔断。只有明确幂等的读请求才按配置做有限重试；写请求不能仅靠重试解决一致性。订单事件使用“数据库事务 + Outbox + RabbitMQ publisher confirm”，消费端用 Inbox 去重并在处理成功后 ack，提供至少一次投递语义。
+
 授权失败遵循关闭原则：未认证返回 401，无权限返回 403，远程判定异常不会自动放行。`realm` 角色和各服务 `client` 角色具有独立命名空间，同名也不会串权。
 
 不要使用 Casbin `keyMatch2` 匹配权限码：冒号分隔的权限会被误当成 URL 参数。项目使用受限的末段通配，并由领域层与 Casbin 一致性测试锁定行为。
@@ -296,9 +308,15 @@ Keycloak 负责“你是谁、有哪些角色”，Casbin 负责“角色能不�
 | `EAGLE_DATABASE_DSN` | 当前服务独占数据库连接 |
 | `EAGLE_AUTH_ISSUER` | 必须与 token 的 `iss` 完全一致 |
 | `EAGLE_AUTH_CLIENT_ID` / `EAGLE_AUTH_AUDIENCE` | 当前资源服务 client 与 audience |
+| `EAGLE_AUTH_INTERNAL_CLIENT_ID` | 允许调用当前服务内部 RPC 的 client |
 | `EAGLE_AUTH_JWKS_URL` | issuer 外网地址与服务访问地址不同时指定 JWKS 内网地址 |
+| `EAGLE_SERVICE_AUTH_TOKEN_URL` / `CLIENT_ID` / `CLIENT_SECRET` | 服务间 Client Credentials |
 | `EAGLE_UPSTREAM_AUTHORIZATION_ENDPOINT` | product 到 admin 的 gRPC 地址 |
 | `EAGLE_UPSTREAM_PRODUCT_ENDPOINT` | order 到 product 的 gRPC 地址 |
+| `EAGLE_CACHE_REDIS_ADDRESS` / `PASSWORD` | product 商品缓存 |
+| `EAGLE_MESSAGING_RABBITMQ_URL` | 订单事件发布与通知消费 |
+| `EAGLE_FILE_PROVIDER` | `local` 或 `s3` |
+| `EAGLE_FILE_S3_ENDPOINT` / `BUCKET` / `ACCESS_KEY` / `SECRET_KEY` | S3/OSS/MinIO 连接配置 |
 
 所有 `google.protobuf.Duration` 只接受秒格式，例如 `3600s`、`0.5s`。`1h`、`30m`、`500ms` 会导致配置解析失败。
 
@@ -318,17 +336,19 @@ make images VERSION=v1.2.0 REGISTRY=registry.example.com/eagle
 make push-images VERSION=v1.2.0 REGISTRY=registry.example.com/eagle
 ```
 
-生产中每个服务使用独立 Deployment、Service、迁移 Job 和数据库账号。迁移成功后再滚动服务，应用容器启动时不自动迁移。详细发布顺序、端口、网络和存储边界见 [部署说明](docs/deployment.md)。
+生产中每个服务使用独立 Deployment、Service、迁移 Job 和数据库账号。仓库提供 Gateway API、TLS 跳转、HPA、PDB、NetworkPolicy、探针和安全上下文基线；迁移成功后再滚动服务，应用容器启动时不自动迁移。详细发布顺序、端口、网络和存储边界见 [部署说明](docs/deployment.md)。
 
 ## 可观测性
 
-服务输出结构化日志，trace 通过 OTLP 上报，指标和健康检查使用独立端口。启动可选的 Prometheus、Tempo、Grafana：
+服务输出结构化日志，trace 通过 OTLP 上报，指标和健康检查使用独立端口。启动 Prometheus、Alertmanager、Tempo、Loki、Alloy 和 Grafana：
 
 ```bash
 docker compose -f deploy/docker-compose.yml --profile obs up -d
 ```
 
-本地配置默认指向 `127.0.0.1:4317`；Collector 未启动不会阻止服务运行。生产环境应按容量将 `trace_sample_ratio` 从开发期的 `1.0` 调低。
+Grafana 位于 `http://127.0.0.1:3000`，Prometheus 位于 `http://127.0.0.1:9090`，Alertmanager 位于 `http://127.0.0.1:9093`。Alloy 收集 Compose 容器 stdout 到 Loki；Grafana 已配置 Prometheus、Loki 和 Tempo 数据源及日志到 trace 的关联。
+
+默认 SLO 是 30 天 99.9% 可用性，并提供错误预算快速消耗、p99 超过 2 秒、RabbitMQ 队列积压和 Redis 不可用告警。示例 Alertmanager 不发送外部通知，生产 overlay 必须接入实际值班渠道。生产环境还应按容量将 `trace_sample_ratio` 从开发期的 `1.0` 调低。
 
 ## 常见问题
 
@@ -360,6 +380,7 @@ race detector 需要 C 编译器。可在 WSL/Linux 中运行，或安装可用�
 
 - [架构说明](docs/architecture.md)：服务边界、分层、数据所有权和跨服务调用
 - [部署说明](docs/deployment.md)：镜像、Compose、生产发布、网络与存储
+- [Kubernetes 基线](deploy/kubernetes/README.md)：Gateway API、Secret、发布与可观测性清单
 - [Keycloak 配置说明](deploy/keycloak/README.md)：realm、安全设置和客户端设计
 - [AI 编码约束](AGENTS.md)：常驻硬约束；细则在 [`.agents/rules/`](.agents/rules/)
 

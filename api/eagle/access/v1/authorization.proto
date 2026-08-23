@@ -11,7 +11,7 @@ option go_package = "github.com/eagle-go/eagle/api/eagle/access/v1;accessv1";
 // resource services. It deliberately exposes no policy mutation methods.
 service AuthorizationService {
   rpc CheckPermission(CheckPermissionRequest) returns (CheckPermissionResponse) {
-    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PUBLIC;
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_INTERNAL;
   }
 }
 

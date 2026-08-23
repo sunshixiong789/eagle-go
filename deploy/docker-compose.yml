@@ -9,6 +9,10 @@ x-service-environment: &service-environment
   EAGLE_AUTH_JWKS_URL: http://keycloak:8080/realms/eagle/protocol/openid-connect/certs
   EAGLE_UPSTREAM_AUTHORIZATION_ENDPOINT: admin:9000
   EAGLE_UPSTREAM_PRODUCT_ENDPOINT: product:9000
+  EAGLE_SERVICE_AUTH_TOKEN_URL: http://keycloak:8080/realms/eagle/protocol/openid-connect/token
+  EAGLE_SERVICE_AUTH_CLIENT_ID: eagle-worker
+  EAGLE_SERVICE_AUTH_CLIENT_SECRET: dev-only-worker-secret
+  EAGLE_MESSAGING_RABBITMQ_URL: amqp://eagle:eagle@rabbitmq:5672/
 
 services:
   postgres:
@@ -47,6 +51,55 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "eagle"]
+    ports: ["6379:6379"]
+    volumes: [redisdata:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "eagle", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:4.1-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: eagle
+      RABBITMQ_DEFAULT_PASS: eagle
+    ports: ["5672:5672", "15672:15672", "15692:15692"]
+    volumes: [rabbitdata:/var/lib/rabbitmq]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: eagle
+      MINIO_ROOT_PASSWORD: eagle-local-secret
+      MINIO_PROMETHEUS_AUTH_TYPE: public
+    ports: ["9004:9000", "9005:9001"]
+    volumes: [miniodata:/data]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        mc alias set local http://minio:9000 eagle eagle-local-secret &&
+        mc mb --ignore-existing local/eagle-files
+    depends_on:
+      minio: {condition: service_healthy}
 
   admin-migrate:
     image: eagle/admin:dev
@@ -95,11 +148,17 @@ services:
       EAGLE_AUTH_CLIENT_ID: eagle-admin
       EAGLE_AUTH_AUDIENCE: eagle-admin
       EAGLE_FILE_LOCAL_DIR: /data/uploads
+      EAGLE_FILE_PROVIDER: s3
+      EAGLE_FILE_S3_ENDPOINT: minio:9000
+      EAGLE_FILE_S3_BUCKET: eagle-files
+      EAGLE_FILE_S3_ACCESS_KEY: eagle
+      EAGLE_FILE_S3_SECRET_KEY: eagle-local-secret
     ports: ["8001:8000", "9001:9000", "9101:9100"]
-    volumes: [filedata:/data/uploads]
     depends_on:
       admin-migrate: {condition: service_completed_successfully}
       keycloak: {condition: service_started}
+      rabbitmq: {condition: service_healthy}
+      minio-init: {condition: service_completed_successfully}
 
   product:
     image: eagle/product:dev
@@ -108,10 +167,13 @@ services:
       EAGLE_DATABASE_DSN: postgres://eagle:eagle@postgres:5432/eagle_product?sslmode=disable
       EAGLE_AUTH_CLIENT_ID: eagle-product
       EAGLE_AUTH_AUDIENCE: eagle-product
+      EAGLE_CACHE_REDIS_ADDRESS: redis:6379
+      EAGLE_CACHE_REDIS_PASSWORD: eagle
     ports: ["8002:8000", "9002:9000", "9102:9100"]
     depends_on:
       product-migrate: {condition: service_completed_successfully}
       admin: {condition: service_healthy}
+      redis: {condition: service_healthy}
 
   order:
     image: eagle/order:dev
@@ -124,6 +186,7 @@ services:
     depends_on:
       order-migrate: {condition: service_completed_successfully}
       product: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
 
   gateway:
     image: nginx:1.27-alpine
@@ -158,7 +221,47 @@ services:
     profiles: ["obs"]
     volumes:
       - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/rules:/etc/prometheus/rules:ro
+      - prometheusdata:/prometheus
     ports: ["9090:9090"]
+    depends_on: [alertmanager, redis-exporter]
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    profiles: ["obs"]
+    command: ["--config.file=/etc/alertmanager/alertmanager.yml"]
+    volumes:
+      - ./observability/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports: ["9093:9093"]
+
+  loki:
+    image: grafana/loki:3.5.0
+    profiles: ["obs"]
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ./observability/loki.yaml:/etc/loki/loki.yaml:ro
+      - lokidata:/var/loki
+    ports: ["3100:3100"]
+
+  alloy:
+    image: grafana/alloy:v1.9.2
+    profiles: ["obs"]
+    command: ["run", "/etc/alloy/config.alloy", "--storage.path=/var/lib/alloy/data"]
+    volumes:
+      - ./observability/alloy.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloydata:/var/lib/alloy/data
+    depends_on: [loki]
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.72.1
+    profiles: ["obs"]
+    environment:
+      REDIS_ADDR: redis://redis:6379
+      REDIS_PASSWORD: eagle
+    ports: ["9121:9121"]
+    depends_on:
+      redis: {condition: service_healthy}
 
   grafana:
     image: grafana/grafana:11.6.0
@@ -170,8 +273,13 @@ services:
     volumes:
       - ./observability/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/ds.yaml:ro
     ports: ["3000:3000"]
-    depends_on: [prometheus, tempo]
+    depends_on: [prometheus, tempo, loki]
 
 volumes:
   pgdata:
-  filedata:
+  redisdata:
+  rabbitdata:
+  miniodata:
+  prometheusdata:
+  lokidata:
+  alloydata:

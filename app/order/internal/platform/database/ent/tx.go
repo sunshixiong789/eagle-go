@@ -16,6 +16,8 @@ type Tx struct {
 	config
 	// OrderItem is the client for interacting with the OrderItem builders.
 	OrderItem *OrderItemClient
+	// OutboxEvent is the client for interacting with the OutboxEvent builders.
+	OutboxEvent *OutboxEventClient
 	// PurchaseOrder is the client for interacting with the PurchaseOrder builders.
 	PurchaseOrder *PurchaseOrderClient
 
@@ -150,6 +152,7 @@ func (tx *Tx) Client() *Client {
 
 func (tx *Tx) init() {
 	tx.OrderItem = NewOrderItemClient(tx.config)
+	tx.OutboxEvent = NewOutboxEventClient(tx.config)
 	tx.PurchaseOrder = NewPurchaseOrderClient(tx.config)
 }
 

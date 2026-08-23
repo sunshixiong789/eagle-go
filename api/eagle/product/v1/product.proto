@@ -20,7 +20,7 @@ service ProductService {
     option (eagle.annotations.v1.access) = ACCESS_LEVEL_PUBLIC;
   }
   rpc BatchGetProducts(BatchGetProductsRequest) returns (BatchGetProductsResponse) {
-    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PUBLIC;
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_INTERNAL;
   }
   rpc ListProducts(ListProductsRequest) returns (ListProductsResponse) {
     option (google.api.http) = {get: "/v1/products"};

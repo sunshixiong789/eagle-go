@@ -22,6 +22,9 @@ message Bootstrap {
   Observability observability = 4;
   File file = 5;
   Upstream upstream = 6;
+  Cache cache = 7;
+  Messaging messaging = 8;
+  ServiceAuth service_auth = 9;
 }
 
 // Upstream contains static development endpoints for synchronous service
@@ -31,13 +34,56 @@ message Upstream {
   string authorization_endpoint = 1;
   string product_endpoint = 2;
   google.protobuf.Duration timeout = 3;
+  int32 max_attempts = 4;
+  google.protobuf.Duration retry_backoff = 5;
 }
 
 // File configures the development/local blob adapter. The module keeps a
 // storage port so production deployments can replace it with S3 or OSS.
 message File {
+  // local 只用于开发；s3 可连接 AWS S3、OSS、MinIO 等兼容服务。
+  string provider = 3;
   string local_dir = 1;
   int64 max_size_bytes = 2;
+  message S3 {
+    string endpoint = 1;
+    string region = 2;
+    string bucket = 3;
+    string access_key = 4;
+    string secret_key = 5;
+    bool use_ssl = 6;
+  }
+  S3 s3 = 4;
+}
+
+message Cache {
+  message Redis {
+    bool enabled = 1;
+    string address = 2;
+    string username = 3;
+    string password = 4;
+    int32 database = 5;
+    google.protobuf.Duration ttl = 6;
+  }
+  Redis redis = 1;
+}
+
+message Messaging {
+  message RabbitMQ {
+    bool enabled = 1;
+    string url = 2;
+    string exchange = 3;
+    string order_created_queue = 4;
+    google.protobuf.Duration reconnect_backoff = 5;
+  }
+  RabbitMQ rabbitmq = 1;
+}
+
+// ServiceAuth 是调用方通过 Keycloak client_credentials 获取短期服务令牌的配置。
+message ServiceAuth {
+  string token_url = 1;
+  string client_id = 2;
+  string client_secret = 3;
 }
 
 // Server 是 HTTP/gRPC 监听参数。
@@ -111,6 +157,10 @@ message Auth {
   // 两者不分开就只能二选一——要么让内网流量绕到公网再回来，
   // 要么放弃 iss 校验。
   string jwks_url = 6;
+
+  // 允许调用 INTERNAL RPC 的 Keycloak azp。必须同时是 client_credentials
+  // 服务令牌，普通用户 token 即使 azp 同名也不会被放行。
+  repeated string internal_client_ids = 7;
 }
 
 message Observability {

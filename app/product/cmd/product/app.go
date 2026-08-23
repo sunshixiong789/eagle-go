@@ -24,18 +24,27 @@ func buildApp(bc *config.Bootstrap, logger *slog.Logger) (platformruntime.Compon
 	if err != nil {
 		return platformruntime.Components{}, err
 	}
-	authorizer, closeAuthorizer, err := accessclient.NewAuthorizer(bc.GetUpstream())
+	authorizer, closeAuthorizer, err := accessclient.NewAuthorizer(bc.GetUpstream(), bc.GetServiceAuth())
 	if err != nil {
 		closeDB()
 		return platformruntime.Components{}, err
 	}
-	service := productservice.NewProductService(productapp.NewUsecase(productinfra.NewRepository(db)))
+	repo := productinfra.NewRepository(db)
+	redisCache, closeRedis, err := productinfra.NewRedisProductCache(bc.GetCache().GetRedis())
+	if err != nil {
+		closeAuthorizer()
+		closeDB()
+		return platformruntime.Components{}, err
+	}
+	repo = productinfra.NewCachedRepository(repo, redisCache, logger)
+	service := productservice.NewProductService(productapp.NewUsecase(repo))
 	ms, err := server.NewMiddlewares(
 		logger, server.NewVerifier(bc.GetAuth()), authorizer, bc.GetAuth(),
 		server.NotFound(productdomain.ErrProductNotFound, productv1.ErrorReason_ERROR_REASON_PRODUCT_NOT_FOUND),
 		server.Conflict(productdomain.ErrProductSKUDuplicated, productv1.ErrorReason_ERROR_REASON_PRODUCT_SKU_DUPLICATED),
 	)
 	if err != nil {
+		closeRedis()
 		closeAuthorizer()
 		closeDB()
 		return platformruntime.Components{}, err
@@ -44,6 +53,6 @@ func buildApp(bc *config.Bootstrap, logger *slog.Logger) (platformruntime.Compon
 	hs := server.NewHTTPServer(bc.GetServer(), ms, nil, func(s *http.Server) { productv1.RegisterProductServiceHTTPServer(s, service) })
 	return platformruntime.Components{
 		Servers: []transport.Server{gs, hs},
-		Cleanup: func() { closeAuthorizer(); closeDB() },
+		Cleanup: func() { closeRedis(); closeAuthorizer(); closeDB() },
 	}, nil
 }

@@ -38,6 +38,38 @@ var (
 			},
 		},
 	}
+	// EventOutboxColumns holds the columns for the "event_outbox" table.
+	EventOutboxColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 36},
+		{Name: "aggregate_id", Type: field.TypeString, Size: 128},
+		{Name: "event_type", Type: field.TypeString, Size: 128},
+		{Name: "routing_key", Type: field.TypeString, Size: 128},
+		{Name: "payload", Type: field.TypeBytes},
+		{Name: "attempts", Type: field.TypeInt32, Default: 0},
+		{Name: "last_error", Type: field.TypeString, Size: 1024, Default: ""},
+		{Name: "available_at", Type: field.TypeTime},
+		{Name: "locked_until", Type: field.TypeTime, Nullable: true},
+		{Name: "published_at", Type: field.TypeTime, Nullable: true},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// EventOutboxTable holds the schema information for the "event_outbox" table.
+	EventOutboxTable = &schema.Table{
+		Name:       "event_outbox",
+		Columns:    EventOutboxColumns,
+		PrimaryKey: []*schema.Column{EventOutboxColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_event_outbox_pending",
+				Unique:  false,
+				Columns: []*schema.Column{EventOutboxColumns[9], EventOutboxColumns[7], EventOutboxColumns[10]},
+			},
+			{
+				Name:    "outboxevent_aggregate_id_event_type",
+				Unique:  true,
+				Columns: []*schema.Column{EventOutboxColumns[1], EventOutboxColumns[2]},
+			},
+		},
+	}
 	// PurchaseOrderColumns holds the columns for the "purchase_order" table.
 	PurchaseOrderColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, Size: 36},
@@ -62,6 +94,7 @@ var (
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		OrderItemTable,
+		EventOutboxTable,
 		PurchaseOrderTable,
 	}
 )
@@ -69,6 +102,9 @@ var (
 func init() {
 	OrderItemTable.Annotation = &entsql.Annotation{
 		Table: "order_item",
+	}
+	EventOutboxTable.Annotation = &entsql.Annotation{
+		Table: "event_outbox",
 	}
 	PurchaseOrderTable.Annotation = &entsql.Annotation{
 		Table: "purchase_order",

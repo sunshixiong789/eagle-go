@@ -4,6 +4,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
@@ -16,6 +17,7 @@ import (
 
 type Database struct {
 	client *ent.Client
+	sql    *sql.DB
 }
 
 func Open(c *config.Data) (*Database, func(), error) {
@@ -24,7 +26,7 @@ func Open(c *config.Data) (*Database, func(), error) {
 		return nil, nil, err
 	}
 	client := ent.NewClient(ent.Driver(entsql.OpenDB(dialect.Postgres, sqlDB)))
-	return &Database{client: client}, cleanup, nil
+	return &Database{client: client, sql: sqlDB}, cleanup, nil
 }
 
 func dbConfig(c *config.Data) db.Config {
@@ -39,6 +41,7 @@ func dbConfig(c *config.Data) db.Config {
 }
 
 func (d *Database) Client() *ent.Client { return d.client }
+func (d *Database) SQL() *sql.DB        { return d.sql }
 
 func IsNotFound(err error) bool { return ent.IsNotFound(err) }
 

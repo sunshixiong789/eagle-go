@@ -50,7 +50,7 @@ token 黑名单；会话撤销由 Keycloak 管理，已签发 access token 最�
 | `eagle-web` | 管理后台前端（SPA） | 公共客户端，强制 PKCE（S256）。SPA 无法安全保存 secret，因此不发 secret |
 | `eagle-admin/product/order` | 三个资源服务器 | 各自 `bearerOnly`，audience 和 client role 命名空间相互隔离 |
 | `eagle-system` | 兼容旧本地配置 | 新部署使用上面三个 client |
-| `eagle-worker` | 服务间调用 | 机密客户端，`client_credentials` 授权 |
+| `eagle-worker` | 服务间调用 | 机密客户端，`client_credentials` 授权；token 含 admin/product/order audience |
 
 ### audience mapper 是必需的
 

@@ -10,6 +10,6 @@ var Version string
 func main() {
 	platformruntime.Run(platformruntime.Spec{
 		Name: "eagle.admin", Version: Version, Build: buildApp,
-		Requirements: config.Requirements{File: true},
+		Requirements: config.Requirements{File: true, RabbitMQ: true},
 	})
 }

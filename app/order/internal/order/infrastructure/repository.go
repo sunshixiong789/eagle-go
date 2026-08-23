@@ -4,6 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
+
+	eventv1 "github.com/eagle-go/eagle/api/eagle/event/v1"
 	"github.com/eagle-go/eagle/app/order/internal/order/domain"
 	platformdb "github.com/eagle-go/eagle/app/order/internal/platform/database"
 	"github.com/eagle-go/eagle/app/order/internal/platform/database/ent"
@@ -36,6 +40,20 @@ func (r *repository) Create(ctx context.Context, value *domain.Order) (*domain.O
 	}
 	if _, err := tx.OrderItem.CreateBulk(builders...).Save(ctx); err != nil {
 		return nil, fmt.Errorf("create order items: %w", err)
+	}
+	event := &eventv1.OrderCreatedV1{
+		EventId: value.ID, OrderId: value.ID, OwnerSubject: value.OwnerSubject,
+		TotalCents: value.TotalCents, OccurredAt: timestamppb.New(row.CreatedAt),
+	}
+	payload, err := proto.Marshal(event)
+	if err != nil {
+		return nil, fmt.Errorf("marshal order-created event: %w", err)
+	}
+	if _, err := tx.OutboxEvent.Create().
+		SetID(event.GetEventId()).SetAggregateID(value.ID).
+		SetEventType("eagle.event.v1.OrderCreatedV1").SetRoutingKey("order.created.v1").
+		SetPayload(payload).SetCreatedAt(row.CreatedAt).Save(ctx); err != nil {
+		return nil, fmt.Errorf("write order outbox: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit order: %w", err)

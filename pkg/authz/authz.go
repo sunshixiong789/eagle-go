@@ -17,6 +17,7 @@ package authz
 
 import (
 	"context"
+	"slices"
 
 	"github.com/go-kratos/kratos/v3/errors"
 	"github.com/go-kratos/kratos/v3/middleware"
@@ -33,8 +34,9 @@ const (
 )
 
 type options struct {
-	authorizer     Authorizer
-	superAdminRole string
+	authorizer        Authorizer
+	superAdminRole    string
+	internalClientIDs []string
 }
 
 // Authorizer is the narrow policy decision port used by the middleware. The
@@ -61,6 +63,11 @@ func WithAuthorizer(a Authorizer) Option {
 // WithSuperAdminRole 设置超管角色，具备该角色的主体跳过 Casbin 判定。
 func WithSuperAdminRole(role string) Option {
 	return func(o *options) { o.superAdminRole = role }
+}
+
+// WithInternalClientIDs sets the Keycloak clients allowed to invoke INTERNAL RPCs.
+func WithInternalClientIDs(clientIDs ...string) Option {
+	return func(o *options) { o.internalClientIDs = slices.Clone(clientIDs) }
 }
 
 // Server 返回鉴权中间件。
@@ -96,6 +103,12 @@ func Server(opts ...Option) middleware.Middleware {
 			}
 
 			if policy.Access == annotationsv1.AccessLevel_ACCESS_LEVEL_AUTHENTICATED {
+				return handler(ctx, req)
+			}
+			if policy.Access == annotationsv1.AccessLevel_ACCESS_LEVEL_INTERNAL {
+				if !p.IsService || !slices.Contains(o.internalClientIDs, p.ClientID) {
+					return nil, errors.Forbidden(ReasonForbidden, "仅允许受信任的服务账号调用")
+				}
 				return handler(ctx, req)
 			}
 			if policy.Access != annotationsv1.AccessLevel_ACCESS_LEVEL_PERMISSION_REQUIRED || policy.Perm == "" {

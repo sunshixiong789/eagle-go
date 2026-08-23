@@ -79,7 +79,8 @@ make up
 docker compose -f deploy/docker-compose.yml ps
 ```
 
-Compose 会先运行 `admin-migrate`、`product-migrate`、`order-migrate`，迁移成功后
+Compose 会启动 PostgreSQL、Keycloak、Redis、RabbitMQ 和 MinIO，先运行
+`admin-migrate`、`product-migrate`、`order-migrate`，迁移成功后
 再启动对应服务。product 等待 admin readiness，order 等待 product readiness，
 三个服务全部就绪后才启动 nginx 网关。可观测性组件按需启动：
 
@@ -100,6 +101,24 @@ docker compose -f deploy/docker-compose.yml --profile obs up -d
 
 ## 生产部署
 
+可直接渲染生产基线：
+
+```bash
+kubectl kustomize deploy/kubernetes/base
+```
+
+`deploy/kubernetes/base` 已包含三个服务的 Deployment/Service、一次性迁移 Job、
+Gateway API、HPA、PDB、探针、安全上下文和 NetworkPolicy。默认域名、镜像仓库、
+Keycloak、Redis、S3 地址都是示例值，发布前必须由 overlay 替换。
+
+集群必须预先安装一个实现 Gateway API 的控制器；基线使用
+`gatewayClassName: envoy`。TLS Secret 为 `eagle-tls`，外部入口只暴露 80/443，
+HTTP 会重定向到 HTTPS。
+
+运行时 Secret 的键清单见 `deploy/kubernetes/secret.example.yaml`。示例文件只含
+`CHANGE_ME`，不要直接应用；生产应由 External Secrets、Vault 或云 Secret Manager
+生成同名 `eagle-runtime` Secret。
+
 每个镜像对应一个独立 Kubernetes Deployment 和 ClusterIP Service。发布顺序固定为：
 
 1. 用 Git SHA 或版本号构建三个不可变镜像；
@@ -108,7 +127,7 @@ docker compose -f deploy/docker-compose.yml --profile obs up -d
 4. `/readyz` 通过后接入流量；
 5. 观察错误率、延迟和授权判定失败。
 
-生产环境差异很大的镜像仓库、域名、证书、Secret 管理器和 StorageClass 不在底座中伪造默认值。部署平台应提供：
+部署平台应提供：
 
 | 能力 | Kubernetes 对象 |
 |---|---|
@@ -120,6 +139,9 @@ docker compose -f deploy/docker-compose.yml --profile obs up -d
 | 弹性 | 有真实容量数据后配置 HPA |
 | 网络隔离 | NetworkPolicy |
 | 可观测性 | ServiceMonitor、OTLP exporter |
+
+Redis、RabbitMQ、PostgreSQL 和对象存储优先使用托管高可用服务；应用仓库只持有
+连接契约和本地开发 Compose，不部署单副本有状态 Pod 冒充生产集群。
 
 数据库迁移采用 expand/contract。Deployment 容器启动时不自动迁移，避免多副本同时迁移。
 
@@ -135,6 +157,18 @@ docker compose -f deploy/docker-compose.yml --profile obs up -d
 | Prometheus | 各服务 metrics | 指标采集 |
 | 各服务 | OTel Collector | trace 上报 |
 
-admin 当前使用本地 BlobStore，只适合开发或单副本。生产多副本前实现已有 `BlobStore` 端口，对接 S3、OSS 或 MinIO；这属于存储适配器替换，不需要再拆一个文件微服务。
+admin 已支持 `local` 与 `s3` BlobStore。Compose 使用 MinIO，生产设置
+`EAGLE_FILE_PROVIDER=s3` 后可连接 AWS S3、OSS 或兼容服务。bucket 由部署平台预先
+创建，应用启动时只检查存在性，不在运行时自动创建生产资源。
+
+## 可观测性与 SLO
+
+Compose 的 `obs` profile 包含 Prometheus、Alertmanager、Tempo、Loki、Alloy 和
+Grafana；Alloy 通过 Docker API 收集结构化 stdout 日志。默认 SLO 是 30 天
+99.9% 可用性，另外监控 2 秒 p99 延迟、Redis 可用性和 RabbitMQ 队列积压。
+
+Kubernetes 使用 `deploy/kubernetes/observability` 中的 ServiceMonitor 和
+PrometheusRule；它要求 Prometheus Operator CRD。生产告警接收方需要在 overlay
+中替换为实际的 PagerDuty、Slack、钉钉或企业告警系统。
 
 只有文件流量需要独立扩容、通知出现独立异步消费链路，或模块由不同团队独立发布时，才把对应模块提升为新服务。

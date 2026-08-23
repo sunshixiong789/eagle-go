@@ -20,3 +20,15 @@ datasources:
         datasourceUid: prometheus
         spanStartTimeShift: -2m
         spanEndTimeShift: 2m
+
+  - name: Loki
+    type: loki
+    uid: loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      derivedFields:
+        - name: TraceID
+          matcherRegex: '"trace_id":"([a-f0-9]+)"'
+          datasourceUid: tempo
+          url: '$${__value.raw}'

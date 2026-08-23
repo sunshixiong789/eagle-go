@@ -153,3 +153,21 @@ jobs:
             go tool goose -dir "app/$service/migrations" postgres "$DSN" status
             go tool goose -dir "app/$service/migrations" postgres "$DSN" down-to 0
           done
+
+  deployment:
+    name: 部署清单检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.32.3
+
+      - name: Compose 解析
+        run: docker compose -f deploy/docker-compose.yml config --quiet
+
+      - name: Kustomize 渲染
+        run: |
+          kubectl kustomize deploy/kubernetes/base >/dev/null
+          kubectl kustomize deploy/kubernetes/observability >/dev/null

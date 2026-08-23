@@ -15,6 +15,7 @@ import (
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"github.com/eagle-go/eagle/app/order/internal/platform/database/ent/orderitem"
+	"github.com/eagle-go/eagle/app/order/internal/platform/database/ent/outboxevent"
 	"github.com/eagle-go/eagle/app/order/internal/platform/database/ent/purchaseorder"
 
 	stdsql "database/sql"
@@ -27,6 +28,8 @@ type Client struct {
 	Schema *migrate.Schema
 	// OrderItem is the client for interacting with the OrderItem builders.
 	OrderItem *OrderItemClient
+	// OutboxEvent is the client for interacting with the OutboxEvent builders.
+	OutboxEvent *OutboxEventClient
 	// PurchaseOrder is the client for interacting with the PurchaseOrder builders.
 	PurchaseOrder *PurchaseOrderClient
 }
@@ -41,6 +44,7 @@ func NewClient(opts ...Option) *Client {
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.OrderItem = NewOrderItemClient(c.config)
+	c.OutboxEvent = NewOutboxEventClient(c.config)
 	c.PurchaseOrder = NewPurchaseOrderClient(c.config)
 }
 
@@ -135,6 +139,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		ctx:           ctx,
 		config:        cfg,
 		OrderItem:     NewOrderItemClient(cfg),
+		OutboxEvent:   NewOutboxEventClient(cfg),
 		PurchaseOrder: NewPurchaseOrderClient(cfg),
 	}, nil
 }
@@ -156,6 +161,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		ctx:           ctx,
 		config:        cfg,
 		OrderItem:     NewOrderItemClient(cfg),
+		OutboxEvent:   NewOutboxEventClient(cfg),
 		PurchaseOrder: NewPurchaseOrderClient(cfg),
 	}, nil
 }
@@ -186,6 +192,7 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	c.OrderItem.Use(hooks...)
+	c.OutboxEvent.Use(hooks...)
 	c.PurchaseOrder.Use(hooks...)
 }
 
@@ -193,6 +200,7 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	c.OrderItem.Intercept(interceptors...)
+	c.OutboxEvent.Intercept(interceptors...)
 	c.PurchaseOrder.Intercept(interceptors...)
 }
 
@@ -201,6 +209,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
 	case *OrderItemMutation:
 		return c.OrderItem.mutate(ctx, m)
+	case *OutboxEventMutation:
+		return c.OutboxEvent.mutate(ctx, m)
 	case *PurchaseOrderMutation:
 		return c.PurchaseOrder.mutate(ctx, m)
 	default:
@@ -341,6 +351,139 @@ func (c *OrderItemClient) mutate(ctx context.Context, m *OrderItemMutation) (Val
 	}
 }
 
+// OutboxEventClient is a client for the OutboxEvent schema.
+type OutboxEventClient struct {
+	config
+}
+
+// NewOutboxEventClient returns a client for the OutboxEvent from the given config.
+func NewOutboxEventClient(c config) *OutboxEventClient {
+	return &OutboxEventClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `outboxevent.Hooks(f(g(h())))`.
+func (c *OutboxEventClient) Use(hooks ...Hook) {
+	c.hooks.OutboxEvent = append(c.hooks.OutboxEvent, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `outboxevent.Intercept(f(g(h())))`.
+func (c *OutboxEventClient) Intercept(interceptors ...Interceptor) {
+	c.inters.OutboxEvent = append(c.inters.OutboxEvent, interceptors...)
+}
+
+// Create returns a builder for creating a OutboxEvent entity.
+func (c *OutboxEventClient) Create() *OutboxEventCreate {
+	mutation := newOutboxEventMutation(c.config, OpCreate)
+	return &OutboxEventCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of OutboxEvent entities.
+func (c *OutboxEventClient) CreateBulk(builders ...*OutboxEventCreate) *OutboxEventCreateBulk {
+	return &OutboxEventCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *OutboxEventClient) MapCreateBulk(slice any, setFunc func(*OutboxEventCreate, int)) *OutboxEventCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &OutboxEventCreateBulk{err: fmt.Errorf("calling to OutboxEventClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*OutboxEventCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &OutboxEventCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for OutboxEvent.
+func (c *OutboxEventClient) Update() *OutboxEventUpdate {
+	mutation := newOutboxEventMutation(c.config, OpUpdate)
+	return &OutboxEventUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *OutboxEventClient) UpdateOne(_m *OutboxEvent) *OutboxEventUpdateOne {
+	mutation := newOutboxEventMutation(c.config, OpUpdateOne, withOutboxEvent(_m))
+	return &OutboxEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *OutboxEventClient) UpdateOneID(id string) *OutboxEventUpdateOne {
+	mutation := newOutboxEventMutation(c.config, OpUpdateOne, withOutboxEventID(id))
+	return &OutboxEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for OutboxEvent.
+func (c *OutboxEventClient) Delete() *OutboxEventDelete {
+	mutation := newOutboxEventMutation(c.config, OpDelete)
+	return &OutboxEventDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *OutboxEventClient) DeleteOne(_m *OutboxEvent) *OutboxEventDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *OutboxEventClient) DeleteOneID(id string) *OutboxEventDeleteOne {
+	builder := c.Delete().Where(outboxevent.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &OutboxEventDeleteOne{builder}
+}
+
+// Query returns a query builder for OutboxEvent.
+func (c *OutboxEventClient) Query() *OutboxEventQuery {
+	return &OutboxEventQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeOutboxEvent},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a OutboxEvent entity by its id.
+func (c *OutboxEventClient) Get(ctx context.Context, id string) (*OutboxEvent, error) {
+	return c.Query().Where(outboxevent.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *OutboxEventClient) GetX(ctx context.Context, id string) *OutboxEvent {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *OutboxEventClient) Hooks() []Hook {
+	return c.hooks.OutboxEvent
+}
+
+// Interceptors returns the client interceptors.
+func (c *OutboxEventClient) Interceptors() []Interceptor {
+	return c.inters.OutboxEvent
+}
+
+func (c *OutboxEventClient) mutate(ctx context.Context, m *OutboxEventMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&OutboxEventCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&OutboxEventUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&OutboxEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&OutboxEventDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown OutboxEvent mutation op: %q", m.Op())
+	}
+}
+
 // PurchaseOrderClient is a client for the PurchaseOrder schema.
 type PurchaseOrderClient struct {
 	config
@@ -477,10 +620,10 @@ func (c *PurchaseOrderClient) mutate(ctx context.Context, m *PurchaseOrderMutati
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		OrderItem, PurchaseOrder []ent.Hook
+		OrderItem, OutboxEvent, PurchaseOrder []ent.Hook
 	}
 	inters struct {
-		OrderItem, PurchaseOrder []ent.Interceptor
+		OrderItem, OutboxEvent, PurchaseOrder []ent.Interceptor
 	}
 )
 

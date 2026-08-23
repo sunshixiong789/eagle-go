@@ -142,7 +142,7 @@ const file_eagle_access_v1_authorization_proto_rawDesc = "" +
 	"\aallowed\x18\x01 \x01(\bR\aallowed\x12%\n" +
 	"\x0epolicy_version\x18\x02 \x01(\x03R\rpolicyVersion2\x82\x01\n" +
 	"\x14AuthorizationService\x12j\n" +
-	"\x0fCheckPermission\x12'.eagle.access.v1.CheckPermissionRequest\x1a(.eagle.access.v1.CheckPermissionResponse\"\x04\x98\xb5\x18\x01B8Z6github.com/eagle-go/eagle/api/eagle/access/v1;accessv1b\x06proto3"
+	"\x0fCheckPermission\x12'.eagle.access.v1.CheckPermissionRequest\x1a(.eagle.access.v1.CheckPermissionResponse\"\x04\x98\xb5\x18\x04B8Z6github.com/eagle-go/eagle/api/eagle/access/v1;accessv1b\x06proto3"
 
 var (
 	file_eagle_access_v1_authorization_proto_rawDescOnce sync.Once

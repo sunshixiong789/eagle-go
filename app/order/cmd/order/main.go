@@ -10,6 +10,6 @@ var Version string
 func main() {
 	platformruntime.Run(platformruntime.Spec{
 		Name: "eagle.order", Version: Version, Build: buildApp,
-		Requirements: config.Requirements{ProductUpstream: true},
+		Requirements: config.Requirements{ProductUpstream: true, RabbitMQ: true, ServiceAuth: true},
 	})
 }

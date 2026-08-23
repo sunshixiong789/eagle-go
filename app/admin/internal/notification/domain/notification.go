@@ -32,4 +32,5 @@ type Repository interface {
 	UnreadCount(context.Context, string) (int64, error)
 	MarkRead(context.Context, string, int64, time.Time) (*Notification, error)
 	MarkAllRead(context.Context, string, time.Time) (int64, error)
+	CreateFromEvent(context.Context, string, string, *Notification) (bool, error)
 }

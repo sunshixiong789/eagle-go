@@ -40,6 +40,39 @@ func (r *repository) Create(ctx context.Context, value *domain.Notification) (*d
 	return toDomain(row), nil
 }
 
+func (r *repository) CreateFromEvent(ctx context.Context, eventID, eventType string, value *domain.Notification) (bool, error) {
+	tx, err := r.db.SQL().BeginTx(ctx, nil)
+	if err != nil {
+		return false, fmt.Errorf("begin notification event transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	result, err := tx.ExecContext(ctx, `
+INSERT INTO event_inbox (event_id, event_type) VALUES ($1, $2)
+ON CONFLICT (event_id) DO NOTHING`, eventID, eventType)
+	if err != nil {
+		return false, fmt.Errorf("write notification inbox: %w", err)
+	}
+	inserted, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("read notification inbox result: %w", err)
+	}
+	if inserted == 0 {
+		if err := tx.Commit(); err != nil {
+			return false, fmt.Errorf("commit duplicate notification event: %w", err)
+		}
+		return false, nil
+	}
+	if _, err := tx.ExecContext(ctx, `
+INSERT INTO notification (recipient_subject, sender_subject, title, content)
+VALUES ($1, $2, $3, $4)`, value.RecipientSubject, value.SenderSubject, value.Title, value.Content); err != nil {
+		return false, fmt.Errorf("create notification from event: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return false, fmt.Errorf("commit notification event: %w", err)
+	}
+	return true, nil
+}
+
 func (r *repository) List(ctx context.Context, q domain.ListQuery) ([]*domain.Notification, int64, error) {
 	query := r.db.Client().Notification.Query().Where(notification.RecipientSubjectEQ(q.RecipientSubject))
 	if q.UnreadOnly {

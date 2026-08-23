@@ -23,6 +23,14 @@ func TestRepositoryCreatesAggregateAtomicallyAndScopesOwner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
+	var outboxCount int
+	if err := testDB.SQL().QueryRowContext(context.Background(), `
+SELECT count(*) FROM event_outbox WHERE aggregate_id = $1 AND event_type = 'eagle.event.v1.OrderCreatedV1'`, created.ID).Scan(&outboxCount); err != nil {
+		t.Fatalf("query outbox: %v", err)
+	}
+	if outboxCount != 1 {
+		t.Fatalf("outbox count = %d, want 1", outboxCount)
+	}
 	got, err := repo.GetOwned(context.Background(), "owner-1", created.ID)
 	if err != nil || got.TotalCents != 1000 || len(got.Items) != 1 {
 		t.Fatalf("GetOwned = %+v, %v", got, err)

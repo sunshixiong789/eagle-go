@@ -50,6 +50,33 @@ func newTestEnforcer(t *testing.T, policies map[string][]string) *Enforcer {
 }
 
 const opCreatePermission = "/eagle.access.v1.PermissionService/CreatePermission"
+const opCheckPermission = "/eagle.access.v1.AuthorizationService/CheckPermission"
+
+func TestServerInternalAccessRequiresWhitelistedService(t *testing.T) {
+	tests := []struct {
+		name      string
+		principal *identity.Principal
+		wantCode  int
+	}{
+		{name: "human", principal: &identity.Principal{Subject: "u-1", ClientID: "eagle-web"}, wantCode: 403},
+		{name: "untrusted service", principal: &identity.Principal{Subject: "s-1", ClientID: "other-worker", IsService: true}, wantCode: 403},
+		{name: "trusted service", principal: &identity.Principal{Subject: "s-1", ClientID: "eagle-worker", IsService: true}, wantCode: 200},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var called bool
+			mw := Server(WithInternalClientIDs("eagle-worker"))
+			ctx := identity.NewContext(serverCtx(opCheckPermission), tt.principal)
+			_, err := mw(probeHandler(&called))(ctx, nil)
+			if got := kratoserrors.Code(err); got != tt.wantCode {
+				t.Fatalf("状态码 = %d, want %d, err=%v", got, tt.wantCode, err)
+			}
+			if called != (tt.wantCode == 200) {
+				t.Fatalf("handler called = %v, want %v", called, tt.wantCode == 200)
+			}
+		})
+	}
+}
 
 func TestServerRejectsAnonymous(t *testing.T) {
 	var called bool

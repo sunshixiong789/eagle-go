@@ -794,7 +794,7 @@ const file_eagle_product_v1_product_proto_rawDesc = "" +
 	"\rCreateProduct\x12&.eagle.product.v1.CreateProductRequest\x1a'.eagle.product.v1.CreateProductResponse\"2\x8a\xb5\x18\x13product:product:add\x98\xb5\x18\x03\x82\xd3\xe4\x93\x02\x11:\x01*\"\f/v1/products\x12v\n" +
 	"\n" +
 	"GetProduct\x12#.eagle.product.v1.GetProductRequest\x1a$.eagle.product.v1.GetProductResponse\"\x1d\x98\xb5\x18\x01\x82\xd3\xe4\x93\x02\x13\x12\x11/v1/products/{id}\x12o\n" +
-	"\x10BatchGetProducts\x12).eagle.product.v1.BatchGetProductsRequest\x1a*.eagle.product.v1.BatchGetProductsResponse\"\x04\x98\xb5\x18\x01\x12w\n" +
+	"\x10BatchGetProducts\x12).eagle.product.v1.BatchGetProductsRequest\x1a*.eagle.product.v1.BatchGetProductsResponse\"\x04\x98\xb5\x18\x04\x12w\n" +
 	"\fListProducts\x12%.eagle.product.v1.ListProductsRequest\x1a&.eagle.product.v1.ListProductsResponse\"\x18\x98\xb5\x18\x01\x82\xd3\xe4\x93\x02\x0e\x12\f/v1/products\x12\x9a\x01\n" +
 	"\rUpdateProduct\x12&.eagle.product.v1.UpdateProductRequest\x1a'.eagle.product.v1.UpdateProductResponse\"8\x8a\xb5\x18\x14product:product:edit\x98\xb5\x18\x03\x82\xd3\xe4\x93\x02\x16:\x01*\x1a\x11/v1/products/{id}\x12\x99\x01\n" +
 	"\rDeleteProduct\x12&.eagle.product.v1.DeleteProductRequest\x1a'.eagle.product.v1.DeleteProductResponse\"7\x8a\xb5\x18\x16product:product:remove\x98\xb5\x18\x03\x82\xd3\xe4\x93\x02\x13*\x11/v1/products/{id}B:Z8github.com/eagle-go/eagle/api/eagle/product/v1;productv1b\x06proto3"

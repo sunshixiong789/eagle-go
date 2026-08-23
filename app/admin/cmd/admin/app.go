@@ -53,16 +53,15 @@ func buildApp(bc *config.Bootstrap, logger *slog.Logger) (platformruntime.Compon
 	permissionService := accessservice.NewPermissionService(accessapp.NewPermissionUsecase(permissionRepo, policyRepo))
 	roleService := accessservice.NewRoleBindingService(accessapp.NewRoleBindingUsecase(policyRepo, permissionRepo))
 	dictService := dictionaryservice.NewDictService(dictionaryapp.NewDictUsecase(dictionaryinfra.NewDictRepo(db)))
-	blobs, err := fileinfra.NewLocalBlobStore(bc.GetFile().GetLocalDir())
+	blobs, err := fileinfra.NewBlobStore(bc.GetFile())
 	if err != nil {
 		return fail(err)
 	}
 	fileService := fileservice.NewFileService(fileapp.NewUsecase(
 		fileinfra.NewRepository(db), blobs, bc.GetFile().GetMaxSizeBytes(),
 	))
-	notificationService := notificationservice.NewNotificationService(
-		notificationapp.NewUsecase(notificationinfra.NewRepository(db)),
-	)
+	notificationUsecase := notificationapp.NewUsecase(notificationinfra.NewRepository(db))
+	notificationService := notificationservice.NewNotificationService(notificationUsecase)
 	authorizationService := accessservice.NewAuthorizationService(accessapp.NewAuthorizationUsecase(
 		accessinfra.NewAuthorizationChecker(enforcer, store),
 	))
@@ -90,9 +89,10 @@ func buildApp(bc *config.Bootstrap, logger *slog.Logger) (platformruntime.Compon
 	})
 	unregisterHealth := accessinfra.RegisterPolicyHealth(store, enforcer)
 	stopReconciler := accessinfra.NewPolicyReconciler(store, enforcer, logger)
+	stopOrderConsumer := notificationinfra.NewOrderCreatedConsumer(bc.GetMessaging().GetRabbitmq(), notificationUsecase, logger)
 	return platformruntime.Components{
 		Servers: []transport.Server{gs, hs},
-		Cleanup: func() { stopReconciler(); unregisterHealth(); closeDB() },
+		Cleanup: func() { stopOrderConsumer(); stopReconciler(); unregisterHealth(); closeDB() },
 	}, nil
 }
 

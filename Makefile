@@ -123,7 +123,14 @@ up:
 .PHONY: up-deps
 # 只启动本地基础依赖，服务由 make run 单独启动
 up-deps:
-	docker compose -f deploy/docker-compose.yml up -d postgres keycloak
+	docker compose -f deploy/docker-compose.yml up -d postgres keycloak redis rabbitmq minio minio-init
+
+.PHONY: validate-deploy
+# 校验 Compose 与 Kubernetes 基线能被正确解析
+validate-deploy:
+	docker compose -f deploy/docker-compose.yml config --quiet
+	kubectl kustomize deploy/kubernetes/base >/dev/null
+	kubectl kustomize deploy/kubernetes/observability >/dev/null
 
 .PHONY: down
 down:

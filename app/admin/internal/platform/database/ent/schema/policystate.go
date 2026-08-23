@@ -9,10 +9,8 @@ import (
 	"entgo.io/ent/schema/field"
 )
 
-// PolicyState 保存授权策略的单调递增版本。
-//
-// 表中固定只有 id=1 一行。Redis 通知只是策略同步的快速路径，各副本
-// 通过这个版本号定期对账，从而补回订阅断线期间丢失的通知。
+// PolicyState 保存授权策略的单调递增版本。表中固定只有 id=1 一行，
+// 各副本通过数据库版本周期对账；Redis 和 RabbitMQ 不参与策略同步。
 type PolicyState struct{ ent.Schema }
 
 func (PolicyState) Annotations() []schema.Annotation {

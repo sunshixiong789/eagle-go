@@ -14,7 +14,6 @@ import (
 
 	"github.com/eagle-go/eagle/pkg/healthx"
 
-	kratosmetrics "github.com/go-kratos/kratos/contrib/otel/v3/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/otel"
@@ -191,13 +190,28 @@ func setupMetrics(cfg Config, res *resource.Resource) (func(context.Context) err
 	// 那套边界是给通用数值准备的，而请求耗时以秒计通常落在 0.005~1 之间，
 	// 会全部挤进第一个桶——P95/P99 直接失去意义。
 	for _, name := range cfg.HistogramViews {
-		opts = append(opts, metricsdk.WithView(kratosmetrics.DefaultSecondsHistogramView(name)))
+		opts = append(opts, metricsdk.WithView(secondsHistogramView(name)))
 	}
 
 	mp := metricsdk.NewMeterProvider(opts...)
 	otel.SetMeterProvider(mp)
 
 	return mp.Shutdown, nil
+}
+
+func secondsHistogramView(name string) metricsdk.View {
+	return func(instrument metricsdk.Instrument) (metricsdk.Stream, bool) {
+		if instrument.Name != name {
+			return metricsdk.Stream{}, false
+		}
+		return metricsdk.Stream{
+			Name: instrument.Name, Description: instrument.Description, Unit: instrument.Unit,
+			Aggregation: metricsdk.AggregationExplicitBucketHistogram{
+				Boundaries: []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10},
+				NoMinMax:   true,
+			},
+		}, true
+	}
 }
 
 // startMetricsServer 启动独立的指标端点。

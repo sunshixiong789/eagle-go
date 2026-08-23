@@ -11,10 +11,10 @@
 
 server:
   http:
-    addr: 0.0.0.0:8003
+    addr: "${SERVER_HTTP_ADDR:0.0.0.0:8003}"
     timeout: 5s
   grpc:
-    addr: 0.0.0.0:9003
+    addr: "${SERVER_GRPC_ADDR:0.0.0.0:9003}"
     timeout: 5s
 
 data:
@@ -46,11 +46,27 @@ auth:
   # 仅本服务 client role（resource_access.eagle-order.roles）会触发短路；
   # 同名 realm role 不具备跨服务超管能力。
   super_admin_role: admin
+  internal_client_ids: ["${AUTH_INTERNAL_CLIENT_ID:eagle-worker}"]
 
 upstream:
   # order 只通过 product 批量读取下单商品快照。
   product_endpoint: "${UPSTREAM_PRODUCT_ENDPOINT:127.0.0.1:9002}"
   timeout: 2s
+  max_attempts: 2
+  retry_backoff: 0.1s
+
+service_auth:
+  token_url: "${SERVICE_AUTH_TOKEN_URL:http://127.0.0.1:8080/realms/eagle/protocol/openid-connect/token}"
+  client_id: "${SERVICE_AUTH_CLIENT_ID:eagle-worker}"
+  client_secret: "${SERVICE_AUTH_CLIENT_SECRET:dev-only-worker-secret}"
+
+messaging:
+  rabbitmq:
+    enabled: true
+    url: "${MESSAGING_RABBITMQ_URL:amqp://eagle:eagle@127.0.0.1:5672/}"
+    exchange: eagle.events
+    order_created_queue: eagle.admin.order-created.v1
+    reconnect_backoff: 2s
 
 observability:
   # 指向本地 obs profile 里的 OTel Collector。
@@ -59,10 +75,10 @@ observability:
   # 一个需要翻文档才能解开的坑。collector 不在时导出器只在后台静默重试，
   # 实测服务照常启动、接口照常响应、日志零噪音，因此填着没有副作用。
   # 完全不想上报时置空即可。
-  otlp_endpoint: "127.0.0.1:4317"
-  otlp_insecure: true
+  otlp_endpoint: "${OBSERVABILITY_OTLP_ENDPOINT:127.0.0.1:4317}"
+  otlp_insecure: "${OBSERVABILITY_OTLP_INSECURE:true}"
   # 开发期全采样；生产建议降到 0.01~0.1
-  trace_sample_ratio: 1.0
-  log_level: info
+  trace_sample_ratio: "${OBSERVABILITY_TRACE_SAMPLE_RATIO:1.0}"
+  log_level: "${OBSERVABILITY_LOG_LEVEL:info}"
   # 指标与健康检查端点，独立于业务端口且不经过鉴权
-  metrics_addr: 0.0.0.0:9103
+  metrics_addr: "${OBSERVABILITY_METRICS_ADDR:0.0.0.0:9103}"

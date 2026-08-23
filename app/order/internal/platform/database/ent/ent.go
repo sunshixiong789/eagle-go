@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/eagle-go/eagle/app/order/internal/platform/database/ent/orderitem"
+	"github.com/eagle-go/eagle/app/order/internal/platform/database/ent/outboxevent"
 	"github.com/eagle-go/eagle/app/order/internal/platform/database/ent/purchaseorder"
 )
 
@@ -75,6 +76,7 @@ func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
 			orderitem.Table:     orderitem.ValidColumn,
+			outboxevent.Table:   outboxevent.ValidColumn,
 			purchaseorder.Table: purchaseorder.ValidColumn,
 		})
 	})

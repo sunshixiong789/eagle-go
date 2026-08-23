@@ -31,6 +31,8 @@ const (
 	AccessLevel_ACCESS_LEVEL_PUBLIC              AccessLevel = 1
 	AccessLevel_ACCESS_LEVEL_AUTHENTICATED       AccessLevel = 2
 	AccessLevel_ACCESS_LEVEL_PERMISSION_REQUIRED AccessLevel = 3
+	// 只允许经过 Keycloak client_credentials 认证且 client id 在服务白名单中的调用方。
+	AccessLevel_ACCESS_LEVEL_INTERNAL AccessLevel = 4
 )
 
 // Enum value maps for AccessLevel.
@@ -40,12 +42,14 @@ var (
 		1: "ACCESS_LEVEL_PUBLIC",
 		2: "ACCESS_LEVEL_AUTHENTICATED",
 		3: "ACCESS_LEVEL_PERMISSION_REQUIRED",
+		4: "ACCESS_LEVEL_INTERNAL",
 	}
 	AccessLevel_value = map[string]int32{
 		"ACCESS_LEVEL_UNSPECIFIED":         0,
 		"ACCESS_LEVEL_PUBLIC":              1,
 		"ACCESS_LEVEL_AUTHENTICATED":       2,
 		"ACCESS_LEVEL_PERMISSION_REQUIRED": 3,
+		"ACCESS_LEVEL_INTERNAL":            4,
 	}
 )
 
@@ -125,12 +129,13 @@ var File_eagle_annotations_v1_perm_proto protoreflect.FileDescriptor
 
 const file_eagle_annotations_v1_perm_proto_rawDesc = "" +
 	"\n" +
-	"\x1feagle/annotations/v1/perm.proto\x12\x14eagle.annotations.v1\x1a google/protobuf/descriptor.proto*\x8a\x01\n" +
+	"\x1feagle/annotations/v1/perm.proto\x12\x14eagle.annotations.v1\x1a google/protobuf/descriptor.proto*\xa5\x01\n" +
 	"\vAccessLevel\x12\x1c\n" +
 	"\x18ACCESS_LEVEL_UNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13ACCESS_LEVEL_PUBLIC\x10\x01\x12\x1e\n" +
 	"\x1aACCESS_LEVEL_AUTHENTICATED\x10\x02\x12$\n" +
-	" ACCESS_LEVEL_PERMISSION_REQUIRED\x10\x03:4\n" +
+	" ACCESS_LEVEL_PERMISSION_REQUIRED\x10\x03\x12\x19\n" +
+	"\x15ACCESS_LEVEL_INTERNAL\x10\x04:4\n" +
 	"\x04perm\x12\x1e.google.protobuf.MethodOptions\x18ц\x03 \x01(\tR\x04perm:8\n" +
 	"\x06public\x12\x1e.google.protobuf.MethodOptions\x18҆\x03 \x01(\bR\x06public:[\n" +
 	"\x06access\x12\x1e.google.protobuf.MethodOptions\x18ӆ\x03 \x01(\x0e2!.eagle.annotations.v1.AccessLevelR\x06accessBBZ@github.com/eagle-go/eagle/api/eagle/annotations/v1;annotationsv1b\x06proto3"

@@ -58,10 +58,10 @@ func run(spec Spec) error {
 		return err
 	}
 
-	c := kratosconfig.New(kratosconfig.WithSource(
-		file.NewSource(*confPath),
-		env.NewSource("EAGLE"),
-	))
+	c := kratosconfig.New(
+		kratosconfig.WithSource(file.NewSource(*confPath), env.NewSource("EAGLE")),
+		kratosconfig.WithResolveActualTypes(true),
+	)
 	defer func() { _ = c.Close() }()
 	if err := c.Load(); err != nil {
 		return err
@@ -119,7 +119,10 @@ func setupObservability(spec Spec, instanceID string, o *config.Observability) (
 		OTLPInsecure:   o.GetOtlpInsecure(),
 		SampleRatio:    o.GetTraceSampleRatio(),
 		MetricsAddr:    o.GetMetricsAddr(),
-		HistogramViews: []string{kratosmetrics.DefaultServerSecondsHistogramName},
+		HistogramViews: []string{
+			kratosmetrics.DefaultServerSecondsHistogramName,
+			kratosmetrics.DefaultClientSecondsHistogramName,
+		},
 	})
 }
 

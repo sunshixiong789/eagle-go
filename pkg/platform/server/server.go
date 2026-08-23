@@ -11,6 +11,7 @@ import (
 	"github.com/go-kratos/kratos/contrib/otel/v3/tracing"
 	"github.com/go-kratos/kratos/v3/middleware"
 	"github.com/go-kratos/kratos/v3/middleware/logging"
+	"github.com/go-kratos/kratos/v3/middleware/metadata"
 	"github.com/go-kratos/kratos/v3/middleware/ratelimit"
 	"github.com/go-kratos/kratos/v3/middleware/recovery"
 	"go.opentelemetry.io/otel"
@@ -74,11 +75,13 @@ func NewMiddlewares(
 		tracing.Server(),
 		metricsMW,
 		logging.Server(logger),
+		metadata.Server(metadata.WithPropagatedPrefix("x-md-global-")),
 		ratelimit.Server(),
 		authn.Server(verifier),
 		authz.Server(
 			authz.WithSuperAdminRole(superAdmin),
 			authz.WithAuthorizer(authorizer),
+			authz.WithInternalClientIDs(authConf.GetInternalClientIds()...),
 		),
 		ErrorMapping(errorMappings...),
 		protovalidatemw.ProtoValidate(),

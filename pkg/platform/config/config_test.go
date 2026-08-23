@@ -23,7 +23,10 @@ func loadConfig(t *testing.T, service string) *appconfig.Bootstrap {
 		t.Fatalf("解析配置目录: %v", err)
 	}
 
-	c := kratosconfig.New(kratosconfig.WithSource(file.NewSource(path)))
+	c := kratosconfig.New(
+		kratosconfig.WithSource(file.NewSource(path)),
+		kratosconfig.WithResolveActualTypes(true),
+	)
 	t.Cleanup(func() { _ = c.Close() })
 
 	if err := c.Load(); err != nil {
@@ -43,8 +46,15 @@ func TestEnvironmentOverridesSensitiveDefaults(t *testing.T) {
 		t.Fatalf("解析配置目录: %v", err)
 	}
 	t.Setenv("EAGLE_DATABASE_DSN", "postgres://runtime:secret@db.internal:5432/eagle?sslmode=require")
+	t.Setenv("EAGLE_SERVER_HTTP_ADDR", "0.0.0.0:18000")
+	t.Setenv("EAGLE_AUTH_INTERNAL_CLIENT_ID", "eagle-product-worker")
+	t.Setenv("EAGLE_MESSAGING_RABBITMQ_URL", "amqps://rabbit.internal/eagle")
+	t.Setenv("EAGLE_OBSERVABILITY_TRACE_SAMPLE_RATIO", "0.05")
 
-	c := kratosconfig.New(kratosconfig.WithSource(file.NewSource(path), configenv.NewSource("EAGLE")))
+	c := kratosconfig.New(
+		kratosconfig.WithSource(file.NewSource(path), configenv.NewSource("EAGLE")),
+		kratosconfig.WithResolveActualTypes(true),
+	)
 	t.Cleanup(func() { _ = c.Close() })
 	if err := c.Load(); err != nil {
 		t.Fatalf("加载配置: %v", err)
@@ -55,6 +65,18 @@ func TestEnvironmentOverridesSensitiveDefaults(t *testing.T) {
 	}
 	if got := bc.GetData().GetDatabase().GetDsn(); !strings.Contains(got, "runtime:secret@db.internal") {
 		t.Fatalf("DATABASE_DSN override not applied: %q", got)
+	}
+	if got := bc.GetServer().GetHttp().GetAddr(); got != "0.0.0.0:18000" {
+		t.Fatalf("SERVER_HTTP_ADDR override not applied: %q", got)
+	}
+	if got := bc.GetAuth().GetInternalClientIds(); len(got) != 1 || got[0] != "eagle-product-worker" {
+		t.Fatalf("AUTH_INTERNAL_CLIENT_ID override not applied: %v", got)
+	}
+	if got := bc.GetMessaging().GetRabbitmq().GetUrl(); got != "amqps://rabbit.internal/eagle" {
+		t.Fatalf("MESSAGING_RABBITMQ_URL override not applied: %q", got)
+	}
+	if got := bc.GetObservability().GetTraceSampleRatio(); got != 0.05 {
+		t.Fatalf("OBSERVABILITY_TRACE_SAMPLE_RATIO override not applied: %v", got)
 	}
 }
 
@@ -67,9 +89,9 @@ func TestConfigParses(t *testing.T) {
 		metricsAddr  string
 		database     string
 	}{
-		{service: "admin", requirements: appconfig.Requirements{File: true}, httpAddr: "0.0.0.0:8001", grpcAddr: "0.0.0.0:9001", metricsAddr: "0.0.0.0:9101", database: "eagle_admin"},
-		{service: "product", requirements: appconfig.Requirements{AuthorizationUpstream: true}, httpAddr: "0.0.0.0:8002", grpcAddr: "0.0.0.0:9002", metricsAddr: "0.0.0.0:9102", database: "eagle_product"},
-		{service: "order", requirements: appconfig.Requirements{ProductUpstream: true}, httpAddr: "0.0.0.0:8003", grpcAddr: "0.0.0.0:9003", metricsAddr: "0.0.0.0:9103", database: "eagle_order"},
+		{service: "admin", requirements: appconfig.Requirements{File: true, RabbitMQ: true}, httpAddr: "0.0.0.0:8001", grpcAddr: "0.0.0.0:9001", metricsAddr: "0.0.0.0:9101", database: "eagle_admin"},
+		{service: "product", requirements: appconfig.Requirements{AuthorizationUpstream: true, Redis: true, ServiceAuth: true}, httpAddr: "0.0.0.0:8002", grpcAddr: "0.0.0.0:9002", metricsAddr: "0.0.0.0:9102", database: "eagle_product"},
+		{service: "order", requirements: appconfig.Requirements{ProductUpstream: true, RabbitMQ: true, ServiceAuth: true}, httpAddr: "0.0.0.0:8003", grpcAddr: "0.0.0.0:9003", metricsAddr: "0.0.0.0:9103", database: "eagle_order"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.service, func(t *testing.T) {

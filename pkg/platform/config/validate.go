@@ -10,6 +10,9 @@ type Requirements struct {
 	File                  bool
 	AuthorizationUpstream bool
 	ProductUpstream       bool
+	Redis                 bool
+	RabbitMQ              bool
+	ServiceAuth           bool
 }
 
 // Validate 校验部署时最终合并出的配置。requirements 为空时校验示例配置
@@ -25,7 +28,13 @@ func Validate(b *Bootstrap, requirements ...Requirements) error {
 	obs := b.GetObservability()
 	file := b.GetFile()
 	upstream := b.GetUpstream()
-	required := Requirements{File: true, AuthorizationUpstream: true, ProductUpstream: true}
+	redis := b.GetCache().GetRedis()
+	rabbit := b.GetMessaging().GetRabbitmq()
+	serviceAuth := b.GetServiceAuth()
+	required := Requirements{
+		File: true, AuthorizationUpstream: true, ProductUpstream: true,
+		Redis: true, RabbitMQ: true, ServiceAuth: true,
+	}
 	if len(requirements) > 0 {
 		required = requirements[0]
 	}
@@ -47,6 +56,9 @@ func Validate(b *Bootstrap, requirements ...Requirements) error {
 	if auth.GetSuperAdminRole() == "" {
 		errs = append(errs, errors.New("auth.super_admin_role is required"))
 	}
+	if len(auth.GetInternalClientIds()) == 0 {
+		errs = append(errs, errors.New("auth.internal_client_ids must not be empty"))
+	}
 	if server.GetHttp().GetAddr() == "" || server.GetGrpc().GetAddr() == "" {
 		errs = append(errs, errors.New("server.http.addr and server.grpc.addr are required"))
 	}
@@ -56,11 +68,24 @@ func Validate(b *Bootstrap, requirements ...Requirements) error {
 	if obs.GetMetricsAddr() != "" && obs.GetMetricsAddr() == server.GetHttp().GetAddr() {
 		errs = append(errs, errors.New("observability.metrics_addr must differ from server.http.addr"))
 	}
-	if required.File && strings.TrimSpace(file.GetLocalDir()) == "" {
-		errs = append(errs, errors.New("file.local_dir is required"))
-	}
 	if required.File && file.GetMaxSizeBytes() <= 0 {
 		errs = append(errs, errors.New("file.max_size_bytes must be positive"))
+	}
+	if required.File {
+		switch file.GetProvider() {
+		case "local":
+			if strings.TrimSpace(file.GetLocalDir()) == "" {
+				errs = append(errs, errors.New("file.local_dir is required for local provider"))
+			}
+		case "s3":
+			s3 := file.GetS3()
+			if strings.TrimSpace(s3.GetEndpoint()) == "" || strings.TrimSpace(s3.GetBucket()) == "" ||
+				strings.TrimSpace(s3.GetAccessKey()) == "" || strings.TrimSpace(s3.GetSecretKey()) == "" {
+				errs = append(errs, errors.New("file.s3 endpoint, bucket, access_key and secret_key are required"))
+			}
+		default:
+			errs = append(errs, errors.New("file.provider must be local or s3"))
+		}
 	}
 	if required.AuthorizationUpstream && strings.TrimSpace(upstream.GetAuthorizationEndpoint()) == "" {
 		errs = append(errs, errors.New("upstream.authorization_endpoint is required"))
@@ -70,6 +95,37 @@ func Validate(b *Bootstrap, requirements ...Requirements) error {
 	}
 	if (required.AuthorizationUpstream || required.ProductUpstream) && (upstream.GetTimeout() == nil || upstream.GetTimeout().AsDuration() <= 0) {
 		errs = append(errs, errors.New("upstream.timeout must be positive"))
+	}
+	if required.AuthorizationUpstream || required.ProductUpstream {
+		if upstream.GetMaxAttempts() < 1 || upstream.GetMaxAttempts() > 5 {
+			errs = append(errs, errors.New("upstream.max_attempts must be in [1,5]"))
+		}
+		if upstream.GetRetryBackoff() == nil || upstream.GetRetryBackoff().AsDuration() <= 0 {
+			errs = append(errs, errors.New("upstream.retry_backoff must be positive"))
+		}
+	}
+	if required.Redis {
+		if !redis.GetEnabled() || strings.TrimSpace(redis.GetAddress()) == "" {
+			errs = append(errs, errors.New("cache.redis must be enabled and address is required"))
+		}
+		if redis.GetTtl() == nil || redis.GetTtl().AsDuration() <= 0 {
+			errs = append(errs, errors.New("cache.redis.ttl must be positive"))
+		}
+	}
+	if required.RabbitMQ {
+		if !rabbit.GetEnabled() || strings.TrimSpace(rabbit.GetUrl()) == "" || strings.TrimSpace(rabbit.GetExchange()) == "" ||
+			strings.TrimSpace(rabbit.GetOrderCreatedQueue()) == "" {
+			errs = append(errs, errors.New("messaging.rabbitmq must be enabled and url/exchange/order_created_queue are required"))
+		} else if u, err := url.Parse(rabbit.GetUrl()); err != nil || (u.Scheme != "amqp" && u.Scheme != "amqps") || u.Host == "" {
+			errs = append(errs, errors.New("messaging.rabbitmq.url must be an amqp or amqps URL"))
+		}
+		if rabbit.GetReconnectBackoff() == nil || rabbit.GetReconnectBackoff().AsDuration() <= 0 {
+			errs = append(errs, errors.New("messaging.rabbitmq.reconnect_backoff must be positive"))
+		}
+	}
+	if required.ServiceAuth && (strings.TrimSpace(serviceAuth.GetTokenUrl()) == "" ||
+		strings.TrimSpace(serviceAuth.GetClientId()) == "" || strings.TrimSpace(serviceAuth.GetClientSecret()) == "") {
+		errs = append(errs, errors.New("service_auth token_url, client_id and client_secret are required"))
 	}
 	return errors.Join(errs...)
 }

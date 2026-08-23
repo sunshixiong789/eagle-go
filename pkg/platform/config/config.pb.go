@@ -31,6 +31,9 @@ type Bootstrap struct {
 	Observability *Observability         `protobuf:"bytes,4,opt,name=observability,proto3" json:"observability,omitempty"`
 	File          *File                  `protobuf:"bytes,5,opt,name=file,proto3" json:"file,omitempty"`
 	Upstream      *Upstream              `protobuf:"bytes,6,opt,name=upstream,proto3" json:"upstream,omitempty"`
+	Cache         *Cache                 `protobuf:"bytes,7,opt,name=cache,proto3" json:"cache,omitempty"`
+	Messaging     *Messaging             `protobuf:"bytes,8,opt,name=messaging,proto3" json:"messaging,omitempty"`
+	ServiceAuth   *ServiceAuth           `protobuf:"bytes,9,opt,name=service_auth,json=serviceAuth,proto3" json:"service_auth,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -107,6 +110,27 @@ func (x *Bootstrap) GetUpstream() *Upstream {
 	return nil
 }
 
+func (x *Bootstrap) GetCache() *Cache {
+	if x != nil {
+		return x.Cache
+	}
+	return nil
+}
+
+func (x *Bootstrap) GetMessaging() *Messaging {
+	if x != nil {
+		return x.Messaging
+	}
+	return nil
+}
+
+func (x *Bootstrap) GetServiceAuth() *ServiceAuth {
+	if x != nil {
+		return x.ServiceAuth
+	}
+	return nil
+}
+
 // Upstream contains static development endpoints for synchronous service
 // calls. Kubernetes service DNS or a service mesh supplies these addresses in
 // production; the application does not embed a registry SDK.
@@ -115,6 +139,8 @@ type Upstream struct {
 	AuthorizationEndpoint string                 `protobuf:"bytes,1,opt,name=authorization_endpoint,json=authorizationEndpoint,proto3" json:"authorization_endpoint,omitempty"`
 	ProductEndpoint       string                 `protobuf:"bytes,2,opt,name=product_endpoint,json=productEndpoint,proto3" json:"product_endpoint,omitempty"`
 	Timeout               *durationpb.Duration   `protobuf:"bytes,3,opt,name=timeout,proto3" json:"timeout,omitempty"`
+	MaxAttempts           int32                  `protobuf:"varint,4,opt,name=max_attempts,json=maxAttempts,proto3" json:"max_attempts,omitempty"`
+	RetryBackoff          *durationpb.Duration   `protobuf:"bytes,5,opt,name=retry_backoff,json=retryBackoff,proto3" json:"retry_backoff,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -170,12 +196,29 @@ func (x *Upstream) GetTimeout() *durationpb.Duration {
 	return nil
 }
 
+func (x *Upstream) GetMaxAttempts() int32 {
+	if x != nil {
+		return x.MaxAttempts
+	}
+	return 0
+}
+
+func (x *Upstream) GetRetryBackoff() *durationpb.Duration {
+	if x != nil {
+		return x.RetryBackoff
+	}
+	return nil
+}
+
 // File configures the development/local blob adapter. The module keeps a
 // storage port so production deployments can replace it with S3 or OSS.
 type File struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	LocalDir      string                 `protobuf:"bytes,1,opt,name=local_dir,json=localDir,proto3" json:"local_dir,omitempty"`
-	MaxSizeBytes  int64                  `protobuf:"varint,2,opt,name=max_size_bytes,json=maxSizeBytes,proto3" json:"max_size_bytes,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// local 只用于开发；s3 可连接 AWS S3、OSS、MinIO 等兼容服务。
+	Provider      string   `protobuf:"bytes,3,opt,name=provider,proto3" json:"provider,omitempty"`
+	LocalDir      string   `protobuf:"bytes,1,opt,name=local_dir,json=localDir,proto3" json:"local_dir,omitempty"`
+	MaxSizeBytes  int64    `protobuf:"varint,2,opt,name=max_size_bytes,json=maxSizeBytes,proto3" json:"max_size_bytes,omitempty"`
+	S3            *File_S3 `protobuf:"bytes,4,opt,name=s3,proto3" json:"s3,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -210,6 +253,13 @@ func (*File) Descriptor() ([]byte, []int) {
 	return file_config_proto_rawDescGZIP(), []int{2}
 }
 
+func (x *File) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
 func (x *File) GetLocalDir() string {
 	if x != nil {
 		return x.LocalDir
@@ -224,6 +274,162 @@ func (x *File) GetMaxSizeBytes() int64 {
 	return 0
 }
 
+func (x *File) GetS3() *File_S3 {
+	if x != nil {
+		return x.S3
+	}
+	return nil
+}
+
+type Cache struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Redis         *Cache_Redis           `protobuf:"bytes,1,opt,name=redis,proto3" json:"redis,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Cache) Reset() {
+	*x = Cache{}
+	mi := &file_config_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Cache) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Cache) ProtoMessage() {}
+
+func (x *Cache) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Cache.ProtoReflect.Descriptor instead.
+func (*Cache) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *Cache) GetRedis() *Cache_Redis {
+	if x != nil {
+		return x.Redis
+	}
+	return nil
+}
+
+type Messaging struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Rabbitmq      *Messaging_RabbitMQ    `protobuf:"bytes,1,opt,name=rabbitmq,proto3" json:"rabbitmq,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Messaging) Reset() {
+	*x = Messaging{}
+	mi := &file_config_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Messaging) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Messaging) ProtoMessage() {}
+
+func (x *Messaging) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Messaging.ProtoReflect.Descriptor instead.
+func (*Messaging) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *Messaging) GetRabbitmq() *Messaging_RabbitMQ {
+	if x != nil {
+		return x.Rabbitmq
+	}
+	return nil
+}
+
+// ServiceAuth 是调用方通过 Keycloak client_credentials 获取短期服务令牌的配置。
+type ServiceAuth struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TokenUrl      string                 `protobuf:"bytes,1,opt,name=token_url,json=tokenUrl,proto3" json:"token_url,omitempty"`
+	ClientId      string                 `protobuf:"bytes,2,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
+	ClientSecret  string                 `protobuf:"bytes,3,opt,name=client_secret,json=clientSecret,proto3" json:"client_secret,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ServiceAuth) Reset() {
+	*x = ServiceAuth{}
+	mi := &file_config_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ServiceAuth) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ServiceAuth) ProtoMessage() {}
+
+func (x *ServiceAuth) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ServiceAuth.ProtoReflect.Descriptor instead.
+func (*ServiceAuth) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ServiceAuth) GetTokenUrl() string {
+	if x != nil {
+		return x.TokenUrl
+	}
+	return ""
+}
+
+func (x *ServiceAuth) GetClientId() string {
+	if x != nil {
+		return x.ClientId
+	}
+	return ""
+}
+
+func (x *ServiceAuth) GetClientSecret() string {
+	if x != nil {
+		return x.ClientSecret
+	}
+	return ""
+}
+
 // Server 是 HTTP/gRPC 监听参数。
 type Server struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -235,7 +441,7 @@ type Server struct {
 
 func (x *Server) Reset() {
 	*x = Server{}
-	mi := &file_config_proto_msgTypes[3]
+	mi := &file_config_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -247,7 +453,7 @@ func (x *Server) String() string {
 func (*Server) ProtoMessage() {}
 
 func (x *Server) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[3]
+	mi := &file_config_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -260,7 +466,7 @@ func (x *Server) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Server.ProtoReflect.Descriptor instead.
 func (*Server) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{3}
+	return file_config_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Server) GetHttp() *Server_HTTP {
@@ -286,7 +492,7 @@ type Data struct {
 
 func (x *Data) Reset() {
 	*x = Data{}
-	mi := &file_config_proto_msgTypes[4]
+	mi := &file_config_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -298,7 +504,7 @@ func (x *Data) String() string {
 func (*Data) ProtoMessage() {}
 
 func (x *Data) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[4]
+	mi := &file_config_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -311,7 +517,7 @@ func (x *Data) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Data.ProtoReflect.Descriptor instead.
 func (*Data) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{4}
+	return file_config_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Data) GetDatabase() *Data_Database {
@@ -345,14 +551,17 @@ type Auth struct {
 	// 集群内地址（http://keycloak.default.svc:8080/realms/eagle）。
 	// 两者不分开就只能二选一——要么让内网流量绕到公网再回来，
 	// 要么放弃 iss 校验。
-	JwksUrl       string `protobuf:"bytes,6,opt,name=jwks_url,json=jwksUrl,proto3" json:"jwks_url,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	JwksUrl string `protobuf:"bytes,6,opt,name=jwks_url,json=jwksUrl,proto3" json:"jwks_url,omitempty"`
+	// 允许调用 INTERNAL RPC 的 Keycloak azp。必须同时是 client_credentials
+	// 服务令牌，普通用户 token 即使 azp 同名也不会被放行。
+	InternalClientIds []string `protobuf:"bytes,7,rep,name=internal_client_ids,json=internalClientIds,proto3" json:"internal_client_ids,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *Auth) Reset() {
 	*x = Auth{}
-	mi := &file_config_proto_msgTypes[5]
+	mi := &file_config_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -364,7 +573,7 @@ func (x *Auth) String() string {
 func (*Auth) ProtoMessage() {}
 
 func (x *Auth) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[5]
+	mi := &file_config_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -377,7 +586,7 @@ func (x *Auth) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Auth.ProtoReflect.Descriptor instead.
 func (*Auth) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{5}
+	return file_config_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Auth) GetIssuer() string {
@@ -415,6 +624,13 @@ func (x *Auth) GetJwksUrl() string {
 	return ""
 }
 
+func (x *Auth) GetInternalClientIds() []string {
+	if x != nil {
+		return x.InternalClientIds
+	}
+	return nil
+}
+
 type Observability struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// OTLP gRPC 端点，如 127.0.0.1:4317。留空则不上报链路
@@ -433,7 +649,7 @@ type Observability struct {
 
 func (x *Observability) Reset() {
 	*x = Observability{}
-	mi := &file_config_proto_msgTypes[6]
+	mi := &file_config_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -445,7 +661,7 @@ func (x *Observability) String() string {
 func (*Observability) ProtoMessage() {}
 
 func (x *Observability) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[6]
+	mi := &file_config_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -458,7 +674,7 @@ func (x *Observability) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Observability.ProtoReflect.Descriptor instead.
 func (*Observability) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{6}
+	return file_config_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *Observability) GetOtlpEndpoint() string {
@@ -496,6 +712,250 @@ func (x *Observability) GetOtlpInsecure() bool {
 	return false
 }
 
+type File_S3 struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Endpoint      string                 `protobuf:"bytes,1,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
+	Region        string                 `protobuf:"bytes,2,opt,name=region,proto3" json:"region,omitempty"`
+	Bucket        string                 `protobuf:"bytes,3,opt,name=bucket,proto3" json:"bucket,omitempty"`
+	AccessKey     string                 `protobuf:"bytes,4,opt,name=access_key,json=accessKey,proto3" json:"access_key,omitempty"`
+	SecretKey     string                 `protobuf:"bytes,5,opt,name=secret_key,json=secretKey,proto3" json:"secret_key,omitempty"`
+	UseSsl        bool                   `protobuf:"varint,6,opt,name=use_ssl,json=useSsl,proto3" json:"use_ssl,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *File_S3) Reset() {
+	*x = File_S3{}
+	mi := &file_config_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *File_S3) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*File_S3) ProtoMessage() {}
+
+func (x *File_S3) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use File_S3.ProtoReflect.Descriptor instead.
+func (*File_S3) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{2, 0}
+}
+
+func (x *File_S3) GetEndpoint() string {
+	if x != nil {
+		return x.Endpoint
+	}
+	return ""
+}
+
+func (x *File_S3) GetRegion() string {
+	if x != nil {
+		return x.Region
+	}
+	return ""
+}
+
+func (x *File_S3) GetBucket() string {
+	if x != nil {
+		return x.Bucket
+	}
+	return ""
+}
+
+func (x *File_S3) GetAccessKey() string {
+	if x != nil {
+		return x.AccessKey
+	}
+	return ""
+}
+
+func (x *File_S3) GetSecretKey() string {
+	if x != nil {
+		return x.SecretKey
+	}
+	return ""
+}
+
+func (x *File_S3) GetUseSsl() bool {
+	if x != nil {
+		return x.UseSsl
+	}
+	return false
+}
+
+type Cache_Redis struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Enabled       bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	Address       string                 `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
+	Username      string                 `protobuf:"bytes,3,opt,name=username,proto3" json:"username,omitempty"`
+	Password      string                 `protobuf:"bytes,4,opt,name=password,proto3" json:"password,omitempty"`
+	Database      int32                  `protobuf:"varint,5,opt,name=database,proto3" json:"database,omitempty"`
+	Ttl           *durationpb.Duration   `protobuf:"bytes,6,opt,name=ttl,proto3" json:"ttl,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Cache_Redis) Reset() {
+	*x = Cache_Redis{}
+	mi := &file_config_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Cache_Redis) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Cache_Redis) ProtoMessage() {}
+
+func (x *Cache_Redis) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Cache_Redis.ProtoReflect.Descriptor instead.
+func (*Cache_Redis) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{3, 0}
+}
+
+func (x *Cache_Redis) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *Cache_Redis) GetAddress() string {
+	if x != nil {
+		return x.Address
+	}
+	return ""
+}
+
+func (x *Cache_Redis) GetUsername() string {
+	if x != nil {
+		return x.Username
+	}
+	return ""
+}
+
+func (x *Cache_Redis) GetPassword() string {
+	if x != nil {
+		return x.Password
+	}
+	return ""
+}
+
+func (x *Cache_Redis) GetDatabase() int32 {
+	if x != nil {
+		return x.Database
+	}
+	return 0
+}
+
+func (x *Cache_Redis) GetTtl() *durationpb.Duration {
+	if x != nil {
+		return x.Ttl
+	}
+	return nil
+}
+
+type Messaging_RabbitMQ struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Enabled           bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	Url               string                 `protobuf:"bytes,2,opt,name=url,proto3" json:"url,omitempty"`
+	Exchange          string                 `protobuf:"bytes,3,opt,name=exchange,proto3" json:"exchange,omitempty"`
+	OrderCreatedQueue string                 `protobuf:"bytes,4,opt,name=order_created_queue,json=orderCreatedQueue,proto3" json:"order_created_queue,omitempty"`
+	ReconnectBackoff  *durationpb.Duration   `protobuf:"bytes,5,opt,name=reconnect_backoff,json=reconnectBackoff,proto3" json:"reconnect_backoff,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *Messaging_RabbitMQ) Reset() {
+	*x = Messaging_RabbitMQ{}
+	mi := &file_config_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Messaging_RabbitMQ) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Messaging_RabbitMQ) ProtoMessage() {}
+
+func (x *Messaging_RabbitMQ) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Messaging_RabbitMQ.ProtoReflect.Descriptor instead.
+func (*Messaging_RabbitMQ) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{4, 0}
+}
+
+func (x *Messaging_RabbitMQ) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *Messaging_RabbitMQ) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
+func (x *Messaging_RabbitMQ) GetExchange() string {
+	if x != nil {
+		return x.Exchange
+	}
+	return ""
+}
+
+func (x *Messaging_RabbitMQ) GetOrderCreatedQueue() string {
+	if x != nil {
+		return x.OrderCreatedQueue
+	}
+	return ""
+}
+
+func (x *Messaging_RabbitMQ) GetReconnectBackoff() *durationpb.Duration {
+	if x != nil {
+		return x.ReconnectBackoff
+	}
+	return nil
+}
+
 type Server_HTTP struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 网络类型，如 tcp。留空即可——不设置时用 Kratos 的默认值，
@@ -511,7 +971,7 @@ type Server_HTTP struct {
 
 func (x *Server_HTTP) Reset() {
 	*x = Server_HTTP{}
-	mi := &file_config_proto_msgTypes[7]
+	mi := &file_config_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -523,7 +983,7 @@ func (x *Server_HTTP) String() string {
 func (*Server_HTTP) ProtoMessage() {}
 
 func (x *Server_HTTP) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[7]
+	mi := &file_config_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -536,7 +996,7 @@ func (x *Server_HTTP) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Server_HTTP.ProtoReflect.Descriptor instead.
 func (*Server_HTTP) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{3, 0}
+	return file_config_proto_rawDescGZIP(), []int{6, 0}
 }
 
 func (x *Server_HTTP) GetNetwork() string {
@@ -574,7 +1034,7 @@ type Server_GRPC struct {
 
 func (x *Server_GRPC) Reset() {
 	*x = Server_GRPC{}
-	mi := &file_config_proto_msgTypes[8]
+	mi := &file_config_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -586,7 +1046,7 @@ func (x *Server_GRPC) String() string {
 func (*Server_GRPC) ProtoMessage() {}
 
 func (x *Server_GRPC) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[8]
+	mi := &file_config_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -599,7 +1059,7 @@ func (x *Server_GRPC) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Server_GRPC.ProtoReflect.Descriptor instead.
 func (*Server_GRPC) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{3, 1}
+	return file_config_proto_rawDescGZIP(), []int{6, 1}
 }
 
 func (x *Server_GRPC) GetNetwork() string {
@@ -642,7 +1102,7 @@ type Data_Database struct {
 
 func (x *Data_Database) Reset() {
 	*x = Data_Database{}
-	mi := &file_config_proto_msgTypes[9]
+	mi := &file_config_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -654,7 +1114,7 @@ func (x *Data_Database) String() string {
 func (*Data_Database) ProtoMessage() {}
 
 func (x *Data_Database) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[9]
+	mi := &file_config_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -667,7 +1127,7 @@ func (x *Data_Database) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Data_Database.ProtoReflect.Descriptor instead.
 func (*Data_Database) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{4, 0}
+	return file_config_proto_rawDescGZIP(), []int{7, 0}
 }
 
 func (x *Data_Database) GetDsn() string {
@@ -709,21 +1169,58 @@ var File_config_proto protoreflect.FileDescriptor
 
 const file_config_proto_rawDesc = "" +
 	"\n" +
-	"\fconfig.proto\x12\x15eagle.platform.config\x1a\x1egoogle/protobuf/duration.proto\"\xde\x02\n" +
+	"\fconfig.proto\x12\x15eagle.platform.config\x1a\x1egoogle/protobuf/duration.proto\"\x99\x04\n" +
 	"\tBootstrap\x125\n" +
 	"\x06server\x18\x01 \x01(\v2\x1d.eagle.platform.config.ServerR\x06server\x12/\n" +
 	"\x04data\x18\x02 \x01(\v2\x1b.eagle.platform.config.DataR\x04data\x12/\n" +
 	"\x04auth\x18\x03 \x01(\v2\x1b.eagle.platform.config.AuthR\x04auth\x12J\n" +
 	"\robservability\x18\x04 \x01(\v2$.eagle.platform.config.ObservabilityR\robservability\x12/\n" +
 	"\x04file\x18\x05 \x01(\v2\x1b.eagle.platform.config.FileR\x04file\x12;\n" +
-	"\bupstream\x18\x06 \x01(\v2\x1f.eagle.platform.config.UpstreamR\bupstream\"\xa1\x01\n" +
+	"\bupstream\x18\x06 \x01(\v2\x1f.eagle.platform.config.UpstreamR\bupstream\x122\n" +
+	"\x05cache\x18\a \x01(\v2\x1c.eagle.platform.config.CacheR\x05cache\x12>\n" +
+	"\tmessaging\x18\b \x01(\v2 .eagle.platform.config.MessagingR\tmessaging\x12E\n" +
+	"\fservice_auth\x18\t \x01(\v2\".eagle.platform.config.ServiceAuthR\vserviceAuth\"\x84\x02\n" +
 	"\bUpstream\x125\n" +
 	"\x16authorization_endpoint\x18\x01 \x01(\tR\x15authorizationEndpoint\x12)\n" +
 	"\x10product_endpoint\x18\x02 \x01(\tR\x0fproductEndpoint\x123\n" +
-	"\atimeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\atimeout\"I\n" +
-	"\x04File\x12\x1b\n" +
+	"\atimeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\atimeout\x12!\n" +
+	"\fmax_attempts\x18\x04 \x01(\x05R\vmaxAttempts\x12>\n" +
+	"\rretry_backoff\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\fretryBackoff\"\xbf\x02\n" +
+	"\x04File\x12\x1a\n" +
+	"\bprovider\x18\x03 \x01(\tR\bprovider\x12\x1b\n" +
 	"\tlocal_dir\x18\x01 \x01(\tR\blocalDir\x12$\n" +
-	"\x0emax_size_bytes\x18\x02 \x01(\x03R\fmaxSizeBytes\"\xce\x02\n" +
+	"\x0emax_size_bytes\x18\x02 \x01(\x03R\fmaxSizeBytes\x12.\n" +
+	"\x02s3\x18\x04 \x01(\v2\x1e.eagle.platform.config.File.S3R\x02s3\x1a\xa7\x01\n" +
+	"\x02S3\x12\x1a\n" +
+	"\bendpoint\x18\x01 \x01(\tR\bendpoint\x12\x16\n" +
+	"\x06region\x18\x02 \x01(\tR\x06region\x12\x16\n" +
+	"\x06bucket\x18\x03 \x01(\tR\x06bucket\x12\x1d\n" +
+	"\n" +
+	"access_key\x18\x04 \x01(\tR\taccessKey\x12\x1d\n" +
+	"\n" +
+	"secret_key\x18\x05 \x01(\tR\tsecretKey\x12\x17\n" +
+	"\ause_ssl\x18\x06 \x01(\bR\x06useSsl\"\x80\x02\n" +
+	"\x05Cache\x128\n" +
+	"\x05redis\x18\x01 \x01(\v2\".eagle.platform.config.Cache.RedisR\x05redis\x1a\xbc\x01\n" +
+	"\x05Redis\x12\x18\n" +
+	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x18\n" +
+	"\aaddress\x18\x02 \x01(\tR\aaddress\x12\x1a\n" +
+	"\busername\x18\x03 \x01(\tR\busername\x12\x1a\n" +
+	"\bpassword\x18\x04 \x01(\tR\bpassword\x12\x1a\n" +
+	"\bdatabase\x18\x05 \x01(\x05R\bdatabase\x12+\n" +
+	"\x03ttl\x18\x06 \x01(\v2\x19.google.protobuf.DurationR\x03ttl\"\x9f\x02\n" +
+	"\tMessaging\x12E\n" +
+	"\brabbitmq\x18\x01 \x01(\v2).eagle.platform.config.Messaging.RabbitMQR\brabbitmq\x1a\xca\x01\n" +
+	"\bRabbitMQ\x12\x18\n" +
+	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x10\n" +
+	"\x03url\x18\x02 \x01(\tR\x03url\x12\x1a\n" +
+	"\bexchange\x18\x03 \x01(\tR\bexchange\x12.\n" +
+	"\x13order_created_queue\x18\x04 \x01(\tR\x11orderCreatedQueue\x12F\n" +
+	"\x11reconnect_backoff\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\x10reconnectBackoff\"l\n" +
+	"\vServiceAuth\x12\x1b\n" +
+	"\ttoken_url\x18\x01 \x01(\tR\btokenUrl\x12\x1b\n" +
+	"\tclient_id\x18\x02 \x01(\tR\bclientId\x12#\n" +
+	"\rclient_secret\x18\x03 \x01(\tR\fclientSecret\"\xce\x02\n" +
 	"\x06Server\x126\n" +
 	"\x04http\x18\x01 \x01(\v2\".eagle.platform.config.Server.HTTPR\x04http\x126\n" +
 	"\x04grpc\x18\x02 \x01(\v2\".eagle.platform.config.Server.GRPCR\x04grpc\x1ai\n" +
@@ -742,13 +1239,14 @@ const file_config_proto_rawDesc = "" +
 	"\tmax_conns\x18\x02 \x01(\x05R\bmaxConns\x12$\n" +
 	"\x0emax_idle_conns\x18\x03 \x01(\x05R\fmaxIdleConns\x12E\n" +
 	"\x11max_conn_lifetime\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\x0fmaxConnLifetime\x12F\n" +
-	"\x12max_conn_idle_time\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\x0fmaxConnIdleTimeJ\x04\b\x02\x10\x03\"\xa2\x01\n" +
+	"\x12max_conn_idle_time\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\x0fmaxConnIdleTimeJ\x04\b\x02\x10\x03\"\xd2\x01\n" +
 	"\x04Auth\x12\x16\n" +
 	"\x06issuer\x18\x01 \x01(\tR\x06issuer\x12\x1b\n" +
 	"\tclient_id\x18\x02 \x01(\tR\bclientId\x12\x1a\n" +
 	"\baudience\x18\x03 \x01(\tR\baudience\x12(\n" +
 	"\x10super_admin_role\x18\x05 \x01(\tR\x0esuperAdminRole\x12\x19\n" +
-	"\bjwks_url\x18\x06 \x01(\tR\ajwksUrlJ\x04\b\x04\x10\x05\"\xc7\x01\n" +
+	"\bjwks_url\x18\x06 \x01(\tR\ajwksUrl\x12.\n" +
+	"\x13internal_client_ids\x18\a \x03(\tR\x11internalClientIdsJ\x04\b\x04\x10\x05\"\xc7\x01\n" +
 	"\rObservability\x12#\n" +
 	"\rotlp_endpoint\x18\x01 \x01(\tR\fotlpEndpoint\x12,\n" +
 	"\x12trace_sample_ratio\x18\x02 \x01(\x01R\x10traceSampleRatio\x12\x1b\n" +
@@ -768,40 +1266,55 @@ func file_config_proto_rawDescGZIP() []byte {
 	return file_config_proto_rawDescData
 }
 
-var file_config_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_config_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_config_proto_goTypes = []any{
 	(*Bootstrap)(nil),           // 0: eagle.platform.config.Bootstrap
 	(*Upstream)(nil),            // 1: eagle.platform.config.Upstream
 	(*File)(nil),                // 2: eagle.platform.config.File
-	(*Server)(nil),              // 3: eagle.platform.config.Server
-	(*Data)(nil),                // 4: eagle.platform.config.Data
-	(*Auth)(nil),                // 5: eagle.platform.config.Auth
-	(*Observability)(nil),       // 6: eagle.platform.config.Observability
-	(*Server_HTTP)(nil),         // 7: eagle.platform.config.Server.HTTP
-	(*Server_GRPC)(nil),         // 8: eagle.platform.config.Server.GRPC
-	(*Data_Database)(nil),       // 9: eagle.platform.config.Data.Database
-	(*durationpb.Duration)(nil), // 10: google.protobuf.Duration
+	(*Cache)(nil),               // 3: eagle.platform.config.Cache
+	(*Messaging)(nil),           // 4: eagle.platform.config.Messaging
+	(*ServiceAuth)(nil),         // 5: eagle.platform.config.ServiceAuth
+	(*Server)(nil),              // 6: eagle.platform.config.Server
+	(*Data)(nil),                // 7: eagle.platform.config.Data
+	(*Auth)(nil),                // 8: eagle.platform.config.Auth
+	(*Observability)(nil),       // 9: eagle.platform.config.Observability
+	(*File_S3)(nil),             // 10: eagle.platform.config.File.S3
+	(*Cache_Redis)(nil),         // 11: eagle.platform.config.Cache.Redis
+	(*Messaging_RabbitMQ)(nil),  // 12: eagle.platform.config.Messaging.RabbitMQ
+	(*Server_HTTP)(nil),         // 13: eagle.platform.config.Server.HTTP
+	(*Server_GRPC)(nil),         // 14: eagle.platform.config.Server.GRPC
+	(*Data_Database)(nil),       // 15: eagle.platform.config.Data.Database
+	(*durationpb.Duration)(nil), // 16: google.protobuf.Duration
 }
 var file_config_proto_depIdxs = []int32{
-	3,  // 0: eagle.platform.config.Bootstrap.server:type_name -> eagle.platform.config.Server
-	4,  // 1: eagle.platform.config.Bootstrap.data:type_name -> eagle.platform.config.Data
-	5,  // 2: eagle.platform.config.Bootstrap.auth:type_name -> eagle.platform.config.Auth
-	6,  // 3: eagle.platform.config.Bootstrap.observability:type_name -> eagle.platform.config.Observability
+	6,  // 0: eagle.platform.config.Bootstrap.server:type_name -> eagle.platform.config.Server
+	7,  // 1: eagle.platform.config.Bootstrap.data:type_name -> eagle.platform.config.Data
+	8,  // 2: eagle.platform.config.Bootstrap.auth:type_name -> eagle.platform.config.Auth
+	9,  // 3: eagle.platform.config.Bootstrap.observability:type_name -> eagle.platform.config.Observability
 	2,  // 4: eagle.platform.config.Bootstrap.file:type_name -> eagle.platform.config.File
 	1,  // 5: eagle.platform.config.Bootstrap.upstream:type_name -> eagle.platform.config.Upstream
-	10, // 6: eagle.platform.config.Upstream.timeout:type_name -> google.protobuf.Duration
-	7,  // 7: eagle.platform.config.Server.http:type_name -> eagle.platform.config.Server.HTTP
-	8,  // 8: eagle.platform.config.Server.grpc:type_name -> eagle.platform.config.Server.GRPC
-	9,  // 9: eagle.platform.config.Data.database:type_name -> eagle.platform.config.Data.Database
-	10, // 10: eagle.platform.config.Server.HTTP.timeout:type_name -> google.protobuf.Duration
-	10, // 11: eagle.platform.config.Server.GRPC.timeout:type_name -> google.protobuf.Duration
-	10, // 12: eagle.platform.config.Data.Database.max_conn_lifetime:type_name -> google.protobuf.Duration
-	10, // 13: eagle.platform.config.Data.Database.max_conn_idle_time:type_name -> google.protobuf.Duration
-	14, // [14:14] is the sub-list for method output_type
-	14, // [14:14] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	3,  // 6: eagle.platform.config.Bootstrap.cache:type_name -> eagle.platform.config.Cache
+	4,  // 7: eagle.platform.config.Bootstrap.messaging:type_name -> eagle.platform.config.Messaging
+	5,  // 8: eagle.platform.config.Bootstrap.service_auth:type_name -> eagle.platform.config.ServiceAuth
+	16, // 9: eagle.platform.config.Upstream.timeout:type_name -> google.protobuf.Duration
+	16, // 10: eagle.platform.config.Upstream.retry_backoff:type_name -> google.protobuf.Duration
+	10, // 11: eagle.platform.config.File.s3:type_name -> eagle.platform.config.File.S3
+	11, // 12: eagle.platform.config.Cache.redis:type_name -> eagle.platform.config.Cache.Redis
+	12, // 13: eagle.platform.config.Messaging.rabbitmq:type_name -> eagle.platform.config.Messaging.RabbitMQ
+	13, // 14: eagle.platform.config.Server.http:type_name -> eagle.platform.config.Server.HTTP
+	14, // 15: eagle.platform.config.Server.grpc:type_name -> eagle.platform.config.Server.GRPC
+	15, // 16: eagle.platform.config.Data.database:type_name -> eagle.platform.config.Data.Database
+	16, // 17: eagle.platform.config.Cache.Redis.ttl:type_name -> google.protobuf.Duration
+	16, // 18: eagle.platform.config.Messaging.RabbitMQ.reconnect_backoff:type_name -> google.protobuf.Duration
+	16, // 19: eagle.platform.config.Server.HTTP.timeout:type_name -> google.protobuf.Duration
+	16, // 20: eagle.platform.config.Server.GRPC.timeout:type_name -> google.protobuf.Duration
+	16, // 21: eagle.platform.config.Data.Database.max_conn_lifetime:type_name -> google.protobuf.Duration
+	16, // 22: eagle.platform.config.Data.Database.max_conn_idle_time:type_name -> google.protobuf.Duration
+	23, // [23:23] is the sub-list for method output_type
+	23, // [23:23] is the sub-list for method input_type
+	23, // [23:23] is the sub-list for extension type_name
+	23, // [23:23] is the sub-list for extension extendee
+	0,  // [0:23] is the sub-list for field type_name
 }
 
 func init() { file_config_proto_init() }
@@ -815,7 +1328,7 @@ func file_config_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_config_proto_rawDesc), len(file_config_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -6,9 +6,9 @@
 
 | 进程 | 拥有的模块 | 拥有的数据 | 依赖 |
 |---|---|---|---|
-| admin | access、dictionary、file、notification | 权限、字典、文件元数据、站内通知 | Keycloak、BlobStore |
-| product | product | 商品 | admin 授权判定 |
-| order | order | 订单与商品快照 | product 查询 |
+| admin | access、dictionary、file、notification | 权限、字典、文件元数据、站内通知、事件 Inbox | Keycloak、S3、RabbitMQ |
+| product | product | 商品 | admin 授权判定、Redis 缓存 |
+| order | order | 订单、商品快照、事件 Outbox | product 查询、RabbitMQ |
 
 Keycloak 是独立认证中心，负责用户、口令、角色和 token。本仓库不建用户表。
 
@@ -53,7 +53,13 @@ DDD 是依赖边界，不是代码数量指标。商品是简单 CRUD；订单�
 
 订单不会读取商品表，也不会把客户端报价当真。创建订单时通过 product gRPC 批量读取商品，将 SKU、名称和单价保存为订单快照，再只在订单库内提交一次事务。商品以后改名或改价不会篡改历史订单。
 
-当前示例没有库存扣减、支付和取消流程，因此不引入分布式事务、Saga、outbox 或 MQ。等出现真实的异步一致性需求再增加。
+订单创建事务会同时写入 `event_outbox`，后台 relay 经 RabbitMQ publisher confirm
+发布 `OrderCreatedV1`。admin 的通知消费者在同一事务内先写 `event_inbox`，再写
+通知，因此重复投递不会产生重复通知。RabbitMQ 不参与权限策略同步；权限仍使用
+数据库 version + 周期对账。
+
+这条链路只演示可靠事件发布与幂等消费，不意味着库存、支付已经实现。将来出现
+跨服务业务写入时，在 Outbox/Inbox 基础上增加 Saga，而不是引入跨库事务或 2PC。
 
 ## 认证与授权
 
@@ -67,7 +73,9 @@ DDD 是依赖边界，不是代码数量指标。商品是简单 CRUD；订单�
 - 权限要求声明在 proto 的 access / perm 上，handler 不写鉴权分支。
 - admin 是策略写入方和判定点；其他服务不连接权限库。
 - 远程判定失败时 fail closed，只影响 PERMISSION_REQUIRED 接口；公开或只要求登录的接口不依赖 admin。
-- admin 的判定 gRPC 只读，不提供策略写接口；生产只在集群网络内暴露 gRPC。
+- admin 的判定 gRPC 只读，不提供策略写接口；`CheckPermission` 与
+  `BatchGetProducts` 是 `INTERNAL` RPC，调用方必须携带 Keycloak
+  `client_credentials` 服务令牌。
 
 当判定吞吐成为瓶颈时，可以增加带版本号的本地策略缓存，但不应提前引入 MQ 或把权限表开放给所有服务。
 
@@ -78,7 +86,10 @@ DDD 是依赖边界，不是代码数量指标。商品是简单 CRUD；订单�
 - product → admin：权限判定；
 - order → product：批量获取下单商品。
 
-客户端在调用方业务模块的 infrastructure，application/domain 不依赖 protobuf。开发环境使用静态地址，Compose/Kubernetes 通过服务 DNS 解析，不嵌入注册中心 SDK。
+客户端在调用方业务模块的 infrastructure，application/domain 不依赖 protobuf。
+调用链统一具备短期服务令牌、trace/metadata、客户端指标、熔断和有界重试；只有
+两个幂等读 RPC 可以重试。开发环境使用静态地址，Compose/Kubernetes 通过服务
+DNS 解析，不嵌入注册中心 SDK。
 
 ## 部署拓扑
 
@@ -90,8 +101,8 @@ DDD 是依赖边界，不是代码数量指标。商品是简单 CRUD；订单�
                 └─ order
                      │
             PostgreSQL（每服务独立 database）
-                     │
-                  Keycloak
+              │ Redis / RabbitMQ / MinIO
+              └──────── Keycloak
 
 docker compose -f deploy/docker-compose.yml up -d --build 会先执行每个服务的迁移任务，再启动服务和网关。OTel、Prometheus、Tempo、Grafana 通过 --profile obs 按需启动。
 
@@ -104,7 +115,10 @@ docker compose -f deploy/docker-compose.yml up -d --build 会先执行每个服�
 - file 多副本时把本地 BlobStore 替换为 S3/OSS/MinIO；
 - NetworkPolicy 限制 order→product、资源服务→admin 和 Prometheus→metrics。
 
-当前阶段不强制上 Kubernetes、Helm、服务网格或注册中心。三个镜像的可部署边界已经建立，基础设施应随真实规模增加。具体打包命令和发布顺序见 [部署说明](deployment.md)。
+生产清单位于 `deploy/kubernetes/base`，包含 Deployment、Service、迁移 Job、
+Gateway API、HPA、PDB 与 NetworkPolicy。Redis、RabbitMQ、PostgreSQL 和 S3 在
+生产环境通过 Secret 接入托管实例，不在应用清单里伪装成单副本生产集群。具体
+发布顺序见 [部署说明](deployment.md)。
 
 ## 共享代码边界
 

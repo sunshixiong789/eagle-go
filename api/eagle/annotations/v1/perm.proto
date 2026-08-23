@@ -13,6 +13,8 @@ enum AccessLevel {
   ACCESS_LEVEL_PUBLIC = 1;
   ACCESS_LEVEL_AUTHENTICATED = 2;
   ACCESS_LEVEL_PERMISSION_REQUIRED = 3;
+  // 只允许经过 Keycloak client_credentials 认证且 client id 在服务白名单中的调用方。
+  ACCESS_LEVEL_INTERNAL = 4;
 }
 
 // 方法级权限声明。
