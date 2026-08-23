@@ -6,7 +6,7 @@
 | `pkg/authz/` | Casbin 与 `PermissionCode.Covers` 对齐、中间件 | 内存 Casbin |
 | `app/<service>/internal/<module>/infrastructure/` | 真实 SQL、事务、独立服务迁移、存储/客户端适配 | embedded-postgres / 临时目录 |
 | `pkg/platform/server/` | 错误映射和服务器装配 | 无 |
-| `tests/architecture/` | 层依赖、禁依赖 | `go list` |
+| `tests/architecture/` | 层依赖、禁依赖、Wire 只在组合根 | `go list` |
 | `app/admin/tests/e2e/` | 401 / 403 / 200 | 进程内 HTTP + 自签 JWT |
 
 - 单测/集成测试不启 Docker。

@@ -24,8 +24,8 @@
 ## 不可破
 
 - 依赖：`service → application → domain ← infrastructure`。`domain`/`application` 不碰 Kratos、proto、Ent、Casbin。只有模块 `infrastructure` 与服务内 `internal/platform/database` 碰 Ent。`pkg/` 不 import `app/`。
-- 每个 `app/<service>/cmd/<service>` 只能组合自己拥有的模块。服务独占 `app/<service>/migrations` 和 database/Ent；禁止跨服务 import 实现、查表、外键或事务，跨边界只走 `api` 契约或事件。
+- 每个 `app/<service>/cmd/<service>` 只能组合自己拥有的模块。组合根用 Wire；`google/wire` 不要进 domain/application/infrastructure。服务独占 `app/<service>/migrations` 和 database/Ent；禁止跨服务 import 实现、查表、外键或事务，跨边界只走 `api` 契约或事件。
 - 有不变量才上聚合根。字典保持贫血。application 禁止复制 infrastructure 锁内检查（父节点/成环/子节点）。
 - 每个 RPC 必须有 `access`。handler 里不写鉴权 if。不建用户表。权限码先入 `permission_definition`，菜单不能发明新码。
-- 禁止：收成 handler+repo；导出 `Permission` 字段去 getter；换 Casbin / 改用 `keyMatch2`；加 `lo`/`copier`/`mapstructure`；为策略同步加 outbox/MQ；手改 `*.pb.go` / `ent/` 生成文件；预埋没有调用方的接口、表、API。
+- 禁止：收成 handler+repo；导出 `Permission` 字段去 getter；换 Casbin / 改用 `keyMatch2`；加 `lo`/`copier`/`mapstructure`；为策略同步加 outbox/MQ；手改 `*.pb.go` / `ent/` / `wire_gen.go` 生成文件；预埋没有调用方的接口、表、API。
 - 标准库优先（`slices`/`maps`/`cmp`/`slog`）。日志不要抄 Kratos v2 的 `log.Helper`。

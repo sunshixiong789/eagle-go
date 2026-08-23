@@ -28,6 +28,7 @@ func (OutboxEvent) Fields() []ent.Field {
 		field.Time("available_at").Default(time.Now),
 		field.Time("locked_until").Optional().Nillable(),
 		field.Time("published_at").Optional().Nillable(),
+		field.Time("failed_at").Optional().Nillable(),
 		field.Time("created_at").Default(time.Now).Immutable(),
 	}
 }
@@ -35,6 +36,7 @@ func (OutboxEvent) Fields() []ent.Field {
 func (OutboxEvent) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("published_at", "available_at", "created_at").StorageKey("idx_event_outbox_pending"),
+		index.Fields("failed_at", "created_at").StorageKey("idx_event_outbox_failed"),
 		index.Fields("aggregate_id", "event_type").Unique(),
 	}
 }

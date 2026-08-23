@@ -13,15 +13,15 @@ import (
 	"github.com/eagle-go/eagle/pkg/authz"
 )
 
-type policyStore struct {
+type PolicyStore struct {
 	client *ent.Client
 }
 
-func NewPolicyStore(db *platformdb.Database) *policyStore {
-	return &policyStore{client: db.Client()}
+func NewPolicyStore(db *platformdb.Database) *PolicyStore {
+	return &PolicyStore{client: db.Client()}
 }
 
-func (s *policyStore) LoadPolicyRows(ctx context.Context) ([]authz.StoredPolicy, error) {
+func (s *PolicyStore) LoadPolicyRows(ctx context.Context) ([]authz.StoredPolicy, error) {
 	rows, err := s.client.CasbinRule.Query().All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("read policies: %w", err)
@@ -36,7 +36,7 @@ func (s *policyStore) LoadPolicyRows(ctx context.Context) ([]authz.StoredPolicy,
 	return out, nil
 }
 
-func (s *policyStore) PolicyVersion(ctx context.Context) (int64, error) {
+func (s *PolicyStore) PolicyVersion(ctx context.Context) (int64, error) {
 	state, err := s.client.PolicyState.Get(ctx, 1)
 	if err != nil {
 		return 0, fmt.Errorf("read policy version: %w", err)
@@ -44,7 +44,7 @@ func (s *policyStore) PolicyVersion(ctx context.Context) (int64, error) {
 	return state.Version, nil
 }
 
-func (s *policyStore) PermissionCatalogCodes(ctx context.Context) ([]string, error) {
+func (s *PolicyStore) PermissionCatalogCodes(ctx context.Context) ([]string, error) {
 	rows, err := s.client.PermissionDefinition.Query().
 		Where(permissiondefinition.StatusEQ(1)).
 		Select(permissiondefinition.FieldCode).
@@ -66,7 +66,7 @@ type policyMutationMeta struct {
 	traceID       string
 }
 
-func (s *policyStore) ReplaceRolePermissions(
+func (s *PolicyStore) ReplaceRolePermissions(
 	ctx context.Context,
 	role string,
 	perms []string,
@@ -123,7 +123,7 @@ func (s *policyStore) ReplaceRolePermissions(
 	return version, nil
 }
 
-func (s *policyStore) AddRoleInheritance(
+func (s *PolicyStore) AddRoleInheritance(
 	ctx context.Context,
 	child, parent string,
 	expected *int64,
@@ -182,7 +182,7 @@ func (s *policyStore) AddRoleInheritance(
 	return version, nil
 }
 
-func (s *policyStore) DeleteRoleInheritance(
+func (s *PolicyStore) DeleteRoleInheritance(
 	ctx context.Context,
 	child, parent string,
 	expected *int64,
@@ -224,7 +224,7 @@ func (s *policyStore) DeleteRoleInheritance(
 
 func stablePolicySnapshot[T any](
 	ctx context.Context,
-	store *policyStore,
+	store *PolicyStore,
 	load func(context.Context) (T, error),
 ) (T, int64, error) {
 	var zero T
@@ -248,7 +248,7 @@ func stablePolicySnapshot[T any](
 	return zero, 0, domain.ErrConcurrentModification
 }
 
-func (s *policyStore) RolePermissionsSnapshot(ctx context.Context, role string) ([]string, int64, error) {
+func (s *PolicyStore) RolePermissionsSnapshot(ctx context.Context, role string) ([]string, int64, error) {
 	return stablePolicySnapshot(ctx, s, func(ctx context.Context) ([]string, error) {
 		rows, err := s.client.CasbinRule.Query().
 			Where(casbinrule.PtypeEQ("p"), casbinrule.V0EQ(role)).
@@ -265,7 +265,7 @@ func (s *policyStore) RolePermissionsSnapshot(ctx context.Context, role string) 
 	})
 }
 
-func (s *policyStore) RulesSnapshot(ctx context.Context, ptype string) ([]authz.StoredPolicy, int64, error) {
+func (s *PolicyStore) RulesSnapshot(ctx context.Context, ptype string) ([]authz.StoredPolicy, int64, error) {
 	return stablePolicySnapshot(ctx, s, func(ctx context.Context) ([]authz.StoredPolicy, error) {
 		rows, err := s.client.CasbinRule.Query().Where(casbinrule.PtypeEQ(ptype)).All(ctx)
 		if err != nil {

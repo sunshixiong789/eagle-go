@@ -11,8 +11,10 @@ data:
   EAGLE_OBSERVABILITY_TRACE_SAMPLE_RATIO: "0.05"
   EAGLE_AUTH_ISSUER: https://sso.example.com/realms/eagle
   EAGLE_AUTH_JWKS_URL: http://keycloak.identity.svc:8080/realms/eagle/protocol/openid-connect/certs
-  EAGLE_UPSTREAM_AUTHORIZATION_ENDPOINT: admin:9000
-  EAGLE_UPSTREAM_PRODUCT_ENDPOINT: product:9000
+  # Headless Service 返回全部就绪 Pod；dns resolver + Kratos wrr 避免
+  # gRPC 长连接长期固定在单个后端实例。
+  EAGLE_UPSTREAM_AUTHORIZATION_ENDPOINT: dns:///admin-grpc.eagle.svc.cluster.local:9000
+  EAGLE_UPSTREAM_PRODUCT_ENDPOINT: dns:///product-grpc.eagle.svc.cluster.local:9000
   EAGLE_SERVICE_AUTH_TOKEN_URL: http://keycloak.identity.svc:8080/realms/eagle/protocol/openid-connect/token
   EAGLE_CACHE_REDIS_ADDRESS: redis.example.internal:6379
   EAGLE_FILE_PROVIDER: s3

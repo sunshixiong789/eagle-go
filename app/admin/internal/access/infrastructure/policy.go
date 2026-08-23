@@ -22,11 +22,11 @@ import (
 // 领域规则与用例编排都不必改动。
 type policyRepo struct {
 	enforcer *authz.Enforcer
-	store    *policyStore
+	store    *PolicyStore
 }
 
 // NewPolicyRepo 构造策略仓储。
-func NewPolicyRepo(enforcer *authz.Enforcer, store *policyStore) domain.PolicyRepo {
+func NewPolicyRepo(enforcer *authz.Enforcer, store *PolicyStore) domain.PolicyRepo {
 	return &policyRepo{enforcer: enforcer, store: store}
 }
 

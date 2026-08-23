@@ -31,6 +31,8 @@ const (
 	FieldLockedUntil = "locked_until"
 	// FieldPublishedAt holds the string denoting the published_at field in the database.
 	FieldPublishedAt = "published_at"
+	// FieldFailedAt holds the string denoting the failed_at field in the database.
+	FieldFailedAt = "failed_at"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// Table holds the table name of the outboxevent in the database.
@@ -49,6 +51,7 @@ var Columns = []string{
 	FieldAvailableAt,
 	FieldLockedUntil,
 	FieldPublishedAt,
+	FieldFailedAt,
 	FieldCreatedAt,
 }
 
@@ -131,6 +134,11 @@ func ByLockedUntil(opts ...sql.OrderTermOption) OrderOption {
 // ByPublishedAt orders the results by the published_at field.
 func ByPublishedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPublishedAt, opts...).ToFunc()
+}
+
+// ByFailedAt orders the results by the failed_at field.
+func ByFailedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldFailedAt, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

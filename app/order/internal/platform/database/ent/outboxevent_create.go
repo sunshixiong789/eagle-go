@@ -117,6 +117,20 @@ func (_c *OutboxEventCreate) SetNillablePublishedAt(v *time.Time) *OutboxEventCr
 	return _c
 }
 
+// SetFailedAt sets the "failed_at" field.
+func (_c *OutboxEventCreate) SetFailedAt(v time.Time) *OutboxEventCreate {
+	_c.mutation.SetFailedAt(v)
+	return _c
+}
+
+// SetNillableFailedAt sets the "failed_at" field if the given value is not nil.
+func (_c *OutboxEventCreate) SetNillableFailedAt(v *time.Time) *OutboxEventCreate {
+	if v != nil {
+		_c.SetFailedAt(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *OutboxEventCreate) SetCreatedAt(v time.Time) *OutboxEventCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -318,6 +332,10 @@ func (_c *OutboxEventCreate) createSpec() (*OutboxEvent, *sqlgraph.CreateSpec) {
 		_spec.SetField(outboxevent.FieldPublishedAt, field.TypeTime, value)
 		_node.PublishedAt = &value
 	}
+	if value, ok := _c.mutation.FailedAt(); ok {
+		_spec.SetField(outboxevent.FieldFailedAt, field.TypeTime, value)
+		_node.FailedAt = &value
+	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(outboxevent.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
@@ -449,6 +467,24 @@ func (u *OutboxEventUpsert) UpdatePublishedAt() *OutboxEventUpsert {
 // ClearPublishedAt clears the value of the "published_at" field.
 func (u *OutboxEventUpsert) ClearPublishedAt() *OutboxEventUpsert {
 	u.SetNull(outboxevent.FieldPublishedAt)
+	return u
+}
+
+// SetFailedAt sets the "failed_at" field.
+func (u *OutboxEventUpsert) SetFailedAt(v time.Time) *OutboxEventUpsert {
+	u.Set(outboxevent.FieldFailedAt, v)
+	return u
+}
+
+// UpdateFailedAt sets the "failed_at" field to the value that was provided on create.
+func (u *OutboxEventUpsert) UpdateFailedAt() *OutboxEventUpsert {
+	u.SetExcluded(outboxevent.FieldFailedAt)
+	return u
+}
+
+// ClearFailedAt clears the value of the "failed_at" field.
+func (u *OutboxEventUpsert) ClearFailedAt() *OutboxEventUpsert {
+	u.SetNull(outboxevent.FieldFailedAt)
 	return u
 }
 
@@ -603,6 +639,27 @@ func (u *OutboxEventUpsertOne) UpdatePublishedAt() *OutboxEventUpsertOne {
 func (u *OutboxEventUpsertOne) ClearPublishedAt() *OutboxEventUpsertOne {
 	return u.Update(func(s *OutboxEventUpsert) {
 		s.ClearPublishedAt()
+	})
+}
+
+// SetFailedAt sets the "failed_at" field.
+func (u *OutboxEventUpsertOne) SetFailedAt(v time.Time) *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.SetFailedAt(v)
+	})
+}
+
+// UpdateFailedAt sets the "failed_at" field to the value that was provided on create.
+func (u *OutboxEventUpsertOne) UpdateFailedAt() *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.UpdateFailedAt()
+	})
+}
+
+// ClearFailedAt clears the value of the "failed_at" field.
+func (u *OutboxEventUpsertOne) ClearFailedAt() *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.ClearFailedAt()
 	})
 }
 
@@ -924,6 +981,27 @@ func (u *OutboxEventUpsertBulk) UpdatePublishedAt() *OutboxEventUpsertBulk {
 func (u *OutboxEventUpsertBulk) ClearPublishedAt() *OutboxEventUpsertBulk {
 	return u.Update(func(s *OutboxEventUpsert) {
 		s.ClearPublishedAt()
+	})
+}
+
+// SetFailedAt sets the "failed_at" field.
+func (u *OutboxEventUpsertBulk) SetFailedAt(v time.Time) *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.SetFailedAt(v)
+	})
+}
+
+// UpdateFailedAt sets the "failed_at" field to the value that was provided on create.
+func (u *OutboxEventUpsertBulk) UpdateFailedAt() *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.UpdateFailedAt()
+	})
+}
+
+// ClearFailedAt clears the value of the "failed_at" field.
+func (u *OutboxEventUpsertBulk) ClearFailedAt() *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.ClearFailedAt()
 	})
 }
 

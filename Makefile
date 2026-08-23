@@ -64,9 +64,16 @@ migrate-down:
 migrate-status:
 	$(GOOSE) -dir $(MIGRATION_DIR) postgres "$(EAGLE_DSN)" status
 
+.PHONY: wire
+# 为每个服务组合根生成 Wire 注入代码
+wire:
+	@for service in $(SERVICES); do \
+		go -C app/$$service run github.com/google/wire/cmd/wire ./cmd/$$service || exit 1; \
+	done
+
 .PHONY: generate
-# 全量生成：对外契约 + 内部配置 + Ent
-generate: api config ent tidy
+# 全量生成：对外契约 + 内部配置 + Ent + Wire
+generate: api config ent wire tidy
 
 .PHONY: build
 # 编译全部可部署服务到 bin/
@@ -76,6 +83,8 @@ build:
 		go build -ldflags "$(LDFLAGS)" -o ./bin/$$service ./app/$$service/cmd/$$service || exit 1; \
 	done
 	go build -o ./bin/migrate ./tools/migrate
+	go build -o ./bin/outboxctl ./tools/outboxctl
+	go build -o ./bin/mqctl ./tools/mqctl
 
 .PHONY: image
 # 构建一个服务镜像，例如 make image SERVICE=product VERSION=v1.2.0 REGISTRY=registry.example.com/eagle
@@ -126,11 +135,19 @@ up-deps:
 	docker compose -f deploy/docker-compose.yml up -d postgres keycloak redis rabbitmq minio minio-init
 
 .PHONY: validate-deploy
-# 校验 Compose 与 Kubernetes 基线能被正确解析
+# 校验 Compose 与所有可部署 Kubernetes 组合能被正确解析
 validate-deploy:
 	docker compose -f deploy/docker-compose.yml config --quiet
-	kubectl kustomize deploy/kubernetes/base >/dev/null
-	kubectl kustomize deploy/kubernetes/observability >/dev/null
+	@for manifest in \
+		deploy/kubernetes/base \
+		deploy/kubernetes/gateway \
+		deploy/kubernetes/overlays/staging \
+		deploy/kubernetes/overlays/production \
+		deploy/kubernetes/overlays/production-mtls \
+		deploy/kubernetes/observability \
+		deploy/kubernetes/backup; do \
+		kubectl kustomize $$manifest >/dev/null || exit 1; \
+	done
 
 .PHONY: down
 down:

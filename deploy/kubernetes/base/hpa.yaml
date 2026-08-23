@@ -5,7 +5,18 @@ spec:
   scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: admin}
   minReplicas: 2
   maxReplicas: 10
-  metrics: [{type: Resource, resource: {name: cpu, target: {type: Utilization, averageUtilization: 70}}}]
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      selectPolicy: Max
+      policies: [{type: Percent, value: 100, periodSeconds: 60}, {type: Pods, value: 4, periodSeconds: 60}]
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      selectPolicy: Max
+      policies: [{type: Percent, value: 25, periodSeconds: 60}]
+  metrics:
+    - {type: Resource, resource: {name: cpu, target: {type: Utilization, averageUtilization: 70}}}
+    - {type: Resource, resource: {name: memory, target: {type: Utilization, averageUtilization: 80}}}
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -14,7 +25,18 @@ spec:
   scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: product}
   minReplicas: 2
   maxReplicas: 20
-  metrics: [{type: Resource, resource: {name: cpu, target: {type: Utilization, averageUtilization: 70}}}]
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      selectPolicy: Max
+      policies: [{type: Percent, value: 100, periodSeconds: 60}, {type: Pods, value: 4, periodSeconds: 60}]
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      selectPolicy: Max
+      policies: [{type: Percent, value: 25, periodSeconds: 60}]
+  metrics:
+    - {type: Resource, resource: {name: cpu, target: {type: Utilization, averageUtilization: 70}}}
+    - {type: Resource, resource: {name: memory, target: {type: Utilization, averageUtilization: 80}}}
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -23,4 +45,15 @@ spec:
   scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: order}
   minReplicas: 2
   maxReplicas: 20
-  metrics: [{type: Resource, resource: {name: cpu, target: {type: Utilization, averageUtilization: 70}}}]
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      selectPolicy: Max
+      policies: [{type: Percent, value: 100, periodSeconds: 60}, {type: Pods, value: 4, periodSeconds: 60}]
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      selectPolicy: Max
+      policies: [{type: Percent, value: 25, periodSeconds: 60}]
+  metrics:
+    - {type: Resource, resource: {name: cpu, target: {type: Utilization, averageUtilization: 70}}}
+    - {type: Resource, resource: {name: memory, target: {type: Utilization, averageUtilization: 80}}}

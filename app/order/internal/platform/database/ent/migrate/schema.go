@@ -50,6 +50,7 @@ var (
 		{Name: "available_at", Type: field.TypeTime},
 		{Name: "locked_until", Type: field.TypeTime, Nullable: true},
 		{Name: "published_at", Type: field.TypeTime, Nullable: true},
+		{Name: "failed_at", Type: field.TypeTime, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 	}
 	// EventOutboxTable holds the schema information for the "event_outbox" table.
@@ -61,7 +62,12 @@ var (
 			{
 				Name:    "idx_event_outbox_pending",
 				Unique:  false,
-				Columns: []*schema.Column{EventOutboxColumns[9], EventOutboxColumns[7], EventOutboxColumns[10]},
+				Columns: []*schema.Column{EventOutboxColumns[9], EventOutboxColumns[7], EventOutboxColumns[11]},
+			},
+			{
+				Name:    "idx_event_outbox_failed",
+				Unique:  false,
+				Columns: []*schema.Column{EventOutboxColumns[10], EventOutboxColumns[11]},
 			},
 			{
 				Name:    "outboxevent_aggregate_id_event_type",

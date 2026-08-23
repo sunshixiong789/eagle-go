@@ -117,6 +117,26 @@ func (_u *OutboxEventUpdate) ClearPublishedAt() *OutboxEventUpdate {
 	return _u
 }
 
+// SetFailedAt sets the "failed_at" field.
+func (_u *OutboxEventUpdate) SetFailedAt(v time.Time) *OutboxEventUpdate {
+	_u.mutation.SetFailedAt(v)
+	return _u
+}
+
+// SetNillableFailedAt sets the "failed_at" field if the given value is not nil.
+func (_u *OutboxEventUpdate) SetNillableFailedAt(v *time.Time) *OutboxEventUpdate {
+	if v != nil {
+		_u.SetFailedAt(*v)
+	}
+	return _u
+}
+
+// ClearFailedAt clears the value of the "failed_at" field.
+func (_u *OutboxEventUpdate) ClearFailedAt() *OutboxEventUpdate {
+	_u.mutation.ClearFailedAt()
+	return _u
+}
+
 // Mutation returns the OutboxEventMutation object of the builder.
 func (_u *OutboxEventUpdate) Mutation() *OutboxEventMutation {
 	return _u.mutation
@@ -199,6 +219,12 @@ func (_u *OutboxEventUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	}
 	if _u.mutation.PublishedAtCleared() {
 		_spec.ClearField(outboxevent.FieldPublishedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.FailedAt(); ok {
+		_spec.SetField(outboxevent.FieldFailedAt, field.TypeTime, value)
+	}
+	if _u.mutation.FailedAtCleared() {
+		_spec.ClearField(outboxevent.FieldFailedAt, field.TypeTime)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -306,6 +332,26 @@ func (_u *OutboxEventUpdateOne) SetNillablePublishedAt(v *time.Time) *OutboxEven
 // ClearPublishedAt clears the value of the "published_at" field.
 func (_u *OutboxEventUpdateOne) ClearPublishedAt() *OutboxEventUpdateOne {
 	_u.mutation.ClearPublishedAt()
+	return _u
+}
+
+// SetFailedAt sets the "failed_at" field.
+func (_u *OutboxEventUpdateOne) SetFailedAt(v time.Time) *OutboxEventUpdateOne {
+	_u.mutation.SetFailedAt(v)
+	return _u
+}
+
+// SetNillableFailedAt sets the "failed_at" field if the given value is not nil.
+func (_u *OutboxEventUpdateOne) SetNillableFailedAt(v *time.Time) *OutboxEventUpdateOne {
+	if v != nil {
+		_u.SetFailedAt(*v)
+	}
+	return _u
+}
+
+// ClearFailedAt clears the value of the "failed_at" field.
+func (_u *OutboxEventUpdateOne) ClearFailedAt() *OutboxEventUpdateOne {
+	_u.mutation.ClearFailedAt()
 	return _u
 }
 
@@ -421,6 +467,12 @@ func (_u *OutboxEventUpdateOne) sqlSave(ctx context.Context) (_node *OutboxEvent
 	}
 	if _u.mutation.PublishedAtCleared() {
 		_spec.ClearField(outboxevent.FieldPublishedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.FailedAt(); ok {
+		_spec.SetField(outboxevent.FieldFailedAt, field.TypeTime, value)
+	}
+	if _u.mutation.FailedAtCleared() {
+		_spec.ClearField(outboxevent.FieldFailedAt, field.TypeTime)
 	}
 	_node = &OutboxEvent{config: _u.config}
 	_spec.Assign = _node.assignValues

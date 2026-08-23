@@ -44,7 +44,7 @@ jobs:
       # 改了 proto 却忘记重新生成的提交会一路合进主干。
       - name: 验证生成代码是最新的
         run: |
-          make api config ent
+          make api config ent wire
           if ! git diff --exit-code; then
             echo "::error::生成代码不一致，请在本地运行 make generate 后提交"
             exit 1
@@ -169,5 +169,13 @@ jobs:
 
       - name: Kustomize 渲染
         run: |
-          kubectl kustomize deploy/kubernetes/base >/dev/null
-          kubectl kustomize deploy/kubernetes/observability >/dev/null
+          for manifest in \
+            deploy/kubernetes/base \
+            deploy/kubernetes/gateway \
+            deploy/kubernetes/overlays/staging \
+            deploy/kubernetes/overlays/production \
+            deploy/kubernetes/overlays/production-mtls \
+            deploy/kubernetes/observability \
+            deploy/kubernetes/backup; do
+            kubectl kustomize "$manifest" >/dev/null
+          done

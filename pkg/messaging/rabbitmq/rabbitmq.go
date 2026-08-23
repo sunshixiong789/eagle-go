@@ -10,6 +10,20 @@ import (
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+)
+
+var (
+	messagingMeter       = otel.Meter("github.com/eagle-go/eagle/pkg/messaging/rabbitmq")
+	messagesPublished    = mustCounter("eagle_messaging_published_total", "RabbitMQ messages confirmed by the broker")
+	messagePublishFailed = mustCounter("eagle_messaging_publish_failures_total", "RabbitMQ publish attempts that failed")
+	messagesConsumed     = mustCounter("eagle_messaging_consumed_total", "RabbitMQ messages handled and acknowledged")
+	messageConsumeFailed = mustCounter("eagle_messaging_consume_failures_total", "RabbitMQ handler attempts that failed")
+	messagesRetried      = mustCounter("eagle_messaging_retried_total", "RabbitMQ messages requeued once")
+	messagesDeadLettered = mustCounter("eagle_messaging_dead_lettered_total", "RabbitMQ messages rejected to a dead-letter queue")
+	consumerDisconnects  = mustCounter("eagle_messaging_consumer_disconnects_total", "RabbitMQ consumer disconnects")
 )
 
 type Config struct {
@@ -45,6 +59,7 @@ func (p *Publisher) Publish(ctx context.Context, message Message) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if err := p.ensureConnected(); err != nil {
+		p.recordPublishFailure(ctx, message)
 		return err
 	}
 	confirmation, err := p.ch.PublishWithDeferredConfirmWithContext(ctx, p.config.Exchange, message.RoutingKey, false, false, amqp.Publishing{
@@ -53,17 +68,33 @@ func (p *Publisher) Publish(ctx context.Context, message Message) error {
 	})
 	if err != nil {
 		p.reset()
+		p.recordPublishFailure(ctx, message)
 		return fmt.Errorf("rabbitmq: publish: %w", err)
 	}
 	acked, err := confirmation.WaitContext(ctx)
 	if err != nil {
 		p.reset()
+		p.recordPublishFailure(ctx, message)
 		return fmt.Errorf("rabbitmq: wait publisher confirm: %w", err)
 	}
 	if !acked {
+		p.recordPublishFailure(ctx, message)
 		return errors.New("rabbitmq: broker rejected published message")
 	}
+	messagesPublished.Add(ctx, 1, metric.WithAttributes(
+		attribute.String("messaging.destination.name", p.config.Exchange),
+		attribute.String("messaging.rabbitmq.routing_key", message.RoutingKey),
+		attribute.String("messaging.message.type", message.Type),
+	))
 	return nil
+}
+
+func (p *Publisher) recordPublishFailure(ctx context.Context, message Message) {
+	messagePublishFailed.Add(ctx, 1, metric.WithAttributes(
+		attribute.String("messaging.destination.name", p.config.Exchange),
+		attribute.String("messaging.rabbitmq.routing_key", message.RoutingKey),
+		attribute.String("messaging.message.type", message.Type),
+	))
 }
 
 func (p *Publisher) ensureConnected() error {
@@ -120,6 +151,7 @@ func RunConsumer(ctx context.Context, config Config, queue, routingKey string, l
 		if ctx.Err() != nil {
 			return
 		}
+		consumerDisconnects.Add(ctx, 1, metric.WithAttributes(attribute.String("messaging.destination.name", queue)))
 		logger.ErrorContext(ctx, "RabbitMQ consumer disconnected", "queue", queue, "error", err)
 		timer := time.NewTimer(config.ReconnectBackoff)
 		select {
@@ -165,6 +197,17 @@ func consume(ctx context.Context, config Config, queue, routingKey string, handl
 				Body: delivery.Body, Timestamp: delivery.Timestamp, Headers: delivery.Headers,
 			}
 			if err := handler(ctx, message); err != nil {
+				attrs := metric.WithAttributes(
+					attribute.String("messaging.destination.name", queue),
+					attribute.String("messaging.rabbitmq.routing_key", delivery.RoutingKey),
+					attribute.String("messaging.message.type", delivery.Type),
+				)
+				messageConsumeFailed.Add(ctx, 1, attrs)
+				if delivery.Redelivered {
+					messagesDeadLettered.Add(ctx, 1, attrs)
+				} else {
+					messagesRetried.Add(ctx, 1, attrs)
+				}
 				if nackErr := delivery.Nack(false, !delivery.Redelivered); nackErr != nil {
 					return fmt.Errorf("nack message: %w", errors.Join(err, nackErr))
 				}
@@ -173,8 +216,21 @@ func consume(ctx context.Context, config Config, queue, routingKey string, handl
 			if err := delivery.Ack(false); err != nil {
 				return fmt.Errorf("ack message: %w", err)
 			}
+			messagesConsumed.Add(ctx, 1, metric.WithAttributes(
+				attribute.String("messaging.destination.name", queue),
+				attribute.String("messaging.rabbitmq.routing_key", delivery.RoutingKey),
+				attribute.String("messaging.message.type", delivery.Type),
+			))
 		}
 	}
+}
+
+func mustCounter(name, description string) metric.Int64Counter {
+	instrument, err := messagingMeter.Int64Counter(name, metric.WithDescription(description))
+	if err != nil {
+		panic(fmt.Sprintf("rabbitmq: create counter %s: %v", name, err))
+	}
+	return instrument
 }
 
 func declareConsumerTopology(ch *amqp.Channel, exchange, queue, routingKey string) error {

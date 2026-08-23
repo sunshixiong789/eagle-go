@@ -76,7 +76,7 @@ func init() {
 	// outboxevent.DefaultAvailableAt holds the default value on creation for the available_at field.
 	outboxevent.DefaultAvailableAt = outboxeventDescAvailableAt.Default.(func() time.Time)
 	// outboxeventDescCreatedAt is the schema descriptor for created_at field.
-	outboxeventDescCreatedAt := outboxeventFields[10].Descriptor()
+	outboxeventDescCreatedAt := outboxeventFields[11].Descriptor()
 	// outboxevent.DefaultCreatedAt holds the default value on creation for the created_at field.
 	outboxevent.DefaultCreatedAt = outboxeventDescCreatedAt.Default.(func() time.Time)
 	// outboxeventDescID is the schema descriptor for id field.

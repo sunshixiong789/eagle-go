@@ -11,5 +11,5 @@
 - 注释只写非显而易见的约束。禁止 `// ID 返回 ID`。`revive` 的 `exported` 已关，不要为过 lint 补空话。不留占位 TODO。
 - 包名不要 `utils` / `common` / `helpers` / `models`。不要 `XxxDTO` / `XxxDO` 进 domain。
 - 日志用 `log/slog`。不要抄网上 Kratos v2 的 `log.Helper`。
-- 手改 `*.proto`、服务内 `ent/schema`、`migrations`。禁止手改 `*.pb.go` 与 `ent/` 生成文件。
+- 手改 `*.proto`、服务内 `ent/schema`、`migrations`、`cmd/<service>/wire.go` 与 `providers.go`。禁止手改 `*.pb.go`、`ent/` 与 `wire_gen.go` 生成文件。组合根用 Wire，`github.com/google/wire` 只允许出现在 `app/<service>/cmd/<service>`。
 - `goimports` 前缀按当前模块选择：`github.com/eagle-go/eagle/api`、`.../pkg` 或 `.../app/<service>`。

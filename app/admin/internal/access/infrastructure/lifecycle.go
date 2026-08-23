@@ -8,7 +8,7 @@ import (
 	"github.com/eagle-go/eagle/pkg/healthx"
 )
 
-func NewEnforcer(store *policyStore) (*authz.Enforcer, error) {
+func NewEnforcer(store *PolicyStore) (*authz.Enforcer, error) {
 	codes, err := store.PermissionCatalogCodes(context.Background())
 	if err != nil {
 		return nil, err
@@ -19,13 +19,13 @@ func NewEnforcer(store *policyStore) (*authz.Enforcer, error) {
 	return authz.NewEnforcer(authz.NewStorageAdapter(store))
 }
 
-func RegisterPolicyHealth(store *policyStore, enforcer *authz.Enforcer) func() {
+func RegisterPolicyHealth(store *PolicyStore, enforcer *authz.Enforcer) func() {
 	return healthx.Default.Register("authz-policy", func(ctx context.Context) error {
 		return checkAuthzPolicyReady(ctx, store, enforcer)
 	})
 }
 
-func checkAuthzPolicyReady(ctx context.Context, store *policyStore, enforcer *authz.Enforcer) error {
+func checkAuthzPolicyReady(ctx context.Context, store *PolicyStore, enforcer *authz.Enforcer) error {
 	version, err := store.PolicyVersion(ctx)
 	if err != nil {
 		return err
@@ -35,7 +35,7 @@ func checkAuthzPolicyReady(ctx context.Context, store *policyStore, enforcer *au
 }
 
 // NewPolicyReconciler starts version reconciliation and returns its cleanup.
-func NewPolicyReconciler(store *policyStore, enforcer *authz.Enforcer, logger *slog.Logger) func() {
+func NewPolicyReconciler(store *PolicyStore, enforcer *authz.Enforcer, logger *slog.Logger) func() {
 	if logger == nil {
 		logger = slog.Default()
 	}

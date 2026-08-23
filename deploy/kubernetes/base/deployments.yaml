@@ -4,14 +4,22 @@ metadata:
   name: admin
 spec:
   replicas: 2
+  revisionHistoryLimit: 3
+  progressDeadlineSeconds: 600
+  minReadySeconds: 10
   strategy: {type: RollingUpdate, rollingUpdate: {maxUnavailable: 0, maxSurge: 1}}
   selector: {matchLabels: {app.kubernetes.io/name: admin}}
   template:
     metadata: {labels: {app.kubernetes.io/name: admin, app.kubernetes.io/part-of: eagle}}
     spec:
-      serviceAccountName: eagle-service
+      serviceAccountName: eagle-admin
+      automountServiceAccountToken: false
+      enableServiceLinks: false
       terminationGracePeriodSeconds: 30
       securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+      topologySpreadConstraints:
+        - {maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: DoNotSchedule, labelSelector: {matchLabels: {app.kubernetes.io/name: admin}}}
+        - {maxSkew: 1, topologyKey: topology.kubernetes.io/zone, whenUnsatisfiable: ScheduleAnyway, labelSelector: {matchLabels: {app.kubernetes.io/name: admin}}}
       containers:
         - name: admin
           image: registry.example.com/eagle/admin:dev
@@ -30,7 +38,7 @@ spec:
           readinessProbe: {httpGet: {path: /readyz, port: metrics}, periodSeconds: 5, timeoutSeconds: 2}
           livenessProbe: {httpGet: {path: /livez, port: metrics}, periodSeconds: 10, timeoutSeconds: 2}
           resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {cpu: "1", memory: 512Mi}}
-          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, capabilities: {drop: [ALL]}}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -38,14 +46,22 @@ metadata:
   name: product
 spec:
   replicas: 2
+  revisionHistoryLimit: 3
+  progressDeadlineSeconds: 600
+  minReadySeconds: 10
   strategy: {type: RollingUpdate, rollingUpdate: {maxUnavailable: 0, maxSurge: 1}}
   selector: {matchLabels: {app.kubernetes.io/name: product}}
   template:
     metadata: {labels: {app.kubernetes.io/name: product, app.kubernetes.io/part-of: eagle}}
     spec:
-      serviceAccountName: eagle-service
+      serviceAccountName: eagle-product
+      automountServiceAccountToken: false
+      enableServiceLinks: false
       terminationGracePeriodSeconds: 30
       securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+      topologySpreadConstraints:
+        - {maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: DoNotSchedule, labelSelector: {matchLabels: {app.kubernetes.io/name: product}}}
+        - {maxSkew: 1, topologyKey: topology.kubernetes.io/zone, whenUnsatisfiable: ScheduleAnyway, labelSelector: {matchLabels: {app.kubernetes.io/name: product}}}
       containers:
         - name: product
           image: registry.example.com/eagle/product:dev
@@ -64,7 +80,7 @@ spec:
           readinessProbe: {httpGet: {path: /readyz, port: metrics}, periodSeconds: 5, timeoutSeconds: 2}
           livenessProbe: {httpGet: {path: /livez, port: metrics}, periodSeconds: 10, timeoutSeconds: 2}
           resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {cpu: "1", memory: 512Mi}}
-          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, capabilities: {drop: [ALL]}}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -72,14 +88,22 @@ metadata:
   name: order
 spec:
   replicas: 2
+  revisionHistoryLimit: 3
+  progressDeadlineSeconds: 600
+  minReadySeconds: 10
   strategy: {type: RollingUpdate, rollingUpdate: {maxUnavailable: 0, maxSurge: 1}}
   selector: {matchLabels: {app.kubernetes.io/name: order}}
   template:
     metadata: {labels: {app.kubernetes.io/name: order, app.kubernetes.io/part-of: eagle}}
     spec:
-      serviceAccountName: eagle-service
+      serviceAccountName: eagle-order
+      automountServiceAccountToken: false
+      enableServiceLinks: false
       terminationGracePeriodSeconds: 30
       securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+      topologySpreadConstraints:
+        - {maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: DoNotSchedule, labelSelector: {matchLabels: {app.kubernetes.io/name: order}}}
+        - {maxSkew: 1, topologyKey: topology.kubernetes.io/zone, whenUnsatisfiable: ScheduleAnyway, labelSelector: {matchLabels: {app.kubernetes.io/name: order}}}
       containers:
         - name: order
           image: registry.example.com/eagle/order:dev
@@ -97,10 +121,22 @@ spec:
           readinessProbe: {httpGet: {path: /readyz, port: metrics}, periodSeconds: 5, timeoutSeconds: 2}
           livenessProbe: {httpGet: {path: /livez, port: metrics}, periodSeconds: 10, timeoutSeconds: 2}
           resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {cpu: "1", memory: 512Mi}}
-          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, capabilities: {drop: [ALL]}}
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: eagle-service
+  name: eagle-admin
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eagle-product
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eagle-order
 automountServiceAccountToken: false

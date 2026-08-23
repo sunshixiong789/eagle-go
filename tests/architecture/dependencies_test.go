@@ -171,7 +171,22 @@ var bannedModulePrefixes = []string{
 	"github.com/go-redis/redis/v8",
 	"github.com/go-redis/redis/v7",
 	"github.com/redis/go-redis",
-	"github.com/google/wire",
+}
+
+func TestWireOnlyInCompositionRoot(t *testing.T) {
+	_, file, _, _ := runtime.Caller(0)
+	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
+	for _, service := range []string{"admin", "product", "order"} {
+		for _, pkg := range listPackages(t, root, "./app/"+service+"/...") {
+			usesWire := slices.Contains(pkg.Imports, "github.com/google/wire")
+			if !usesWire {
+				continue
+			}
+			if !strings.HasSuffix(pkg.ImportPath, "/cmd/"+service) {
+				t.Errorf("%s imports github.com/google/wire; Wire stays in app/%s/cmd/%s", pkg.ImportPath, service, service)
+			}
+		}
+	}
 }
 
 func TestBannedDependencies(t *testing.T) {

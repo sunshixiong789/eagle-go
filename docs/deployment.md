@@ -107,6 +107,11 @@ docker compose -f deploy/docker-compose.yml --profile obs up -d
 kubectl kustomize deploy/kubernetes/base
 ```
 
+实际环境从 overlay 进入：`overlays/staging`、`overlays/production`，需要服务网格 mTLS 时
+使用 `overlays/production-mtls`。网关生产策略单独位于 `deploy/kubernetes/gateway`，备份和
+可观测性也分别部署。完整发布、告警、MQ、备份恢复和容灾步骤见
+[`operations.md`](operations.md)。
+
 `deploy/kubernetes/base` 已包含三个服务的 Deployment/Service、一次性迁移 Job、
 Gateway API、HPA、PDB、探针、安全上下文和 NetworkPolicy。默认域名、镜像仓库、
 Keycloak、Redis、S3 地址都是示例值，发布前必须由 overlay 替换。

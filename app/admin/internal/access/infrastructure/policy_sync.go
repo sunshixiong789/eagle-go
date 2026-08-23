@@ -14,7 +14,7 @@ const policyReconcileInterval = 5 * time.Second
 // 对账周期内追上数据库中的权威策略。
 func runPolicyReconciler(
 	ctx context.Context,
-	store *policyStore,
+	store *PolicyStore,
 	enforcer *authz.Enforcer,
 	logger *slog.Logger,
 ) {

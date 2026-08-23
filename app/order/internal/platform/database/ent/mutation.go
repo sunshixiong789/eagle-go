@@ -832,6 +832,7 @@ type OutboxEventMutation struct {
 	available_at  *time.Time
 	locked_until  *time.Time
 	published_at  *time.Time
+	failed_at     *time.Time
 	created_at    *time.Time
 	clearedFields map[string]struct{}
 	done          bool
@@ -1313,6 +1314,55 @@ func (m *OutboxEventMutation) ResetPublishedAt() {
 	delete(m.clearedFields, outboxevent.FieldPublishedAt)
 }
 
+// SetFailedAt sets the "failed_at" field.
+func (m *OutboxEventMutation) SetFailedAt(t time.Time) {
+	m.failed_at = &t
+}
+
+// FailedAt returns the value of the "failed_at" field in the mutation.
+func (m *OutboxEventMutation) FailedAt() (r time.Time, exists bool) {
+	v := m.failed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFailedAt returns the old "failed_at" field's value of the OutboxEvent entity.
+// If the OutboxEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OutboxEventMutation) OldFailedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFailedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFailedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFailedAt: %w", err)
+	}
+	return oldValue.FailedAt, nil
+}
+
+// ClearFailedAt clears the value of the "failed_at" field.
+func (m *OutboxEventMutation) ClearFailedAt() {
+	m.failed_at = nil
+	m.clearedFields[outboxevent.FieldFailedAt] = struct{}{}
+}
+
+// FailedAtCleared returns if the "failed_at" field was cleared in this mutation.
+func (m *OutboxEventMutation) FailedAtCleared() bool {
+	_, ok := m.clearedFields[outboxevent.FieldFailedAt]
+	return ok
+}
+
+// ResetFailedAt resets all changes to the "failed_at" field.
+func (m *OutboxEventMutation) ResetFailedAt() {
+	m.failed_at = nil
+	delete(m.clearedFields, outboxevent.FieldFailedAt)
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *OutboxEventMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -1383,7 +1433,7 @@ func (m *OutboxEventMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *OutboxEventMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 11)
 	if m.aggregate_id != nil {
 		fields = append(fields, outboxevent.FieldAggregateID)
 	}
@@ -1410,6 +1460,9 @@ func (m *OutboxEventMutation) Fields() []string {
 	}
 	if m.published_at != nil {
 		fields = append(fields, outboxevent.FieldPublishedAt)
+	}
+	if m.failed_at != nil {
+		fields = append(fields, outboxevent.FieldFailedAt)
 	}
 	if m.created_at != nil {
 		fields = append(fields, outboxevent.FieldCreatedAt)
@@ -1440,6 +1493,8 @@ func (m *OutboxEventMutation) Field(name string) (ent.Value, bool) {
 		return m.LockedUntil()
 	case outboxevent.FieldPublishedAt:
 		return m.PublishedAt()
+	case outboxevent.FieldFailedAt:
+		return m.FailedAt()
 	case outboxevent.FieldCreatedAt:
 		return m.CreatedAt()
 	}
@@ -1469,6 +1524,8 @@ func (m *OutboxEventMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldLockedUntil(ctx)
 	case outboxevent.FieldPublishedAt:
 		return m.OldPublishedAt(ctx)
+	case outboxevent.FieldFailedAt:
+		return m.OldFailedAt(ctx)
 	case outboxevent.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	}
@@ -1543,6 +1600,13 @@ func (m *OutboxEventMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetPublishedAt(v)
 		return nil
+	case outboxevent.FieldFailedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFailedAt(v)
+		return nil
 	case outboxevent.FieldCreatedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -1601,6 +1665,9 @@ func (m *OutboxEventMutation) ClearedFields() []string {
 	if m.FieldCleared(outboxevent.FieldPublishedAt) {
 		fields = append(fields, outboxevent.FieldPublishedAt)
 	}
+	if m.FieldCleared(outboxevent.FieldFailedAt) {
+		fields = append(fields, outboxevent.FieldFailedAt)
+	}
 	return fields
 }
 
@@ -1620,6 +1687,9 @@ func (m *OutboxEventMutation) ClearField(name string) error {
 		return nil
 	case outboxevent.FieldPublishedAt:
 		m.ClearPublishedAt()
+		return nil
+	case outboxevent.FieldFailedAt:
+		m.ClearFailedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown OutboxEvent nullable field %s", name)
@@ -1655,6 +1725,9 @@ func (m *OutboxEventMutation) ResetField(name string) error {
 		return nil
 	case outboxevent.FieldPublishedAt:
 		m.ResetPublishedAt()
+		return nil
+	case outboxevent.FieldFailedAt:
+		m.ResetFailedAt()
 		return nil
 	case outboxevent.FieldCreatedAt:
 		m.ResetCreatedAt()

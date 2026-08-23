@@ -16,7 +16,7 @@
 | 验签、鉴权中间件、健康检查、身份 context | `pkg/` |
 
 - 新业务先建立 `app/<service>/internal/<module>`，再在模块内分层；不要建立服务级全局 `domain/data/service`。
-- 新服务入口放 `app/<service>/cmd/<service>`，它只能组合该服务拥有的模块；禁止 import 其他服务模块。
+- 新服务入口放 `app/<service>/cmd/<service>`，它只能组合该服务拥有的模块；禁止 import 其他服务模块。装配写在该目录的 `providerSet`，然后 `make wire`；不要把 Wire 引进业务四层。
 - 跨服务调用依赖对方 `api/` 契约并在 infrastructure 实现本模块端口，application/domain 不碰 protobuf client。
 - 有不变量才写聚合根。字典、通知等简单模型保持贫血，不为凑 DDD 术语加领域事件或工厂。
 - 需要锁才能判断的树/并发规则只在 infrastructure 事务里做，application 不预检（避免 TOCTOU）。

@@ -9,10 +9,10 @@ import (
 
 type authorizationChecker struct {
 	enforcer *authz.Enforcer
-	store    *policyStore
+	store    *PolicyStore
 }
 
-func NewAuthorizationChecker(enforcer *authz.Enforcer, store *policyStore) domain.AuthorizationChecker {
+func NewAuthorizationChecker(enforcer *authz.Enforcer, store *PolicyStore) domain.AuthorizationChecker {
 	return &authorizationChecker{enforcer: enforcer, store: store}
 }
 

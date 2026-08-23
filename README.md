@@ -2,7 +2,7 @@
 
 基于 Go Workspace 的 Kratos 微服务开发底座，提供 OIDC 认证、集中 RBAC、服务间认证、缓存、可靠事件、对象存储与完整可观测性，并用商品、订单演示服务独立数据库、同步调用和异步事件。
 
-技术栈：Go 1.27、Kratos v3、Protobuf、buf、Ent、PostgreSQL 17、Keycloak、Casbin、Redis、RabbitMQ、S3、OpenTelemetry、Prometheus、Loki、Tempo、Grafana、Kubernetes Gateway API。
+技术栈：Go 1.27、Kratos v3、Google Wire、Protobuf、buf、Ent、PostgreSQL 17、Keycloak、Casbin、Redis、RabbitMQ、S3、OpenTelemetry、Prometheus、Loki、Tempo、Grafana、Kubernetes Gateway API。
 
 ## 项目现状
 
@@ -83,7 +83,7 @@ make init
 make generate
 ```
 
-`make init` 会下载并验证锁定版本的开发工具。`make generate` 依次生成 API、配置和各服务 Ent 代码，再整理所有模块依赖。生成文件已经提交到仓库；无源文件变更时，执行后 `git status` 不应出现新的差异。
+`make init` 会下载并验证锁定版本的开发工具。`make generate` 依次生成 API、配置、各服务 Ent 和组合根 Wire 代码，再整理所有模块依赖。生成文件已经提交到仓库；无源文件变更时，执行后 `git status` 不应出现新的差异。
 
 ### 3. 启动完整本地环境
 
@@ -181,9 +181,10 @@ curl -H "Authorization: Bearer $TOKEN" \
 ```bash
 make help                              # 查看入口
 make init                              # 验证锁定的开发工具
-make generate                          # API + 配置 + Ent + tidy
+make generate                          # API + 配置 + Ent + Wire + tidy
 make api                               # 只生成 API
 make ent                               # 只生成各服务 Ent 代码
+make wire                              # 只生成各服务组合根注入代码
 make tidy                              # 整理每个 Go module
 make build                             # 编译三个服务和 migrate 到 bin/
 make lint                              # Go 静态检查
@@ -213,7 +214,7 @@ go test -short ./app/admin/... ./app/product/... ./app/order/... ./pkg/...
 3. 新权限码通过 admin 的 goose 迁移写入 `permission_definition`。
 4. 执行 `make api`，不要手改 `*.pb.go`。
 5. 在所属模块补齐 `service -> application -> domain <- infrastructure`。
-6. 只有新增一个 Protobuf Service 时，才在 `app/<service>/cmd/<service>/app.go` 注册。
+6. 只有新增一个 Protobuf Service 时，才在 `app/<service>/cmd/<service>` 的 Wire provider 里注册。
 7. 添加测试并执行 `make lint && make test`。
 
 需要权限的 RPC 示例：
@@ -282,7 +283,7 @@ subject := identity.Subject(ctx)
 4. 在 `api/` 定义 RPC、校验规则、HTTP 映射和访问级别，然后执行 `make api`。
 5. 在 `internal/<module>/domain` 放模型、规则和仓储/客户端接口。
 6. 在 `application` 编排用例，在 `infrastructure` 实现数据库或远程端口，在 `service` 转换协议对象。
-7. 在服务唯一组合根显式装配新模块。
+7. 在 `app/<service>/cmd/<service>` 的 `providerSet` 装配新模块，然后执行 `make wire`。禁止手改 `wire_gen.go`。
 8. 先测领域不变量，再测真实基础设施与 HTTP 链路。
 
 跨服务调用只能依赖 `api` 契约：禁止 import 其他服务实现、读取对方表、建立跨库外键或跨服务事务。简单 CRUD 不必为了形式引入聚合根、工厂或 DTO 体系。
@@ -370,7 +371,7 @@ Grafana 位于 `http://127.0.0.1:3000`，Prometheus 位于 `http://127.0.0.1:909
 
 ### 修改 proto 或 Ent schema 后行为不一致
 
-执行 `make api` 或 `make ent`，完整场景直接执行 `make generate`。生成文件禁止手改，CI 会检查生成结果和源定义是否一致。
+执行 `make api`、`make ent` 或 `make wire`，完整场景直接执行 `make generate`。生成文件禁止手改，CI 会检查生成结果和源定义是否一致。
 
 ### Windows 上 `go test -race` 报 cgo 错误
 
