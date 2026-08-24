@@ -16,21 +16,59 @@
 
 每个服务都有自己的 `go.mod`、配置、Ent Client、迁移、二进制和镜像。根目录的 `go.work` 只负责把这些模块组合成本地开发工作区，不集中管理各服务依赖。
 
-```text
-Client -> Gateway API/nginx -> admin
-                            -> product --gRPC + client credentials--> admin
-                            -> order   --gRPC + client credentials--> product
+```mermaid
+flowchart TB
+    client["Web / App / API Client"]
 
-order --Transactional Outbox--> RabbitMQ --> admin Inbox --> notification
-product --cache aside--> Redis
-admin   --BlobStore--> S3/MinIO
+    subgraph edge [统一入口]
+        gateway["开发：nginx<br/>生产：Envoy Gateway"]
+    end
 
-Keycloak：用户、口令、角色、token
-admin/Casbin：角色到权限码的映射与权限判定
-PostgreSQL：本地共用实例，每个服务独立 database
+    subgraph services [独立发布的应用服务]
+        direction LR
+        admin["admin<br/>权限 · 字典 · 文件 · 通知"]
+        product["product<br/>商品"]
+        order["order<br/>订单"]
+    end
+
+    subgraph data [服务独占数据]
+        direction LR
+        admin_db[(eagle_admin)]
+        product_db[(eagle_product)]
+        order_db[(eagle_order)]
+    end
+
+    subgraph platform [平台依赖]
+        direction LR
+        keycloak["Keycloak<br/>OIDC · JWT · 服务身份"]
+        redis[(Redis)]
+        rabbitmq["RabbitMQ"]
+        object_store[(S3 / MinIO)]
+    end
+
+    client -->|HTTP| gateway
+    gateway -->|/v1/system| admin
+    gateway -->|/v1/products| product
+    gateway -->|/v1/orders| order
+
+    product -.->|gRPC 权限判定| admin
+    order -.->|gRPC 商品快照| product
+    order -->|Transactional Outbox| rabbitmq
+    rabbitmq -->|order.created.v1| admin
+
+    admin --> admin_db
+    product --> product_db
+    order --> order_db
+    product -->|cache-aside| redis
+    admin -->|BlobStore| object_store
+    keycloak -.->|JWT / JWKS| admin
+    keycloak -.->|JWT / JWKS| product
+    keycloak -.->|JWT / JWKS| order
 ```
 
-更完整的服务边界、分层和数据所有权见 [架构说明](docs/architecture.md)，镜像与生产发布见 [部署说明](docs/deployment.md)。
+更完整的服务边界、分层和数据所有权见[架构说明](docs/architecture.md)。启动和调试见
+[开发环境部署](docs/development-deployment.md)，镜像与 Kubernetes 发布见
+[生产环境部署](docs/deployment.md)。
 
 ## 目录结构
 
@@ -80,6 +118,9 @@ service -> application -> domain <- infrastructure
 
 ```bash
 make init
+```
+
+```bash
 make generate
 ```
 
@@ -89,10 +130,14 @@ make generate
 
 ```bash
 make up
-docker compose -f deploy/docker-compose.yml ps
 ```
 
-Compose 会构建三个独立服务镜像，依次完成各自数据库迁移，再启动服务和 nginx 网关。主要入口：
+```bash
+docker compose -f deploy/docker-compose.yml ps --all
+```
+
+Compose 会构建三个独立服务镜像，依次完成各自数据库迁移，再启动服务和 nginx 开发网关。
+`*-migrate` 显示 `Exited (0)` 是一次性任务成功，不是重复服务或异常退出。主要入口：
 
 | 入口 | 地址 |
 |---|---|
@@ -108,9 +153,15 @@ Compose 会构建三个独立服务镜像，依次完成各自数据库迁移，
 确认服务就绪：
 
 ```bash
-curl http://127.0.0.1:9101/readyz
-curl http://127.0.0.1:9102/readyz
-curl http://127.0.0.1:9103/readyz
+curl --fail http://127.0.0.1:9101/readyz
+```
+
+```bash
+curl --fail http://127.0.0.1:9102/readyz
+```
+
+```bash
+curl --fail http://127.0.0.1:9103/readyz
 ```
 
 停止环境：
@@ -125,76 +176,138 @@ make down
 
 ```bash
 make up-deps
+```
+
+```bash
 make migrate-up SERVICE=admin
+```
+
+```bash
 make run SERVICE=admin
 ```
 
-`product` 依赖 admin，`order` 依赖 product。调试这两个服务时，需要同时保证它们的上游已启动。默认配置分别位于 `app/<service>/configs/config.yaml`，也可用环境变量覆盖。
+`product` 依赖 admin，`order` 依赖 product。调试这两个服务时，需要同时保证它们的上游已启动。
+默认配置分别位于 `app/<service>/configs/config.yaml`，也可用环境变量覆盖。完整的宿主机调试组合见
+[开发环境部署](docs/development-deployment.md)。
 
 ### 5. 创建首个用户并调用接口
 
 `realm-eagle.json` 刻意不预置用户，避免已知口令随配置进入生产。先登录 Keycloak 管理 CLI：
 
 ```bash
-docker exec eagle-keycloak /opt/keycloak/bin/kcadm.sh config credentials \
-  --server http://localhost:8080 --realm master \
-  --user admin --password admin
+docker compose -f deploy/docker-compose.yml exec -T keycloak /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user admin --password admin
 ```
 
 创建用户时必须填写姓名，否则 Keycloak 26 的资料校验会阻止登录：
 
 ```bash
-docker exec eagle-keycloak /opt/keycloak/bin/kcadm.sh create users -r eagle \
-  -s username=alice -s enabled=true \
-  -s firstName=Alice -s lastName=Test -s email=alice@example.com
-
-docker exec eagle-keycloak /opt/keycloak/bin/kcadm.sh set-password -r eagle \
-  --username alice --new-password 'Passw0rd!'
-
-docker exec eagle-keycloak /opt/keycloak/bin/kcadm.sh add-roles -r eagle \
-  --uusername alice --rolename admin
+docker compose -f deploy/docker-compose.yml exec -T keycloak /opt/keycloak/bin/kcadm.sh create users -r eagle -s username=alice -s enabled=true -s firstName=Alice -s lastName=Test -s email=alice@example.com
 ```
 
-取得 token：
-
 ```bash
-TOKEN=$(curl -s \
-  -d client_id=eagle-web \
-  -d username=alice \
-  -d 'password=Passw0rd!' \
-  -d grant_type=password \
-  http://127.0.0.1:8080/realms/eagle/protocol/openid-connect/token \
-  | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
+docker compose -f deploy/docker-compose.yml exec -T keycloak /opt/keycloak/bin/kcadm.sh set-password -r eagle --username alice --new-password 'Passw0rd!'
 ```
 
-通过网关调用受保护接口：
+```bash
+docker compose -f deploy/docker-compose.yml exec -T keycloak /opt/keycloak/bin/kcadm.sh add-roles -r eagle --uusername alice --rolename admin
+```
+
+取得 token 并通过网关调用受保护接口。这里保留为一个原子命令，确保从 IDEA 运行代码块时
+shell 变量不会在两个进程之间丢失：
 
 ```bash
-curl -H "Authorization: Bearer $TOKEN" \
-  http://127.0.0.1:8000/v1/system/permissions
+TOKEN=$(curl --silent --fail -d client_id=eagle-web -d username=alice -d 'password=Passw0rd!' -d grant_type=password http://127.0.0.1:8080/realms/eagle/protocol/openid-connect/token | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p') && curl --fail -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8000/v1/system/permissions
 ```
 
 不带 `Authorization` 应返回 401。Keycloak realm 的完整设计和生产注意事项见 [Keycloak 配置说明](deploy/keycloak/README.md)。
 
 ## 常用命令
 
+下面每个代码块只包含一个动作，IDEA/GoLand 启用 Markdown 和 Shell Script 插件后，可以点击
+代码块左侧直接执行。
+
+查看全部 Make 入口：
+
 ```bash
-make help                              # 查看入口
-make init                              # 验证锁定的开发工具
-make generate                          # API + 配置 + Ent + Wire + tidy
-make api                               # 只生成 API
-make ent                               # 只生成各服务 Ent 代码
-make wire                              # 只生成各服务组合根注入代码
-make tidy                              # 整理每个 Go module
-make build                             # 编译三个服务和 migrate 到 bin/
-make lint                              # Go 静态检查
-make test                              # race + 覆盖率 + 集成测试
-make migrate-status SERVICE=product    # 查看指定服务迁移状态
-make migrate-up SERVICE=product        # 执行指定服务迁移
-make run SERVICE=product               # 在宿主机运行指定服务
-make image SERVICE=product VERSION=dev # 构建单服务镜像
-make images VERSION=dev                # 分别构建三个镜像
-make validate-deploy                   # 校验 Compose 与 Kustomize 清单
+make help
+```
+
+验证锁定的开发工具：
+
+```bash
+make init
+```
+
+生成 API、配置、Ent、Wire 并整理依赖：
+
+```bash
+make generate
+```
+
+编译全部服务和运维工具：
+
+```bash
+make build
+```
+
+执行 Go 静态检查：
+
+```bash
+make lint
+```
+
+执行 race、覆盖率和集成测试：
+
+```bash
+make test
+```
+
+启动完整 Compose 环境：
+
+```bash
+make up
+```
+
+查看常驻容器和一次性任务：
+
+```bash
+docker compose -f deploy/docker-compose.yml ps --all
+```
+
+只启动宿主机调试所需的依赖：
+
+```bash
+make up-deps
+```
+
+停止 Compose 环境并保留数据卷：
+
+```bash
+make down
+```
+
+运行 admin：
+
+```bash
+make run SERVICE=admin
+```
+
+运行 product：
+
+```bash
+make run SERVICE=product
+```
+
+运行 order：
+
+```bash
+make run SERVICE=order
+```
+
+校验 Compose、迁移模板和 Kustomize 清单：
+
+```bash
+make validate-deploy
 ```
 
 `make test` 不需要 Docker。集成测试会用 embedded-postgres 启动真实 PostgreSQL；首次运行需要联网下载约 100 MB 的数据库二进制，之后复用本地缓存。
@@ -333,7 +446,13 @@ make build
 
 ```bash
 make image SERVICE=product VERSION=v1.2.0 REGISTRY=registry.example.com/eagle
+```
+
+```bash
 make images VERSION=v1.2.0 REGISTRY=registry.example.com/eagle
+```
+
+```bash
 make push-images VERSION=v1.2.0 REGISTRY=registry.example.com/eagle
 ```
 
@@ -380,7 +499,9 @@ race detector 需要 C 编译器。可在 WSL/Linux 中运行，或安装可用�
 ## 文档与约束
 
 - [架构说明](docs/architecture.md)：服务边界、分层、数据所有权和跨服务调用
-- [部署说明](docs/deployment.md)：镜像、Compose、生产发布、网络与存储
+- [开发环境部署](docs/development-deployment.md)：Compose、宿主机调试、IDEA 入口和本地联调
+- [生产环境部署](docs/deployment.md)：不可变镜像、Kubernetes、迁移顺序、网关和上线检查
+- [生产运行手册](docs/operations.md)：告警、MQ、备份恢复、回滚和故障处置
 - [Kubernetes 基线](deploy/kubernetes/README.md)：Gateway API、Secret、发布与可观测性清单
 - [Keycloak 配置说明](deploy/keycloak/README.md)：realm、安全设置和客户端设计
 - [AI 编码约束](AGENTS.md)：常驻硬约束；细则在 [`.agents/rules/`](.agents/rules/)

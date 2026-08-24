@@ -6,7 +6,6 @@ resources:
   - configmap.yaml
   - deployments.yaml
   - services.yaml
-  - migrations.yaml
   - gateway.yaml
   - pdb.yaml
   - hpa.yaml

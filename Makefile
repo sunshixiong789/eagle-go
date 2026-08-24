@@ -140,6 +140,7 @@ validate-deploy:
 	docker compose -f deploy/docker-compose.yml config --quiet
 	@for manifest in \
 		deploy/kubernetes/base \
+		deploy/kubernetes/migrations \
 		deploy/kubernetes/gateway \
 		deploy/kubernetes/overlays/staging \
 		deploy/kubernetes/overlays/production \

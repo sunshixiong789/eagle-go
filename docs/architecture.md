@@ -95,7 +95,7 @@ DNS 解析，不嵌入注册中心 SDK。
 
 本地：
 
-    Browser → nginx:8000
+    Browser → nginx 开发网关:8000
                 ├─ admin
                 ├─ product ← order
                 └─ order
@@ -115,10 +115,11 @@ docker compose -f deploy/docker-compose.yml up -d --build 会先执行每个服�
 - file 多副本时把本地 BlobStore 替换为 S3/OSS/MinIO；
 - NetworkPolicy 限制 order→product、资源服务→admin 和 Prometheus→metrics。
 
-生产清单位于 `deploy/kubernetes/base`，包含 Deployment、Service、迁移 Job、
-Gateway API、HPA、PDB 与 NetworkPolicy。Redis、RabbitMQ、PostgreSQL 和 S3 在
-生产环境通过 Secret 接入托管实例，不在应用清单里伪装成单副本生产集群。具体
-发布顺序见 [部署说明](deployment.md)。
+生产应用基线位于 `deploy/kubernetes/base`，包含 Deployment、Service、Gateway API、
+HPA、PDB 与 NetworkPolicy。一次性迁移模板独立位于 `deploy/kubernetes/migrations`，
+由发布平台等待成功后再滚动 Deployment。Redis、RabbitMQ、PostgreSQL 和 S3 在生产环境
+通过 Secret 接入托管实例，不在应用清单里伪装成单副本生产集群。具体发布顺序见
+[生产环境部署](deployment.md)。
 
 ## 共享代码边界
 

@@ -1,7 +1,7 @@
 # 生产运行手册
 
-本文只说明生产控制面和故障处置；本地启动见根 `README.md`，服务边界见
-`docs/architecture.md`，镜像与部署拓扑见 `docs/deployment.md`。
+本文只说明生产控制面和故障处置；本地启动见[开发环境部署](development-deployment.md)，
+服务边界见[架构说明](architecture.md)，生产发布顺序见[生产环境部署](deployment.md)。
 
 ## 发布与回滚
 

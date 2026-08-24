@@ -1,179 +1,178 @@
-# 打包与部署
+# 生产环境部署
+
+本文只描述生产制品、平台前置条件和安全发布顺序。本地 Compose、宿主机调试和 IDEA 入口见
+[开发环境部署](development-deployment.md)，告警、MQ、备份恢复和故障处置见
+[生产运行手册](operations.md)。
 
 ## 发布单元
 
-模块不等于微服务。当前六个模块只组合成三个可独立发布的进程：
+模块不等于微服务。当前六个业务模块组合为三个独立发布单元：
 
-| 服务 | 组合的模块 | 二进制 | 镜像 | 数据库 |
-|---|---|---|---|---|
-| admin | access、dictionary、file、notification | `bin/admin` | `eagle/admin:<version>` | `eagle_admin` |
-| product | product | `bin/product` | `eagle/product:<version>` | `eagle_product` |
-| order | order | `bin/order` | `eagle/order:<version>` | `eagle_order` |
+| 服务 | 业务模块 | 镜像 | 独占数据库 |
+|---|---|---|---|
+| admin | access、dictionary、file、notification | `eagle/admin:<version>` | `eagle_admin` |
+| product | product | `eagle/product:<version>` | `eagle_product` |
+| order | order | `eagle/order:<version>` | `eagle_order` |
 
-`app/<service>/cmd/<service>` 是进程的唯一组合根，`app/<service>/migrations` 是它独占的迁移目录。文件和通知仍是独立业务模块，但当前没有独立扩缩容、团队或故障隔离需求，所以不单独部署。
+每个镜像只包含当前服务的 `/app/service`、通用 `/app/migrate`、`/app/healthcheck`、配置和
+`app/<service>/migrations`。三个服务分别拥有 Deployment、Service、数据库账号和发布节奏；
+禁止跨服务共享数据库、迁移目录或事务。
 
-## 本地二进制
+## 构建不可变镜像
 
-编译全部服务：
+仓库使用参数化多阶段 Dockerfile，但每次只构建一个服务。正式发布通过 `Release images`
+GitHub Actions workflow 生成 amd64/arm64 镜像、SBOM、provenance 和漏洞扫描结果。
 
-```bash
-make build
-./bin/admin -conf app/admin/configs
-./bin/product -conf app/product/configs
-./bin/order -conf app/order/configs
-```
-
-也可以只运行一个服务：
+发布 tag：
 
 ```bash
-make migrate-up SERVICE=product
-make run SERVICE=product
+git tag v1.2.0
 ```
 
-## 镜像打包
+```bash
+git push origin v1.2.0
+```
 
-仓库使用一个参数化的多阶段 Dockerfile，但产物是三个互不相同的镜像，
-不是一个镜像启动不同命令。服务在隔离的 Go builder 阶段编译，运行阶段
-只使用 distroless；因此发布不依赖构建机本地安装的 Go 版本或 CPU 架构。
+也可以在发布平台手动触发 workflow 并提供唯一版本号。环境仓库必须使用 workflow 输出的
+镜像 digest，例如 `ghcr.io/example/eagle/admin@sha256:...`，不要使用 `stable`、`staging`
+或 `latest` 等可变标签。仓库 overlay 中的仓库名和标签仅为可渲染示例，不能直接用于生产。
 
-单独构建商品服务：
+本地验证单服务镜像时可以执行：
 
 ```bash
 make image SERVICE=product VERSION=v1.2.0 REGISTRY=registry.example.com/eagle
 ```
 
-一次构建并推送全部服务：
+## 平台前置条件
+
+应用进入集群前，平台必须已经提供：
+
+| 能力 | 要求 |
+|---|---|
+| Kubernetes | Gateway API CRD、支持 NetworkPolicy 的 CNI、metrics-server |
+| 边缘网关 | 与 `GatewayClass` 匹配的 Envoy Gateway 控制器 |
+| 身份 | 生产 Keycloak/OIDC、独立服务身份和 Client Credentials |
+| 数据 | 三个独立 PostgreSQL database 与最小权限账号 |
+| 中间件 | 高可用 Redis、RabbitMQ、S3 兼容对象存储 |
+| 可观测性 | OTel Collector、Prometheus Operator、日志和 trace 后端 |
+| Secret | External Secrets、Vault 或云 Secret Manager |
+
+仓库不会在生产应用命名空间部署单副本 PostgreSQL、Redis、RabbitMQ、Keycloak 或对象存储。
+
+## 环境 Overlay
+
+`deploy/kubernetes/base` 定义三个服务的 Deployment/Service、Gateway API、HPA、PDB、探针、
+安全上下文和 NetworkPolicy。迁移 Job 模板按服务拆分在 `deploy/kubernetes/migrations/`，
+不属于应用 base，避免与 Deployment 同时 apply。staging/production overlay 提供可渲染示例，
+实际环境必须在独立 GitOps 配置中替换以下内容：
+
+- 三个镜像的仓库和 digest；
+- API 域名、TLS Secret、GatewayClass 和 CORS origin；
+- OIDC issuer、JWKS、服务间 token 地址；
+- 三个数据库 DSN、Redis、RabbitMQ 和 S3 地址及凭据；
+- 资源、HPA、限流、熔断和超时参数；
+- OTLP、Prometheus、日志与告警接收方。
+
+只做静态渲染检查：
 
 ```bash
-make images VERSION=v1.2.0 REGISTRY=registry.example.com/eagle
-make push-images VERSION=v1.2.0 REGISTRY=registry.example.com/eagle
+make validate-deploy
 ```
 
-等价的原始命令是：
+该命令只证明 Compose 和 Kustomize 可以解析，不证明生产依赖存在，也不执行迁移或发布。
 
-```bash
-docker build --build-arg SERVICE=product --build-arg VERSION=v1.2.0 \
-  -t registry.example.com/eagle/product:v1.2.0 .
-```
+## 迁移与滚动发布
 
-镜像内同时带有 `/app/service`、`/app/migrate`、`/app/healthcheck` 和仅属于
-当前服务的 `/app/migrations`。不会把其他服务的二进制或迁移打进镜像。
-BuildKit 会缓存 Go module 与编译结果，但每次只构建 `SERVICE` 指定的服务。
+Deployment 启动时不会自动迁移，避免多副本并发修改 schema。每次发布必须由部署平台按服务
+串行编排，不能依赖一次 `kubectl apply -k` 自动保证 Job 与 Deployment 的先后顺序。
 
-## Docker Compose 开发拓扑
+单个服务的发布状态机是：
 
 ```text
-Browser -> nginx:8000
-             |-- admin:8000   -> eagle_admin
-             |-- product:8000 -> eagle_product
-             `-- order:8000   -> eagle_order
-
-product --gRPC CheckPermission--> admin
-order   --gRPC BatchGet--------> product
+确认不可变镜像 digest
+  → 创建本次发布唯一名称的 migration Job
+  → 等待 Job Complete
+  → 更新同一服务 Deployment 的镜像 digest
+  → 等待 rollout 完成和 /readyz 通过
+  → 观察指标与日志
 ```
 
-启动完整环境：
+发布平台必须先选择发生变化的服务、替换镜像 digest，并为模板名称追加本次发布标识，再用
+create 语义创建。迁移 Job 必须满足：
 
-```bash
-make up
-docker compose -f deploy/docker-compose.yml ps
-```
+- 名称包含服务和发布标识，例如 `admin-migrate-a613c46`；
+- 使用与即将发布的 Deployment 完全相同的镜像 digest；
+- 只挂载当前服务的数据库 DSN；
+- 命令为 `/app/migrate -dir /app/migrations`；
+- 失败时阻止 Deployment 更新；
+- 成功记录至少保留到发布观察期结束，再由 TTL 或平台清理。
 
-Compose 会启动 PostgreSQL、Keycloak、Redis、RabbitMQ 和 MinIO，先运行
-`admin-migrate`、`product-migrate`、`order-migrate`，迁移成功后
-再启动对应服务。product 等待 admin readiness，order 等待 product readiness，
-三个服务全部就绪后才启动 nginx 网关。可观测性组件按需启动：
+固定名称的旧 Job 不能复用：Kubernetes Job PodTemplate 不可修改，复用还可能导致新迁移没有执行。
+`admin-migrate`、`product-migrate`、`order-migrate` 是模板角色名，发布平台必须为每次运行生成唯一
+对象名。
 
-```bash
-docker compose -f deploy/docker-compose.yml --profile obs up -d
-```
+只发布发生变化的服务。例如 product 发布不应重新运行 admin/order 迁移，也不应滚动其 Pod。
 
-端口如下：
+## 数据库变更策略
 
-| 服务 | HTTP | gRPC | metrics |
-|---|---:|---:|---:|
-| gateway | 8000 | - | - |
-| admin | 8001 | 9001 | 9101 |
-| product | 8002 | 9002 | 9102 |
-| order | 8003 | 9003 | 9103 |
+数据库迁移采用 expand/contract：
 
-容器之间使用 `admin:9000`、`product:9000` 这样的服务 DNS，宿主机映射端口只用于调试。
+1. expand：先添加兼容的新表、列、索引或双写能力；
+2. rollout：发布仍兼容旧 schema 的应用；
+3. backfill：限速回填并核对数据；
+4. contract：确认所有旧版本退出后，再删除旧结构。
 
-## 生产部署
+应用回滚只回退镜像 digest；已经执行的 schema 变更不得依赖 Pod 自动回滚。破坏性 contract
+迁移必须作为独立发布，在备份、兼容窗口和回滚方案确认后执行。
 
-可直接渲染生产基线：
+## 网关与服务通信
 
-```bash
-kubectl kustomize deploy/kubernetes/base
-```
+生产只使用 Gateway API + Envoy Gateway，不部署 Compose 的 nginx。仓库中的 `Gateway` 和
+`HTTPRoute` 是路由声明，集群必须预先安装 `GatewayClass/envoy` 对应的控制器；没有控制器时，
+资源可以创建但不会产生可用入口。
 
-实际环境从 overlay 进入：`overlays/staging`、`overlays/production`，需要服务网格 mTLS 时
-使用 `overlays/production-mtls`。网关生产策略单独位于 `deploy/kubernetes/gateway`，备份和
-可观测性也分别部署。完整发布、告警、MQ、备份恢复和容灾步骤见
-[`operations.md`](operations.md)。
+外部流量按路径进入三个 HTTP Service：
 
-`deploy/kubernetes/base` 已包含三个服务的 Deployment/Service、一次性迁移 Job、
-Gateway API、HPA、PDB、探针、安全上下文和 NetworkPolicy。默认域名、镜像仓库、
-Keycloak、Redis、S3 地址都是示例值，发布前必须由 overlay 替换。
-
-集群必须预先安装一个实现 Gateway API 的控制器；基线使用
-`gatewayClassName: envoy`。TLS Secret 为 `eagle-tls`，外部入口只暴露 80/443，
-HTTP 会重定向到 HTTPS。
-
-运行时 Secret 的键清单见 `deploy/kubernetes/secret.example.yaml`。示例文件只含
-`CHANGE_ME`，不要直接应用；生产应由 External Secrets、Vault 或云 Secret Manager
-生成同名 `eagle-runtime` Secret。
-
-每个镜像对应一个独立 Kubernetes Deployment 和 ClusterIP Service。发布顺序固定为：
-
-1. 用 Git SHA 或版本号构建三个不可变镜像；
-2. 只对发生变更的服务运行 `/app/migrate -dir /app/migrations` Job；
-3. Job 成功后滚动该服务的 Deployment；
-4. `/readyz` 通过后接入流量；
-5. 观察错误率、延迟和授权判定失败。
-
-部署平台应提供：
-
-| 能力 | Kubernetes 对象 |
+| 路径 | 后端 |
 |---|---|
-| 服务进程 | Deployment、Service、PodDisruptionBudget |
-| 外部 HTTP | Ingress 或 Gateway API |
-| 普通配置 | ConfigMap |
-| DSN、OIDC、对象存储凭据 | Secret / ExternalSecret |
-| 数据库变更 | 每次发布的一次性 Job |
-| 弹性 | 有真实容量数据后配置 HPA |
-| 网络隔离 | NetworkPolicy |
-| 可观测性 | ServiceMonitor、OTLP exporter |
+| `/v1/system` | admin:8000 |
+| `/v1/products` | product:8000 |
+| `/v1/orders` | order:8000 |
 
-Redis、RabbitMQ、PostgreSQL 和对象存储优先使用托管高可用服务；应用仓库只持有
-连接契约和本地开发 Compose，不部署单副本有状态 Pod 冒充生产集群。
+内部 gRPC 使用 Headless Service + `dns:///`：product 调 admin，order 调 product。服务间调用
+使用独立 Client Credentials，不能复用 Compose 的 `eagle-worker` 开发凭据。
 
-数据库迁移采用 expand/contract。Deployment 容器启动时不自动迁移，避免多副本同时迁移。
+## Secret 与配置
 
-## 网络与存储边界
+`deploy/kubernetes/secret.example.yaml` 只列出键名，所有值都是 `CHANGE_ME`，不得直接 apply。
+生产由 Secret Manager 生成同名 `eagle-runtime` Secret。普通配置通过 ConfigMap 注入，敏感值
+只能通过 Secret 引用。
 
-| 来源 | 目标 | 用途 |
-|---|---|---|
-| Ingress/Gateway | 三个服务 HTTP | 外部 API |
-| product | admin gRPC | 权限判定 |
-| order | product gRPC | 商品快照 |
-| 各服务 | 自己的 PostgreSQL database | 数据访问 |
-| 各服务 | Keycloak JWKS | token 验签 |
-| Prometheus | 各服务 metrics | 指标采集 |
-| 各服务 | OTel Collector | trace 上报 |
+上线前至少核对：
 
-admin 已支持 `local` 与 `s3` BlobStore。Compose 使用 MinIO，生产设置
-`EAGLE_FILE_PROVIDER=s3` 后可连接 AWS S3、OSS 或兼容服务。bucket 由部署平台预先
-创建，应用启动时只检查存在性，不在运行时自动创建生产资源。
+- token 的 `iss` 与 `EAGLE_AUTH_ISSUER` 完全一致；
+- product/order 使用不同的 Client Credentials；
+- 每个 DSN 只能访问自己的 database；
+- RabbitMQ、Redis、OIDC、S3、OTLP 使用生产 TLS 地址和受信 CA；
+- TLS Secret、数据库口令、服务 secret 支持独立轮换。
 
-## 可观测性与 SLO
+## 就绪、扩缩容与网络
 
-Compose 的 `obs` profile 包含 Prometheus、Alertmanager、Tempo、Loki、Alloy 和
-Grafana；Alloy 通过 Docker API 收集结构化 stdout 日志。默认 SLO 是 30 天
-99.9% 可用性，另外监控 2 秒 p99 延迟、Redis 可用性和 RabbitMQ 队列积压。
+`/livez` 只表示进程存活，`/readyz` 聚合初始化状态和数据库等依赖检查。Gateway 和 Service 只应
+把流量发送给 readiness 通过的 Pod。滚动策略保持 `maxUnavailable: 0`，发布平台仍需等待
+Deployment rollout，而不是只等待资源 apply 成功。
 
-Kubernetes 使用 `deploy/kubernetes/observability` 中的 ServiceMonitor 和
-PrometheusRule；它要求 Prometheus Operator CRD。生产告警接收方需要在 overlay
-中替换为实际的 PagerDuty、Slack、钉钉或企业告警系统。
+HPA、PDB、topology spread、ResourceQuota、LimitRange、网关限流和熔断值都是基线，不是生产
+容量结论，必须由压测和真实流量校准。NetworkPolicy 只允许网关访问 HTTP、指定服务访问内部
+gRPC、Prometheus 访问 metrics；环境仓库还应按实际外部依赖补 egress 白名单。
 
-只有文件流量需要独立扩容、通知出现独立异步消费链路，或模块由不同团队独立发布时，才把对应模块提升为新服务。
+## 上线检查
+
+- 镜像使用 digest，签名/provenance 校验通过；
+- 只运行发生变更服务的唯一迁移 Job，且状态为 Complete；
+- Deployment 已更新到同一 digest，rollout 和 readiness 通过；
+- Gateway 状态为 Programmed，证书、域名和 CORS 正确；
+- Secret 来自受控系统，示例 Secret 未被应用；
+- 资源、HPA、限流和熔断已经按环境容量校准；
+- 错误率、p99、Pod 重启、Outbox 年龄、DLQ 和消费失败进入观察面板；
+- 发布负责人、回滚条件和观察窗口已经记录。
