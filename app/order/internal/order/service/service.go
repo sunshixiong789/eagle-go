@@ -13,23 +13,27 @@ import (
 
 type OrderService struct {
 	orderv1.UnimplementedOrderServiceServer
-	uc *application.Usecase
+	commands *application.Usecase
+	reader   domain.Reader
 }
 
-func NewOrderService(uc *application.Usecase) *OrderService { return &OrderService{uc: uc} }
+func NewOrderService(commands *application.Usecase, reader domain.Reader) *OrderService {
+	return &OrderService{commands: commands, reader: reader}
+}
 
 func toProto(value *domain.Order) *orderv1.Order {
 	if value == nil {
 		return nil
 	}
-	items := make([]*orderv1.OrderItem, 0, len(value.Items))
-	for _, item := range value.Items {
-		items = append(items, &orderv1.OrderItem{
+	items := value.Items()
+	out := make([]*orderv1.OrderItem, 0, len(items))
+	for _, item := range items {
+		out = append(out, &orderv1.OrderItem{
 			ProductId: item.ProductID, ProductSku: item.ProductSKU, ProductName: item.ProductName,
 			UnitPriceCents: item.UnitPriceCents, Quantity: item.Quantity, SubtotalCents: item.SubtotalCents,
 		})
 	}
-	return &orderv1.Order{Id: value.ID, Status: orderv1.OrderStatus_ORDER_STATUS_CREATED, TotalCents: value.TotalCents, Items: items, CreatedAt: timestamppb.New(value.CreatedAt)}
+	return &orderv1.Order{Id: value.ID(), Status: orderv1.OrderStatus_ORDER_STATUS_CREATED, TotalCents: value.TotalCents(), Items: out, CreatedAt: timestamppb.New(value.CreatedAt())}
 }
 
 func (s *OrderService) CreateOrder(ctx context.Context, req *orderv1.CreateOrderRequest) (*orderv1.CreateOrderResponse, error) {
@@ -37,7 +41,7 @@ func (s *OrderService) CreateOrder(ctx context.Context, req *orderv1.CreateOrder
 	for _, item := range req.GetItems() {
 		requested = append(requested, domain.RequestedItem{ProductID: item.GetProductId(), Quantity: item.GetQuantity()})
 	}
-	value, err := s.uc.Create(ctx, identity.Subject(ctx), requested)
+	value, err := s.commands.Create(ctx, identity.Subject(ctx), req.GetIdempotencyKey(), requested)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +49,7 @@ func (s *OrderService) CreateOrder(ctx context.Context, req *orderv1.CreateOrder
 }
 
 func (s *OrderService) GetMyOrder(ctx context.Context, req *orderv1.GetMyOrderRequest) (*orderv1.GetMyOrderResponse, error) {
-	value, err := s.uc.GetOwned(ctx, identity.Subject(ctx), req.GetId())
+	value, err := s.reader.GetOwned(ctx, identity.Subject(ctx), req.GetId())
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +57,15 @@ func (s *OrderService) GetMyOrder(ctx context.Context, req *orderv1.GetMyOrderRe
 }
 
 func (s *OrderService) ListMyOrders(ctx context.Context, req *orderv1.ListMyOrdersRequest) (*orderv1.ListMyOrdersResponse, error) {
-	values, total, err := s.uc.ListOwned(ctx, identity.Subject(ctx), req.GetPage(), req.GetPageSize())
+	pageSize := req.GetPageSize()
+	if pageSize == 0 {
+		pageSize = 20
+	}
+	values, total, err := s.reader.ListOwned(ctx, domain.ListQuery{
+		OwnerSubject: identity.Subject(ctx),
+		Offset:       int64(req.GetPage()) * int64(pageSize),
+		PageSize:     pageSize,
+	})
 	if err != nil {
 		return nil, err
 	}

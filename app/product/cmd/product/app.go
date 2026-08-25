@@ -25,5 +25,6 @@ func productErrorMappings() []server.ErrorMappingRule {
 	return []server.ErrorMappingRule{
 		server.NotFound(productdomain.ErrProductNotFound, productv1.ErrorReason_ERROR_REASON_PRODUCT_NOT_FOUND),
 		server.Conflict(productdomain.ErrProductSKUDuplicated, productv1.ErrorReason_ERROR_REASON_PRODUCT_SKU_DUPLICATED),
+		server.BadRequest(productdomain.ErrInvalidProduct, productv1.ErrorReason_ERROR_REASON_INVALID_PRODUCT),
 	}
 }

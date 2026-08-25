@@ -21,7 +21,7 @@ func NewCachedRepository(next domain.Repository, cache productCache, logger *slo
 func (r *cachedRepository) Create(ctx context.Context, value *domain.Product) (*domain.Product, error) {
 	created, err := r.next.Create(ctx, value)
 	if err == nil {
-		r.set(ctx, created)
+		r.setIfNewer(ctx, created)
 	}
 	return created, err
 }
@@ -34,7 +34,7 @@ func (r *cachedRepository) Get(ctx context.Context, id int64) (*domain.Product, 
 	}
 	product, err := r.next.Get(ctx, id)
 	if err == nil {
-		r.set(ctx, product)
+		r.setIfNewer(ctx, product)
 	}
 	return product, err
 }
@@ -50,7 +50,7 @@ func (r *cachedRepository) List(ctx context.Context, query domain.ListQuery) ([]
 func (r *cachedRepository) Update(ctx context.Context, value *domain.Product) (*domain.Product, error) {
 	updated, err := r.next.Update(ctx, value)
 	if err == nil {
-		r.set(ctx, updated)
+		r.setIfNewer(ctx, updated)
 	}
 	return updated, err
 }
@@ -65,8 +65,8 @@ func (r *cachedRepository) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
-func (r *cachedRepository) set(ctx context.Context, product *domain.Product) {
-	if err := r.cache.Set(ctx, product); err != nil {
+func (r *cachedRepository) setIfNewer(ctx context.Context, product *domain.Product) {
+	if err := r.cache.SetIfNewer(ctx, product); err != nil {
 		r.warn(ctx, "写入 Redis 商品缓存失败", err)
 	}
 }

@@ -1308,6 +1308,8 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/eagle.order.v1.CreateOrderItem'
+                idempotencyKey:
+                    type: string
         eagle.order.v1.CreateOrderResponse:
             type: object
             properties:

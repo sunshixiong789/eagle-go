@@ -11,7 +11,7 @@
 | 服务 | 业务能力 | 数据库 | 依赖 |
 |---|---|---|---|
 | `admin` | 权限、字典、文件、站内通知 | `eagle_admin` | Keycloak、S3、RabbitMQ |
-| `product` | 商品 | `eagle_product` | admin 权限判定、Redis |
+| `product` | 商品 | `eagle_product` | admin 策略快照、Redis |
 | `order` | 订单和商品快照 | `eagle_order` | product 商品查询、RabbitMQ |
 
 每个服务都有自己的 `go.mod`、配置、Ent Client、迁移、二进制和镜像。根目录的 `go.work` 只负责把这些模块组合成本地开发工作区，不集中管理各服务依赖。
@@ -51,7 +51,7 @@ flowchart TB
     gateway -->|/v1/products| product
     gateway -->|/v1/orders| order
 
-    product -.->|gRPC 权限判定| admin
+    product -.->|gRPC 策略快照| admin
     order -.->|gRPC 商品快照| product
     order -->|Transactional Outbox| rabbitmq
     rabbitmq -->|order.created.v1| admin
@@ -89,7 +89,13 @@ eagle-go/
 └── Makefile                # 统一开发入口
 ```
 
-业务代码先按服务、再按模块组织。一个模块内部固定为：
+业务代码先按服务、再按模块组织。简单 CRUD 使用：
+
+```text
+service -> domain <- infrastructure
+```
+
+存在用例编排时使用：
 
 ```text
 service -> application -> domain <- infrastructure
@@ -98,11 +104,13 @@ service -> application -> domain <- infrastructure
 | 层 | 职责 |
 |---|---|
 | `service` | 实现生成的 Protobuf Service，转换协议对象并传递当前主体 |
-| `application` | 编排用例，只依赖本模块 `domain` |
+| `application` | 可选；编排用例，只依赖本模块 `domain` |
 | `domain` | 模型、不变量、领域错误和仓储/客户端端口，不依赖框架 |
 | `infrastructure` | 实现数据库、文件存储和跨服务客户端端口 |
 
 只有真实不变量才需要聚合根。权限树、订单适合领域模型；字典这类直接 CRUD 保持简单即可。
+列表 API 统一使用 0-based `page`（`page=0` 为第一页），默认每页 20 条；领域查询的 offset
+使用 `int64`，禁止在 `int32` 上先做页码乘法。
 
 ## 快速开始
 
@@ -326,7 +334,7 @@ go test -short ./app/admin/... ./app/product/... ./app/order/... ./pkg/...
 2. 每个 RPC 显式声明 `access`；需要权限时同时声明三段式 `perm`。
 3. 新权限码通过 admin 的 goose 迁移写入 `permission_definition`。
 4. 执行 `make api`，不要手改 `*.pb.go`。
-5. 在所属模块补齐 `service -> application -> domain <- infrastructure`。
+5. 按用例复杂度选择 `service -> domain <- infrastructure` 或 `service -> application -> domain <- infrastructure`。
 6. 只有新增一个 Protobuf Service 时，才在 `app/<service>/cmd/<service>` 的 Wire provider 里注册。
 7. 添加测试并执行 `make lint && make test`。
 
@@ -395,7 +403,7 @@ subject := identity.Subject(ctx)
 3. 在 `app/<service>/migrations/` 添加 goose SQL；生产不使用 Ent 自动迁移。
 4. 在 `api/` 定义 RPC、校验规则、HTTP 映射和访问级别，然后执行 `make api`。
 5. 在 `internal/<module>/domain` 放模型、规则和仓储/客户端接口。
-6. 在 `application` 编排用例，在 `infrastructure` 实现数据库或远程端口，在 `service` 转换协议对象。
+6. 仅在存在多端口、聚合变更、事务、幂等、补偿或多入口复用时在 `application` 编排用例；纯 CRUD 由 `service` 依赖 domain 端口。`infrastructure` 实现数据库或远程端口，`service` 只转换协议对象。
 7. 在 `app/<service>/cmd/<service>` 的 `providerSet` 装配新模块，然后执行 `make wire`。禁止手改 `wire_gen.go`。
 8. 先测领域不变量，再测真实基础设施与 HTTP 链路。
 

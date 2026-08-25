@@ -29,6 +29,12 @@ func (_c *PurchaseOrderCreate) SetOwnerSubject(v string) *PurchaseOrderCreate {
 	return _c
 }
 
+// SetIdempotencyKey sets the "idempotency_key" field.
+func (_c *PurchaseOrderCreate) SetIdempotencyKey(v string) *PurchaseOrderCreate {
+	_c.mutation.SetIdempotencyKey(v)
+	return _c
+}
+
 // SetStatus sets the "status" field.
 func (_c *PurchaseOrderCreate) SetStatus(v string) *PurchaseOrderCreate {
 	_c.mutation.SetStatus(v)
@@ -112,6 +118,14 @@ func (_c *PurchaseOrderCreate) check() error {
 			return &ValidationError{Name: "owner_subject", err: fmt.Errorf(`ent: validator failed for field "PurchaseOrder.owner_subject": %w`, err)}
 		}
 	}
+	if _, ok := _c.mutation.IdempotencyKey(); !ok {
+		return &ValidationError{Name: "idempotency_key", err: errors.New(`ent: missing required field "PurchaseOrder.idempotency_key"`)}
+	}
+	if v, ok := _c.mutation.IdempotencyKey(); ok {
+		if err := purchaseorder.IdempotencyKeyValidator(v); err != nil {
+			return &ValidationError{Name: "idempotency_key", err: fmt.Errorf(`ent: validator failed for field "PurchaseOrder.idempotency_key": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "PurchaseOrder.status"`)}
 	}
@@ -175,6 +189,10 @@ func (_c *PurchaseOrderCreate) createSpec() (*PurchaseOrder, *sqlgraph.CreateSpe
 	if value, ok := _c.mutation.OwnerSubject(); ok {
 		_spec.SetField(purchaseorder.FieldOwnerSubject, field.TypeString, value)
 		_node.OwnerSubject = value
+	}
+	if value, ok := _c.mutation.IdempotencyKey(); ok {
+		_spec.SetField(purchaseorder.FieldIdempotencyKey, field.TypeString, value)
+		_node.IdempotencyKey = value
 	}
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(purchaseorder.FieldStatus, field.TypeString, value)
@@ -298,6 +316,9 @@ func (u *PurchaseOrderUpsertOne) UpdateNewValues() *PurchaseOrderUpsertOne {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
 		if _, exists := u.create.mutation.ID(); exists {
 			s.SetIgnore(purchaseorder.FieldID)
+		}
+		if _, exists := u.create.mutation.IdempotencyKey(); exists {
+			s.SetIgnore(purchaseorder.FieldIdempotencyKey)
 		}
 		if _, exists := u.create.mutation.CreatedAt(); exists {
 			s.SetIgnore(purchaseorder.FieldCreatedAt)
@@ -564,6 +585,9 @@ func (u *PurchaseOrderUpsertBulk) UpdateNewValues() *PurchaseOrderUpsertBulk {
 		for _, b := range u.create.builders {
 			if _, exists := b.mutation.ID(); exists {
 				s.SetIgnore(purchaseorder.FieldID)
+			}
+			if _, exists := b.mutation.IdempotencyKey(); exists {
+				s.SetIgnore(purchaseorder.FieldIdempotencyKey)
 			}
 			if _, exists := b.mutation.CreatedAt(); exists {
 				s.SetIgnore(purchaseorder.FieldCreatedAt)

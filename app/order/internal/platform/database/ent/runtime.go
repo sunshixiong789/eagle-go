@@ -89,16 +89,20 @@ func init() {
 	purchaseorderDescOwnerSubject := purchaseorderFields[1].Descriptor()
 	// purchaseorder.OwnerSubjectValidator is a validator for the "owner_subject" field. It is called by the builders before save.
 	purchaseorder.OwnerSubjectValidator = purchaseorderDescOwnerSubject.Validators[0].(func(string) error)
+	// purchaseorderDescIdempotencyKey is the schema descriptor for idempotency_key field.
+	purchaseorderDescIdempotencyKey := purchaseorderFields[2].Descriptor()
+	// purchaseorder.IdempotencyKeyValidator is a validator for the "idempotency_key" field. It is called by the builders before save.
+	purchaseorder.IdempotencyKeyValidator = purchaseorderDescIdempotencyKey.Validators[0].(func(string) error)
 	// purchaseorderDescStatus is the schema descriptor for status field.
-	purchaseorderDescStatus := purchaseorderFields[2].Descriptor()
+	purchaseorderDescStatus := purchaseorderFields[3].Descriptor()
 	// purchaseorder.StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	purchaseorder.StatusValidator = purchaseorderDescStatus.Validators[0].(func(string) error)
 	// purchaseorderDescTotalCents is the schema descriptor for total_cents field.
-	purchaseorderDescTotalCents := purchaseorderFields[3].Descriptor()
+	purchaseorderDescTotalCents := purchaseorderFields[4].Descriptor()
 	// purchaseorder.TotalCentsValidator is a validator for the "total_cents" field. It is called by the builders before save.
 	purchaseorder.TotalCentsValidator = purchaseorderDescTotalCents.Validators[0].(func(int64) error)
 	// purchaseorderDescCreatedAt is the schema descriptor for created_at field.
-	purchaseorderDescCreatedAt := purchaseorderFields[4].Descriptor()
+	purchaseorderDescCreatedAt := purchaseorderFields[5].Descriptor()
 	// purchaseorder.DefaultCreatedAt holds the default value on creation for the created_at field.
 	purchaseorder.DefaultCreatedAt = purchaseorderDescCreatedAt.Default.(func() time.Time)
 	// purchaseorderDescID is the schema descriptor for id field.

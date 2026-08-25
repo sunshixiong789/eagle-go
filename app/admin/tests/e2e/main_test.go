@@ -31,7 +31,6 @@ import (
 	accessdomain "github.com/eagle-go/eagle/app/admin/internal/access/domain"
 	accessinfra "github.com/eagle-go/eagle/app/admin/internal/access/infrastructure"
 	accessservice "github.com/eagle-go/eagle/app/admin/internal/access/service"
-	dictionaryapp "github.com/eagle-go/eagle/app/admin/internal/dictionary/application"
 	dictionarydomain "github.com/eagle-go/eagle/app/admin/internal/dictionary/domain"
 	dictionaryinfra "github.com/eagle-go/eagle/app/admin/internal/dictionary/infrastructure"
 	dictionaryservice "github.com/eagle-go/eagle/app/admin/internal/dictionary/service"
@@ -137,7 +136,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	}
 
 	permSvc := accessservice.NewPermissionService(accessapp.NewPermissionUsecase(permRepo, policyRepo))
-	dictSvc := dictionaryservice.NewDictService(dictionaryapp.NewDictUsecase(dictRepo))
+	dictSvc := dictionaryservice.NewDictService(dictRepo)
 	bindingSvc := accessservice.NewRoleBindingService(accessapp.NewRoleBindingUsecase(policyRepo, permRepo))
 	fileSvc := fileservice.NewFileService(fileapp.NewUsecase(fileRepo, blobs, 10<<20))
 	notificationSvc := notificationservice.NewNotificationService(notificationapp.NewUsecase(notificationRepo))

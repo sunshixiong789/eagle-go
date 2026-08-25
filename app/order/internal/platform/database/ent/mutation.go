@@ -1787,18 +1787,19 @@ func (m *OutboxEventMutation) ResetEdge(name string) error {
 // PurchaseOrderMutation represents an operation that mutates the PurchaseOrder nodes in the graph.
 type PurchaseOrderMutation struct {
 	config
-	op             Op
-	typ            string
-	id             *string
-	owner_subject  *string
-	status         *string
-	total_cents    *int64
-	addtotal_cents *int64
-	created_at     *time.Time
-	clearedFields  map[string]struct{}
-	done           bool
-	oldValue       func(context.Context) (*PurchaseOrder, error)
-	predicates     []predicate.PurchaseOrder
+	op              Op
+	typ             string
+	id              *string
+	owner_subject   *string
+	idempotency_key *string
+	status          *string
+	total_cents     *int64
+	addtotal_cents  *int64
+	created_at      *time.Time
+	clearedFields   map[string]struct{}
+	done            bool
+	oldValue        func(context.Context) (*PurchaseOrder, error)
+	predicates      []predicate.PurchaseOrder
 }
 
 var _ ent.Mutation = (*PurchaseOrderMutation)(nil)
@@ -1939,6 +1940,42 @@ func (m *PurchaseOrderMutation) OldOwnerSubject(ctx context.Context) (v string, 
 // ResetOwnerSubject resets all changes to the "owner_subject" field.
 func (m *PurchaseOrderMutation) ResetOwnerSubject() {
 	m.owner_subject = nil
+}
+
+// SetIdempotencyKey sets the "idempotency_key" field.
+func (m *PurchaseOrderMutation) SetIdempotencyKey(s string) {
+	m.idempotency_key = &s
+}
+
+// IdempotencyKey returns the value of the "idempotency_key" field in the mutation.
+func (m *PurchaseOrderMutation) IdempotencyKey() (r string, exists bool) {
+	v := m.idempotency_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIdempotencyKey returns the old "idempotency_key" field's value of the PurchaseOrder entity.
+// If the PurchaseOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PurchaseOrderMutation) OldIdempotencyKey(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIdempotencyKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIdempotencyKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIdempotencyKey: %w", err)
+	}
+	return oldValue.IdempotencyKey, nil
+}
+
+// ResetIdempotencyKey resets all changes to the "idempotency_key" field.
+func (m *PurchaseOrderMutation) ResetIdempotencyKey() {
+	m.idempotency_key = nil
 }
 
 // SetStatus sets the "status" field.
@@ -2103,9 +2140,12 @@ func (m *PurchaseOrderMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PurchaseOrderMutation) Fields() []string {
-	fields := make([]string, 0, 4)
+	fields := make([]string, 0, 5)
 	if m.owner_subject != nil {
 		fields = append(fields, purchaseorder.FieldOwnerSubject)
+	}
+	if m.idempotency_key != nil {
+		fields = append(fields, purchaseorder.FieldIdempotencyKey)
 	}
 	if m.status != nil {
 		fields = append(fields, purchaseorder.FieldStatus)
@@ -2126,6 +2166,8 @@ func (m *PurchaseOrderMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case purchaseorder.FieldOwnerSubject:
 		return m.OwnerSubject()
+	case purchaseorder.FieldIdempotencyKey:
+		return m.IdempotencyKey()
 	case purchaseorder.FieldStatus:
 		return m.Status()
 	case purchaseorder.FieldTotalCents:
@@ -2143,6 +2185,8 @@ func (m *PurchaseOrderMutation) OldField(ctx context.Context, name string) (ent.
 	switch name {
 	case purchaseorder.FieldOwnerSubject:
 		return m.OldOwnerSubject(ctx)
+	case purchaseorder.FieldIdempotencyKey:
+		return m.OldIdempotencyKey(ctx)
 	case purchaseorder.FieldStatus:
 		return m.OldStatus(ctx)
 	case purchaseorder.FieldTotalCents:
@@ -2164,6 +2208,13 @@ func (m *PurchaseOrderMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetOwnerSubject(v)
+		return nil
+	case purchaseorder.FieldIdempotencyKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIdempotencyKey(v)
 		return nil
 	case purchaseorder.FieldStatus:
 		v, ok := value.(string)
@@ -2252,6 +2303,9 @@ func (m *PurchaseOrderMutation) ResetField(name string) error {
 	switch name {
 	case purchaseorder.FieldOwnerSubject:
 		m.ResetOwnerSubject()
+		return nil
+	case purchaseorder.FieldIdempotencyKey:
+		m.ResetIdempotencyKey()
 		return nil
 	case purchaseorder.FieldStatus:
 		m.ResetStatus()

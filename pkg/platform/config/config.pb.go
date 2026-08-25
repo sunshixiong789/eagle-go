@@ -141,8 +141,10 @@ type Upstream struct {
 	Timeout               *durationpb.Duration   `protobuf:"bytes,3,opt,name=timeout,proto3" json:"timeout,omitempty"`
 	MaxAttempts           int32                  `protobuf:"varint,4,opt,name=max_attempts,json=maxAttempts,proto3" json:"max_attempts,omitempty"`
 	RetryBackoff          *durationpb.Duration   `protobuf:"bytes,5,opt,name=retry_backoff,json=retryBackoff,proto3" json:"retry_backoff,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// Resource services periodically replace their local authorization snapshot.
+	AuthorizationRefreshInterval *durationpb.Duration `protobuf:"bytes,6,opt,name=authorization_refresh_interval,json=authorizationRefreshInterval,proto3" json:"authorization_refresh_interval,omitempty"`
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
 }
 
 func (x *Upstream) Reset() {
@@ -206,6 +208,13 @@ func (x *Upstream) GetMaxAttempts() int32 {
 func (x *Upstream) GetRetryBackoff() *durationpb.Duration {
 	if x != nil {
 		return x.RetryBackoff
+	}
+	return nil
+}
+
+func (x *Upstream) GetAuthorizationRefreshInterval() *durationpb.Duration {
+	if x != nil {
+		return x.AuthorizationRefreshInterval
 	}
 	return nil
 }
@@ -881,14 +890,16 @@ func (x *Cache_Redis) GetTtl() *durationpb.Duration {
 }
 
 type Messaging_RabbitMQ struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	Enabled           bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
-	Url               string                 `protobuf:"bytes,2,opt,name=url,proto3" json:"url,omitempty"`
-	Exchange          string                 `protobuf:"bytes,3,opt,name=exchange,proto3" json:"exchange,omitempty"`
-	OrderCreatedQueue string                 `protobuf:"bytes,4,opt,name=order_created_queue,json=orderCreatedQueue,proto3" json:"order_created_queue,omitempty"`
-	ReconnectBackoff  *durationpb.Duration   `protobuf:"bytes,5,opt,name=reconnect_backoff,json=reconnectBackoff,proto3" json:"reconnect_backoff,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	Enabled              bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	Url                  string                 `protobuf:"bytes,2,opt,name=url,proto3" json:"url,omitempty"`
+	Exchange             string                 `protobuf:"bytes,3,opt,name=exchange,proto3" json:"exchange,omitempty"`
+	OrderCreatedQueue    string                 `protobuf:"bytes,4,opt,name=order_created_queue,json=orderCreatedQueue,proto3" json:"order_created_queue,omitempty"`
+	ReconnectBackoff     *durationpb.Duration   `protobuf:"bytes,5,opt,name=reconnect_backoff,json=reconnectBackoff,proto3" json:"reconnect_backoff,omitempty"`
+	ConsumerMaxAttempts  int32                  `protobuf:"varint,6,opt,name=consumer_max_attempts,json=consumerMaxAttempts,proto3" json:"consumer_max_attempts,omitempty"`
+	ConsumerRetryBackoff *durationpb.Duration   `protobuf:"bytes,7,opt,name=consumer_retry_backoff,json=consumerRetryBackoff,proto3" json:"consumer_retry_backoff,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *Messaging_RabbitMQ) Reset() {
@@ -952,6 +963,20 @@ func (x *Messaging_RabbitMQ) GetOrderCreatedQueue() string {
 func (x *Messaging_RabbitMQ) GetReconnectBackoff() *durationpb.Duration {
 	if x != nil {
 		return x.ReconnectBackoff
+	}
+	return nil
+}
+
+func (x *Messaging_RabbitMQ) GetConsumerMaxAttempts() int32 {
+	if x != nil {
+		return x.ConsumerMaxAttempts
+	}
+	return 0
+}
+
+func (x *Messaging_RabbitMQ) GetConsumerRetryBackoff() *durationpb.Duration {
+	if x != nil {
+		return x.ConsumerRetryBackoff
 	}
 	return nil
 }
@@ -1179,13 +1204,14 @@ const file_config_proto_rawDesc = "" +
 	"\bupstream\x18\x06 \x01(\v2\x1f.eagle.platform.config.UpstreamR\bupstream\x122\n" +
 	"\x05cache\x18\a \x01(\v2\x1c.eagle.platform.config.CacheR\x05cache\x12>\n" +
 	"\tmessaging\x18\b \x01(\v2 .eagle.platform.config.MessagingR\tmessaging\x12E\n" +
-	"\fservice_auth\x18\t \x01(\v2\".eagle.platform.config.ServiceAuthR\vserviceAuth\"\x84\x02\n" +
+	"\fservice_auth\x18\t \x01(\v2\".eagle.platform.config.ServiceAuthR\vserviceAuth\"\xe5\x02\n" +
 	"\bUpstream\x125\n" +
 	"\x16authorization_endpoint\x18\x01 \x01(\tR\x15authorizationEndpoint\x12)\n" +
 	"\x10product_endpoint\x18\x02 \x01(\tR\x0fproductEndpoint\x123\n" +
 	"\atimeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\atimeout\x12!\n" +
 	"\fmax_attempts\x18\x04 \x01(\x05R\vmaxAttempts\x12>\n" +
-	"\rretry_backoff\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\fretryBackoff\"\xbf\x02\n" +
+	"\rretry_backoff\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\fretryBackoff\x12_\n" +
+	"\x1eauthorization_refresh_interval\x18\x06 \x01(\v2\x19.google.protobuf.DurationR\x1cauthorizationRefreshInterval\"\xbf\x02\n" +
 	"\x04File\x12\x1a\n" +
 	"\bprovider\x18\x03 \x01(\tR\bprovider\x12\x1b\n" +
 	"\tlocal_dir\x18\x01 \x01(\tR\blocalDir\x12$\n" +
@@ -1208,15 +1234,17 @@ const file_config_proto_rawDesc = "" +
 	"\busername\x18\x03 \x01(\tR\busername\x12\x1a\n" +
 	"\bpassword\x18\x04 \x01(\tR\bpassword\x12\x1a\n" +
 	"\bdatabase\x18\x05 \x01(\x05R\bdatabase\x12+\n" +
-	"\x03ttl\x18\x06 \x01(\v2\x19.google.protobuf.DurationR\x03ttl\"\x9f\x02\n" +
+	"\x03ttl\x18\x06 \x01(\v2\x19.google.protobuf.DurationR\x03ttl\"\xa4\x03\n" +
 	"\tMessaging\x12E\n" +
-	"\brabbitmq\x18\x01 \x01(\v2).eagle.platform.config.Messaging.RabbitMQR\brabbitmq\x1a\xca\x01\n" +
+	"\brabbitmq\x18\x01 \x01(\v2).eagle.platform.config.Messaging.RabbitMQR\brabbitmq\x1a\xcf\x02\n" +
 	"\bRabbitMQ\x12\x18\n" +
 	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x10\n" +
 	"\x03url\x18\x02 \x01(\tR\x03url\x12\x1a\n" +
 	"\bexchange\x18\x03 \x01(\tR\bexchange\x12.\n" +
 	"\x13order_created_queue\x18\x04 \x01(\tR\x11orderCreatedQueue\x12F\n" +
-	"\x11reconnect_backoff\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\x10reconnectBackoff\"l\n" +
+	"\x11reconnect_backoff\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\x10reconnectBackoff\x122\n" +
+	"\x15consumer_max_attempts\x18\x06 \x01(\x05R\x13consumerMaxAttempts\x12O\n" +
+	"\x16consumer_retry_backoff\x18\a \x01(\v2\x19.google.protobuf.DurationR\x14consumerRetryBackoff\"l\n" +
 	"\vServiceAuth\x12\x1b\n" +
 	"\ttoken_url\x18\x01 \x01(\tR\btokenUrl\x12\x1b\n" +
 	"\tclient_id\x18\x02 \x01(\tR\bclientId\x12#\n" +
@@ -1298,23 +1326,25 @@ var file_config_proto_depIdxs = []int32{
 	5,  // 8: eagle.platform.config.Bootstrap.service_auth:type_name -> eagle.platform.config.ServiceAuth
 	16, // 9: eagle.platform.config.Upstream.timeout:type_name -> google.protobuf.Duration
 	16, // 10: eagle.platform.config.Upstream.retry_backoff:type_name -> google.protobuf.Duration
-	10, // 11: eagle.platform.config.File.s3:type_name -> eagle.platform.config.File.S3
-	11, // 12: eagle.platform.config.Cache.redis:type_name -> eagle.platform.config.Cache.Redis
-	12, // 13: eagle.platform.config.Messaging.rabbitmq:type_name -> eagle.platform.config.Messaging.RabbitMQ
-	13, // 14: eagle.platform.config.Server.http:type_name -> eagle.platform.config.Server.HTTP
-	14, // 15: eagle.platform.config.Server.grpc:type_name -> eagle.platform.config.Server.GRPC
-	15, // 16: eagle.platform.config.Data.database:type_name -> eagle.platform.config.Data.Database
-	16, // 17: eagle.platform.config.Cache.Redis.ttl:type_name -> google.protobuf.Duration
-	16, // 18: eagle.platform.config.Messaging.RabbitMQ.reconnect_backoff:type_name -> google.protobuf.Duration
-	16, // 19: eagle.platform.config.Server.HTTP.timeout:type_name -> google.protobuf.Duration
-	16, // 20: eagle.platform.config.Server.GRPC.timeout:type_name -> google.protobuf.Duration
-	16, // 21: eagle.platform.config.Data.Database.max_conn_lifetime:type_name -> google.protobuf.Duration
-	16, // 22: eagle.platform.config.Data.Database.max_conn_idle_time:type_name -> google.protobuf.Duration
-	23, // [23:23] is the sub-list for method output_type
-	23, // [23:23] is the sub-list for method input_type
-	23, // [23:23] is the sub-list for extension type_name
-	23, // [23:23] is the sub-list for extension extendee
-	0,  // [0:23] is the sub-list for field type_name
+	16, // 11: eagle.platform.config.Upstream.authorization_refresh_interval:type_name -> google.protobuf.Duration
+	10, // 12: eagle.platform.config.File.s3:type_name -> eagle.platform.config.File.S3
+	11, // 13: eagle.platform.config.Cache.redis:type_name -> eagle.platform.config.Cache.Redis
+	12, // 14: eagle.platform.config.Messaging.rabbitmq:type_name -> eagle.platform.config.Messaging.RabbitMQ
+	13, // 15: eagle.platform.config.Server.http:type_name -> eagle.platform.config.Server.HTTP
+	14, // 16: eagle.platform.config.Server.grpc:type_name -> eagle.platform.config.Server.GRPC
+	15, // 17: eagle.platform.config.Data.database:type_name -> eagle.platform.config.Data.Database
+	16, // 18: eagle.platform.config.Cache.Redis.ttl:type_name -> google.protobuf.Duration
+	16, // 19: eagle.platform.config.Messaging.RabbitMQ.reconnect_backoff:type_name -> google.protobuf.Duration
+	16, // 20: eagle.platform.config.Messaging.RabbitMQ.consumer_retry_backoff:type_name -> google.protobuf.Duration
+	16, // 21: eagle.platform.config.Server.HTTP.timeout:type_name -> google.protobuf.Duration
+	16, // 22: eagle.platform.config.Server.GRPC.timeout:type_name -> google.protobuf.Duration
+	16, // 23: eagle.platform.config.Data.Database.max_conn_lifetime:type_name -> google.protobuf.Duration
+	16, // 24: eagle.platform.config.Data.Database.max_conn_idle_time:type_name -> google.protobuf.Duration
+	25, // [25:25] is the sub-list for method output_type
+	25, // [25:25] is the sub-list for method input_type
+	25, // [25:25] is the sub-list for extension type_name
+	25, // [25:25] is the sub-list for extension extendee
+	0,  // [0:25] is the sub-list for field type_name
 }
 
 func init() { file_config_proto_init() }

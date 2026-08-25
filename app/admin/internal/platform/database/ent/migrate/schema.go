@@ -95,7 +95,9 @@ var (
 		{Name: "content_type", Type: field.TypeString, Size: 128, Default: "application/octet-stream"},
 		{Name: "size", Type: field.TypeInt64},
 		{Name: "sha256", Type: field.TypeString, Size: 64},
+		{Name: "state", Type: field.TypeString, Size: 16, Default: "pending"},
 		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
 	}
 	// StoredFileTable holds the schema information for the "stored_file" table.
 	StoredFileTable = &schema.Table{
@@ -106,12 +108,17 @@ var (
 			{
 				Name:    "idx_stored_file_owner_created",
 				Unique:  false,
-				Columns: []*schema.Column{StoredFileColumns[1], StoredFileColumns[7]},
+				Columns: []*schema.Column{StoredFileColumns[1], StoredFileColumns[8]},
 				Annotation: &entsql.IndexAnnotation{
 					DescColumns: map[string]bool{
-						StoredFileColumns[7].Name: true,
+						StoredFileColumns[8].Name: true,
 					},
 				},
+			},
+			{
+				Name:    "idx_stored_file_state_updated",
+				Unique:  false,
+				Columns: []*schema.Column{StoredFileColumns[7], StoredFileColumns[9]},
 			},
 		},
 	}

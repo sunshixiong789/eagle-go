@@ -2239,7 +2239,9 @@ type FileMutation struct {
 	size          *int64
 	addsize       *int64
 	sha256        *string
+	state         *string
 	created_at    *time.Time
+	updated_at    *time.Time
 	clearedFields map[string]struct{}
 	done          bool
 	oldValue      func(context.Context) (*File, error)
@@ -2586,6 +2588,42 @@ func (m *FileMutation) ResetSha256() {
 	m.sha256 = nil
 }
 
+// SetState sets the "state" field.
+func (m *FileMutation) SetState(s string) {
+	m.state = &s
+}
+
+// State returns the value of the "state" field in the mutation.
+func (m *FileMutation) State() (r string, exists bool) {
+	v := m.state
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldState returns the old "state" field's value of the File entity.
+// If the File object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *FileMutation) OldState(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldState is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldState requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldState: %w", err)
+	}
+	return oldValue.State, nil
+}
+
+// ResetState resets all changes to the "state" field.
+func (m *FileMutation) ResetState() {
+	m.state = nil
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *FileMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -2622,6 +2660,42 @@ func (m *FileMutation) ResetCreatedAt() {
 	m.created_at = nil
 }
 
+// SetUpdatedAt sets the "updated_at" field.
+func (m *FileMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *FileMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the File entity.
+// If the File object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *FileMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *FileMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
 // Where appends a list predicates to the FileMutation builder.
 func (m *FileMutation) Where(ps ...predicate.File) {
 	m.predicates = append(m.predicates, ps...)
@@ -2656,7 +2730,7 @@ func (m *FileMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *FileMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 9)
 	if m.owner_subject != nil {
 		fields = append(fields, file.FieldOwnerSubject)
 	}
@@ -2675,8 +2749,14 @@ func (m *FileMutation) Fields() []string {
 	if m.sha256 != nil {
 		fields = append(fields, file.FieldSha256)
 	}
+	if m.state != nil {
+		fields = append(fields, file.FieldState)
+	}
 	if m.created_at != nil {
 		fields = append(fields, file.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, file.FieldUpdatedAt)
 	}
 	return fields
 }
@@ -2698,8 +2778,12 @@ func (m *FileMutation) Field(name string) (ent.Value, bool) {
 		return m.Size()
 	case file.FieldSha256:
 		return m.Sha256()
+	case file.FieldState:
+		return m.State()
 	case file.FieldCreatedAt:
 		return m.CreatedAt()
+	case file.FieldUpdatedAt:
+		return m.UpdatedAt()
 	}
 	return nil, false
 }
@@ -2721,8 +2805,12 @@ func (m *FileMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldSize(ctx)
 	case file.FieldSha256:
 		return m.OldSha256(ctx)
+	case file.FieldState:
+		return m.OldState(ctx)
 	case file.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
+	case file.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
 	}
 	return nil, fmt.Errorf("unknown File field %s", name)
 }
@@ -2774,12 +2862,26 @@ func (m *FileMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetSha256(v)
 		return nil
+	case file.FieldState:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetState(v)
+		return nil
 	case file.FieldCreatedAt:
 		v, ok := value.(time.Time)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetCreatedAt(v)
+		return nil
+	case file.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
 		return nil
 	}
 	return fmt.Errorf("unknown File field %s", name)
@@ -2863,8 +2965,14 @@ func (m *FileMutation) ResetField(name string) error {
 	case file.FieldSha256:
 		m.ResetSha256()
 		return nil
+	case file.FieldState:
+		m.ResetState()
+		return nil
 	case file.FieldCreatedAt:
 		m.ResetCreatedAt()
+		return nil
+	case file.FieldUpdatedAt:
+		m.ResetUpdatedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown File field %s", name)

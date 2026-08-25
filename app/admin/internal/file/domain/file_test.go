@@ -33,7 +33,7 @@ func TestNewFileNormalizesContentType(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if file.ContentType != "application/octet-stream" {
-		t.Fatalf("content type = %q", file.ContentType)
+	if file.ContentType() != "application/octet-stream" {
+		t.Fatalf("content type = %q", file.ContentType())
 	}
 }

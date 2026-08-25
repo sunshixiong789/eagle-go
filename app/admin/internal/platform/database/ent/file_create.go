@@ -67,6 +67,20 @@ func (_c *FileCreate) SetSha256(v string) *FileCreate {
 	return _c
 }
 
+// SetState sets the "state" field.
+func (_c *FileCreate) SetState(v string) *FileCreate {
+	_c.mutation.SetState(v)
+	return _c
+}
+
+// SetNillableState sets the "state" field if the given value is not nil.
+func (_c *FileCreate) SetNillableState(v *string) *FileCreate {
+	if v != nil {
+		_c.SetState(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *FileCreate) SetCreatedAt(v time.Time) *FileCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -77,6 +91,20 @@ func (_c *FileCreate) SetCreatedAt(v time.Time) *FileCreate {
 func (_c *FileCreate) SetNillableCreatedAt(v *time.Time) *FileCreate {
 	if v != nil {
 		_c.SetCreatedAt(*v)
+	}
+	return _c
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (_c *FileCreate) SetUpdatedAt(v time.Time) *FileCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
+}
+
+// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
+func (_c *FileCreate) SetNillableUpdatedAt(v *time.Time) *FileCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
 	return _c
 }
@@ -126,9 +154,17 @@ func (_c *FileCreate) defaults() {
 		v := file.DefaultContentType
 		_c.mutation.SetContentType(v)
 	}
+	if _, ok := _c.mutation.State(); !ok {
+		v := file.DefaultState
+		_c.mutation.SetState(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := file.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
+	}
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
+		v := file.DefaultUpdatedAt()
+		_c.mutation.SetUpdatedAt(v)
 	}
 }
 
@@ -182,8 +218,19 @@ func (_c *FileCreate) check() error {
 			return &ValidationError{Name: "sha256", err: fmt.Errorf(`ent: validator failed for field "File.sha256": %w`, err)}
 		}
 	}
+	if _, ok := _c.mutation.State(); !ok {
+		return &ValidationError{Name: "state", err: errors.New(`ent: missing required field "File.state"`)}
+	}
+	if v, ok := _c.mutation.State(); ok {
+		if err := file.StateValidator(v); err != nil {
+			return &ValidationError{Name: "state", err: fmt.Errorf(`ent: validator failed for field "File.state": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "File.created_at"`)}
+	}
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
+		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "File.updated_at"`)}
 	}
 	if v, ok := _c.mutation.ID(); ok {
 		if err := file.IDValidator(v); err != nil {
@@ -250,9 +297,17 @@ func (_c *FileCreate) createSpec() (*File, *sqlgraph.CreateSpec) {
 		_spec.SetField(file.FieldSha256, field.TypeString, value)
 		_node.Sha256 = value
 	}
+	if value, ok := _c.mutation.State(); ok {
+		_spec.SetField(file.FieldState, field.TypeString, value)
+		_node.State = value
+	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(file.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
+	}
+	if value, ok := _c.mutation.UpdatedAt(); ok {
+		_spec.SetField(file.FieldUpdatedAt, field.TypeTime, value)
+		_node.UpdatedAt = value
 	}
 	return _node, _spec
 }
@@ -305,6 +360,30 @@ type (
 		*sql.UpdateSet
 	}
 )
+
+// SetState sets the "state" field.
+func (u *FileUpsert) SetState(v string) *FileUpsert {
+	u.Set(file.FieldState, v)
+	return u
+}
+
+// UpdateState sets the "state" field to the value that was provided on create.
+func (u *FileUpsert) UpdateState() *FileUpsert {
+	u.SetExcluded(file.FieldState)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *FileUpsert) SetUpdatedAt(v time.Time) *FileUpsert {
+	u.Set(file.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *FileUpsert) UpdateUpdatedAt() *FileUpsert {
+	u.SetExcluded(file.FieldUpdatedAt)
+	return u
+}
 
 // UpdateNewValues updates the mutable fields using the new values that were set on create except the ID field.
 // Using this option is equivalent to using:
@@ -373,6 +452,34 @@ func (u *FileUpsertOne) Update(set func(*FileUpsert)) *FileUpsertOne {
 		set(&FileUpsert{UpdateSet: update})
 	}))
 	return u
+}
+
+// SetState sets the "state" field.
+func (u *FileUpsertOne) SetState(v string) *FileUpsertOne {
+	return u.Update(func(s *FileUpsert) {
+		s.SetState(v)
+	})
+}
+
+// UpdateState sets the "state" field to the value that was provided on create.
+func (u *FileUpsertOne) UpdateState() *FileUpsertOne {
+	return u.Update(func(s *FileUpsert) {
+		s.UpdateState()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *FileUpsertOne) SetUpdatedAt(v time.Time) *FileUpsertOne {
+	return u.Update(func(s *FileUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *FileUpsertOne) UpdateUpdatedAt() *FileUpsertOne {
+	return u.Update(func(s *FileUpsert) {
+		s.UpdateUpdatedAt()
+	})
 }
 
 // Exec executes the query.
@@ -609,6 +716,34 @@ func (u *FileUpsertBulk) Update(set func(*FileUpsert)) *FileUpsertBulk {
 		set(&FileUpsert{UpdateSet: update})
 	}))
 	return u
+}
+
+// SetState sets the "state" field.
+func (u *FileUpsertBulk) SetState(v string) *FileUpsertBulk {
+	return u.Update(func(s *FileUpsert) {
+		s.SetState(v)
+	})
+}
+
+// UpdateState sets the "state" field to the value that was provided on create.
+func (u *FileUpsertBulk) UpdateState() *FileUpsertBulk {
+	return u.Update(func(s *FileUpsert) {
+		s.UpdateState()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *FileUpsertBulk) SetUpdatedAt(v time.Time) *FileUpsertBulk {
+	return u.Update(func(s *FileUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *FileUpsertBulk) UpdateUpdatedAt() *FileUpsertBulk {
+	return u.Update(func(s *FileUpsert) {
+		s.UpdateUpdatedAt()
+	})
 }
 
 // Exec executes the query.

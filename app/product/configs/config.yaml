@@ -49,11 +49,12 @@ auth:
   internal_client_ids: ["${AUTH_INTERNAL_CLIENT_ID:eagle-worker}"]
 
 upstream:
-  # product 只通过 admin 做集中策略判定。
+  # product 从 admin 拉取版本化策略快照，请求路径在本地完成判定。
   authorization_endpoint: "${UPSTREAM_AUTHORIZATION_ENDPOINT:127.0.0.1:9001}"
   timeout: 2s
   max_attempts: 2
   retry_backoff: 0.1s
+  authorization_refresh_interval: 5s
 
 service_auth:
   token_url: "${SERVICE_AUTH_TOKEN_URL:http://127.0.0.1:8080/realms/eagle/protocol/openid-connect/token}"

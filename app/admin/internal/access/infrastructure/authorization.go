@@ -20,6 +20,20 @@ func (c *authorizationChecker) Allow(ctx context.Context, roles []string, permis
 	return c.enforcer.AllowContext(ctx, roles, permission.String())
 }
 
-func (c *authorizationChecker) Version(ctx context.Context) (int64, error) {
-	return c.store.PolicyVersion(ctx)
+func (c *authorizationChecker) Version(context.Context) (int64, error) {
+	// The version must describe the exact in-memory snapshot used by Allow,
+	// not a newer database version that the reconciler has not loaded yet.
+	return c.enforcer.LoadedPolicyVersion(), nil
+}
+
+func (c *authorizationChecker) Snapshot(ctx context.Context) ([]domain.PolicyRule, int64, error) {
+	rules, version, err := stablePolicySnapshot(ctx, c.store, c.store.LoadPolicyRows)
+	if err != nil {
+		return nil, 0, err
+	}
+	out := make([]domain.PolicyRule, 0, len(rules))
+	for _, rule := range rules {
+		out = append(out, domain.PolicyRule{PType: rule.PType, Values: rule.Values})
+	}
+	return out, version, nil
 }

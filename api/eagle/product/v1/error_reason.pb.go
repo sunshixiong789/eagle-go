@@ -27,6 +27,7 @@ const (
 	ErrorReason_ERROR_REASON_UNSPECIFIED            ErrorReason = 0
 	ErrorReason_ERROR_REASON_PRODUCT_NOT_FOUND      ErrorReason = 1
 	ErrorReason_ERROR_REASON_PRODUCT_SKU_DUPLICATED ErrorReason = 2
+	ErrorReason_ERROR_REASON_INVALID_PRODUCT        ErrorReason = 3
 )
 
 // Enum value maps for ErrorReason.
@@ -35,11 +36,13 @@ var (
 		0: "ERROR_REASON_UNSPECIFIED",
 		1: "ERROR_REASON_PRODUCT_NOT_FOUND",
 		2: "ERROR_REASON_PRODUCT_SKU_DUPLICATED",
+		3: "ERROR_REASON_INVALID_PRODUCT",
 	}
 	ErrorReason_value = map[string]int32{
 		"ERROR_REASON_UNSPECIFIED":            0,
 		"ERROR_REASON_PRODUCT_NOT_FOUND":      1,
 		"ERROR_REASON_PRODUCT_SKU_DUPLICATED": 2,
+		"ERROR_REASON_INVALID_PRODUCT":        3,
 	}
 )
 
@@ -74,11 +77,12 @@ var File_eagle_product_v1_error_reason_proto protoreflect.FileDescriptor
 
 const file_eagle_product_v1_error_reason_proto_rawDesc = "" +
 	"\n" +
-	"#eagle/product/v1/error_reason.proto\x12\x10eagle.product.v1*x\n" +
+	"#eagle/product/v1/error_reason.proto\x12\x10eagle.product.v1*\x9a\x01\n" +
 	"\vErrorReason\x12\x1c\n" +
 	"\x18ERROR_REASON_UNSPECIFIED\x10\x00\x12\"\n" +
 	"\x1eERROR_REASON_PRODUCT_NOT_FOUND\x10\x01\x12'\n" +
-	"#ERROR_REASON_PRODUCT_SKU_DUPLICATED\x10\x02B:Z8github.com/eagle-go/eagle/api/eagle/product/v1;productv1b\x06proto3"
+	"#ERROR_REASON_PRODUCT_SKU_DUPLICATED\x10\x02\x12 \n" +
+	"\x1cERROR_REASON_INVALID_PRODUCT\x10\x03B:Z8github.com/eagle-go/eagle/api/eagle/product/v1;productv1b\x06proto3"
 
 var (
 	file_eagle_product_v1_error_reason_proto_rawDescOnce sync.Once

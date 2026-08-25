@@ -232,15 +232,15 @@ func (r *dictRepo) ListDataByType(ctx context.Context, dictType string) ([]*doma
 	return out, nil
 }
 
-func (r *dictRepo) UpdateData(ctx context.Context, d *domain.DictData) (*domain.DictData, error) {
-	updated, err := r.db.Client().DictData.UpdateOneID(d.ID).
-		SetLabel(d.Label).
-		SetValue(d.Value).
-		SetSort(d.Sort).
-		SetCSSClass(d.CSSClass).
-		SetIsDefault(d.IsDefault).
-		SetStatus(int32(d.Status)).
-		SetRemark(d.Remark).
+func (r *dictRepo) UpdateData(ctx context.Context, update domain.UpdateDictData) (*domain.DictData, error) {
+	updated, err := r.db.Client().DictData.UpdateOneID(update.ID).
+		SetLabel(update.Label).
+		SetValue(update.Value).
+		SetSort(update.Sort).
+		SetCSSClass(update.CSSClass).
+		SetIsDefault(update.IsDefault).
+		SetStatus(int32(update.Status)).
+		SetRemark(update.Remark).
 		Save(ctx)
 	if err != nil {
 		if platformdb.IsNotFound(err) {
@@ -249,7 +249,7 @@ func (r *dictRepo) UpdateData(ctx context.Context, d *domain.DictData) (*domain.
 		if platformdb.IsUniqueViolation(err) {
 			return nil, domain.ErrDictDataDuplicated
 		}
-		return nil, fmt.Errorf("update dict data %d: %w", d.ID, err)
+		return nil, fmt.Errorf("update dict data %d: %w", update.ID, err)
 	}
 	return toDomainDictData(updated), nil
 }

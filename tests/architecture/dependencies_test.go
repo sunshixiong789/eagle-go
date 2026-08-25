@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -13,76 +14,42 @@ import (
 )
 
 func TestLayerDependencies(t *testing.T) {
-	_, file, _, _ := runtime.Caller(0)
-	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
-
-	modules := []struct {
-		service string
-		module  string
-	}{
-		{service: "admin", module: "access"},
-		{service: "admin", module: "dictionary"},
-		{service: "admin", module: "file"},
-		{service: "admin", module: "notification"},
-		{service: "product", module: "product"},
-		{service: "order", module: "order"},
-	}
-	var tests []struct {
-		pkg       string
-		forbidden []string
-		allowed   []string
-	}
-	for _, module := range modules {
+	root := repositoryRoot()
+	for _, module := range discoverModules(t, root) {
 		basePath := "./app/" + module.service + "/internal/" + module.module
 		baseImport := "github.com/eagle-go/eagle/app/" + module.service + "/internal/" + module.module
-		tests = append(tests,
-			struct {
-				pkg       string
-				forbidden []string
-				allowed   []string
-			}{
-				pkg:       basePath + "/domain",
-				forbidden: []string{"github.com/eagle-go/eagle/", "github.com/go-kratos/", "entgo.io/", "github.com/redis/"},
-			},
-			struct {
-				pkg       string
-				forbidden []string
-				allowed   []string
-			}{
-				pkg:       basePath + "/application",
-				forbidden: []string{"github.com/eagle-go/eagle/", "github.com/go-kratos/", "entgo.io/", "github.com/redis/"},
-				allowed:   []string{baseImport + "/domain"},
-			},
-		)
-	}
 
-	for _, tt := range tests {
-		t.Run(tt.pkg, func(t *testing.T) {
-			cmd := exec.Command("go", "list", "-f", `{{join .Imports "\n"}}`, tt.pkg)
-			cmd.Dir = root
-			out, err := cmd.Output()
-			if err != nil {
-				t.Fatalf("go list: %v", err)
-			}
-			imports := strings.Fields(string(out))
-			for _, imp := range imports {
-				if slices.Contains(tt.allowed, imp) {
-					continue
-				}
-				for _, prefix := range tt.forbidden {
-					if strings.HasPrefix(imp, prefix) {
-						t.Errorf("%s must not import %s", tt.pkg, imp)
-					}
-				}
-			}
+		assertImports(t, root, basePath+"/domain", nil, func(imp string) bool {
+			return !isStandardImport(imp)
 		})
+
+		applicationDir := filepath.Join(root, "app", module.service, "internal", module.module, "application")
+		if isDirectory(applicationDir) {
+			assertImports(t, root, basePath+"/application", []string{baseImport + "/domain"}, func(imp string) bool {
+				return !isStandardImport(imp)
+			})
+		}
+
+		serviceDir := filepath.Join(root, "app", module.service, "internal", module.module, "service")
+		if isDirectory(serviceDir) {
+			assertImports(t, root, basePath+"/service", nil, func(imp string) bool {
+				return strings.HasPrefix(imp, baseImport+"/infrastructure") ||
+					strings.Contains(imp, "/internal/platform/database")
+			})
+		}
+
+		infrastructureDir := filepath.Join(root, "app", module.service, "internal", module.module, "infrastructure")
+		if isDirectory(infrastructureDir) {
+			assertImports(t, root, basePath+"/infrastructure/...", nil, func(imp string) bool {
+				return strings.HasPrefix(imp, baseImport+"/service")
+			})
+		}
 	}
 }
 
 func TestServiceCompositionBoundaries(t *testing.T) {
-	_, file, _, _ := runtime.Caller(0)
-	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
-	services := []string{"admin", "product", "order"}
+	root := repositoryRoot()
+	services := discoverServices(t, root)
 	for _, service := range services {
 		for _, pkg := range listPackages(t, root, "./app/"+service+"/...") {
 			for _, imp := range pkg.Imports {
@@ -127,9 +94,77 @@ func listPackages(t *testing.T, root, pattern string) []listedPackage {
 	return packages
 }
 
-func TestInfrastructureBoundaries(t *testing.T) {
+type modulePath struct {
+	service string
+	module  string
+}
+
+func repositoryRoot() string {
 	_, file, _, _ := runtime.Caller(0)
-	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
+	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
+}
+
+func discoverServices(t *testing.T, root string) []string {
+	t.Helper()
+	paths, err := filepath.Glob(filepath.Join(root, "app", "*", "go.mod"))
+	if err != nil {
+		t.Fatalf("discover services: %v", err)
+	}
+	services := make([]string, 0, len(paths))
+	for _, path := range paths {
+		services = append(services, filepath.Base(filepath.Dir(path)))
+	}
+	slices.Sort(services)
+	return services
+}
+
+func discoverModules(t *testing.T, root string) []modulePath {
+	t.Helper()
+	var modules []modulePath
+	for _, service := range discoverServices(t, root) {
+		paths, err := filepath.Glob(filepath.Join(root, "app", service, "internal", "*", "domain"))
+		if err != nil {
+			t.Fatalf("discover modules of %s: %v", service, err)
+		}
+		for _, path := range paths {
+			modules = append(modules, modulePath{service: service, module: filepath.Base(filepath.Dir(path))})
+		}
+	}
+	return modules
+}
+
+func assertImports(t *testing.T, root, pkg string, allowed []string, forbidden func(string) bool) {
+	t.Helper()
+	t.Run(pkg, func(t *testing.T) {
+		cmd := exec.Command("go", "list", "-f", `{{join .Imports "\n"}}`, pkg)
+		cmd.Dir = root
+		out, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("go list: %v", err)
+		}
+		for _, imp := range strings.Fields(string(out)) {
+			if slices.Contains(allowed, imp) {
+				continue
+			}
+			if forbidden(imp) {
+				t.Errorf("%s must not import %s", pkg, imp)
+			}
+		}
+	})
+}
+
+func isStandardImport(path string) bool {
+	first, _, _ := strings.Cut(path, "/")
+	return !strings.Contains(first, ".")
+}
+
+func isDirectory(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
+
+func TestInfrastructureBoundaries(t *testing.T) {
+	root := repositoryRoot()
 
 	for _, pkg := range listPackages(t, root, "./pkg/...") {
 		for _, imp := range pkg.Imports {
@@ -139,7 +174,7 @@ func TestInfrastructureBoundaries(t *testing.T) {
 		}
 	}
 
-	for _, service := range []string{"admin", "product", "order"} {
+	for _, service := range discoverServices(t, root) {
 		for _, pkg := range listPackages(t, root, "./app/"+service+"/...") {
 			if strings.Contains(pkg.ImportPath, "/infrastructure") ||
 				strings.Contains(pkg.ImportPath, "/internal/platform/database") ||
@@ -174,9 +209,8 @@ var bannedModulePrefixes = []string{
 }
 
 func TestWireOnlyInCompositionRoot(t *testing.T) {
-	_, file, _, _ := runtime.Caller(0)
-	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
-	for _, service := range []string{"admin", "product", "order"} {
+	root := repositoryRoot()
+	for _, service := range discoverServices(t, root) {
 		for _, pkg := range listPackages(t, root, "./app/"+service+"/...") {
 			usesWire := slices.Contains(pkg.Imports, "github.com/google/wire")
 			if !usesWire {
@@ -190,8 +224,7 @@ func TestWireOnlyInCompositionRoot(t *testing.T) {
 }
 
 func TestBannedDependencies(t *testing.T) {
-	_, file, _, _ := runtime.Caller(0)
-	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
+	root := repositoryRoot()
 
 	cmd := exec.Command("go", "list", "-m", "-f", "{{if not .Indirect}}{{.Path}}{{end}}", "all")
 	cmd.Dir = root

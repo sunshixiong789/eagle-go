@@ -17,29 +17,36 @@
 app/<service>/
 ├── cmd/<service>               # 进程入口和 Wire 组合根
 ├── internal/<module>/
-│   ├── service                 # Protobuf 传输适配
-│   ├── application             # 用例编排
+│   ├── service                 # 入站适配：Protobuf、消息消费和任务入口
+│   ├── application             # 可选；只在存在用例编排时创建
 │   ├── domain                  # 领域模型、规则、错误和端口
-│   └── infrastructure          # 数据库、缓存、消息和远程调用适配
+│   └── infrastructure          # 出站适配：数据库、缓存、消息发布和远程调用
 ├── internal/platform/database  # 当前服务独占的数据库与 Ent Client
 └── migrations                  # 当前服务独占的迁移
 ```
 
-模块内依赖固定为：
+模块按复杂度渐进生长，允许两种依赖形态：
 
 ```text
+service -> domain <- infrastructure
+
+或
+
 service -> application -> domain <- infrastructure
 ```
 
 - `domain` 只依赖标准库，负责业务概念、纯业务不变量、领域错误，以及被用例实际需要的仓储或外部能力端口。
-- `application` 只依赖本模块 `domain`，负责一个用例的流程编排；不依赖 Proto、Kratos、Ent、Casbin 或具体客户端。
+- `application` 是可选的，只依赖本模块 `domain`，负责一个用例的流程编排；不依赖 Proto、Kratos、Ent、Casbin 或具体客户端。
 - `infrastructure` 实现 domain 端口，负责 Ent/SQL、事务、缓存、消息、文件存储和跨服务客户端，并把技术错误翻译为领域错误。
-- `service` 实现 Protobuf Service，只做协议对象转换、主体传递和错误边界适配；不写业务规则或持久化逻辑。
+- `service` 承载入站适配，只做协议对象转换、主体传递和错误边界适配；不写业务规则、事务、补偿或持久化逻辑，也不 import `infrastructure`。
 
 DDD 用来保护边界和不变量，不用来增加代码量：
 
 - 只有存在生命周期、状态转换或必须始终成立的业务规则时，才使用聚合根、值对象或领域方法。字典、查询等简单 CRUD 保持简单。
+- 仅包含 `return repo.Xxx(...)` 的 application 应删除，由 service 依赖 domain 定义的最小端口。一旦用例需要多端口协作、聚合加载-变更-保存、事务、Outbox/Inbox、幂等、补偿、审计或多入口复用，必须增加 application。
 - 不依赖 I/O 的规则放在 domain 构造器或方法中；跨端口的用例流程放在 application；必须依赖数据库锁、唯一约束或当前持久化状态的检查，放在 infrastructure 的同一事务内，不在 application 重复预检。
+- 一个聚合的原子持久化可由聚合仓储内部完成；涉及多个本地写入时使用语义化的原子端口，禁止向 application 暴露 Ent Tx 或通过 context 隐式传递事务。
+- 更新端口优先接收只含允许修改字段的明确参数，不用完整公开实体依赖调用方约定保护不可变字段。
 - domain 定义的是业务需要的最小端口，不是对 Ent API 的包装。端口方法必须有当前生产调用方。
 - 不为了“完整 DDD”强行加入工厂、领域事件、通用 BaseRepository、DTO/DO 或多余分层。
 

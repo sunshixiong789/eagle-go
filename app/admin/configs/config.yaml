@@ -67,6 +67,8 @@ messaging:
     exchange: eagle.events
     order_created_queue: eagle.admin.order-created.v1
     reconnect_backoff: 2s
+    consumer_max_attempts: 5
+    consumer_retry_backoff: 1s
 
 observability:
   # 指向本地 obs profile 里的 OTel Collector。

@@ -35,7 +35,8 @@ var providerSet = wire.NewSet(
 	provideAuthorizer,
 	productinfra.NewRedisProductCache,
 	provideRepository,
-	productapp.NewUsecase,
+	provideProductReader,
+	productapp.NewCommands,
 	productservice.NewProductService,
 	server.NewVerifier,
 	provideMiddlewares,
@@ -63,6 +64,8 @@ func provideAuthorizer(authorizer *accessclient.Authorizer) authz.Authorizer {
 func provideRepository(db *platformdb.Database, cache *productinfra.RedisProductCache, logger *slog.Logger) productdomain.Repository {
 	return productinfra.NewCachedRepository(productinfra.NewRepository(db), cache, logger)
 }
+
+func provideProductReader(repo productdomain.Repository) productdomain.Reader { return repo }
 
 func provideMiddlewares(
 	logger *slog.Logger,

@@ -130,15 +130,30 @@ func snap(id, parent int64, name, code string, typ PermissionType, status, sort 
 	}
 }
 
+func mustRehydratePermission(s PermissionSnapshot) *Permission {
+	p, err := RehydratePermission(s)
+	if err != nil {
+		panic(err)
+	}
+	return p
+}
+
 func buildTree() *PermissionTree {
 	return NewPermissionTree([]*Permission{
-		RehydratePermission(snap(1, 0, "系统管理", "", PermissionTypeDir, 1, 1)),
-		RehydratePermission(snap(100, 1, "用户管理", "system:user:list", PermissionTypeMenu, 1, 1)),
-		RehydratePermission(snap(101, 100, "用户新增", "system:user:add", PermissionTypeButton, 1, 1)),
-		RehydratePermission(snap(200, 1, "字典管理", "system:dict:list", PermissionTypeMenu, 1, 2)),
-		RehydratePermission(snap(201, 200, "字典停用项", "system:dict:add", PermissionTypeButton, 0, 1)),
-		RehydratePermission(snap(300, 1, "停用角色菜单", "system:role:list", PermissionTypeMenu, 0, 3)),
+		mustRehydratePermission(snap(1, 0, "系统管理", "", PermissionTypeDir, 1, 1)),
+		mustRehydratePermission(snap(100, 1, "用户管理", "system:user:list", PermissionTypeMenu, 1, 1)),
+		mustRehydratePermission(snap(101, 100, "用户新增", "system:user:add", PermissionTypeButton, 1, 1)),
+		mustRehydratePermission(snap(200, 1, "字典管理", "system:dict:list", PermissionTypeMenu, 1, 2)),
+		mustRehydratePermission(snap(201, 200, "字典停用项", "system:dict:add", PermissionTypeButton, 0, 1)),
+		mustRehydratePermission(snap(300, 1, "停用角色菜单", "system:role:list", PermissionTypeMenu, 0, 3)),
 	})
+}
+
+func TestRehydratePermissionRejectsCorruptSnapshot(t *testing.T) {
+	_, err := RehydratePermission(snap(1, 0, "", "", PermissionTypeDir, 1, 1))
+	if !errors.Is(err, ErrEmptyPermissionName) {
+		t.Fatalf("err = %v, want %v", err, ErrEmptyPermissionName)
+	}
 }
 
 func TestPermissionTreeEnsureNoCycle(t *testing.T) {

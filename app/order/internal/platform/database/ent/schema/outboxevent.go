@@ -37,6 +37,5 @@ func (OutboxEvent) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("published_at", "available_at", "created_at").StorageKey("idx_event_outbox_pending"),
 		index.Fields("failed_at", "created_at").StorageKey("idx_event_outbox_failed"),
-		index.Fields("aggregate_id", "event_type").Unique(),
 	}
 }

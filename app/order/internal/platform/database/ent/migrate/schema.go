@@ -69,17 +69,13 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{EventOutboxColumns[10], EventOutboxColumns[11]},
 			},
-			{
-				Name:    "outboxevent_aggregate_id_event_type",
-				Unique:  true,
-				Columns: []*schema.Column{EventOutboxColumns[1], EventOutboxColumns[2]},
-			},
 		},
 	}
 	// PurchaseOrderColumns holds the columns for the "purchase_order" table.
 	PurchaseOrderColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, Size: 36},
 		{Name: "owner_subject", Type: field.TypeString, Size: 128},
+		{Name: "idempotency_key", Type: field.TypeString, Size: 64},
 		{Name: "status", Type: field.TypeString, Size: 32},
 		{Name: "total_cents", Type: field.TypeInt64},
 		{Name: "created_at", Type: field.TypeTime},
@@ -93,7 +89,12 @@ var (
 			{
 				Name:    "idx_purchase_order_owner_created",
 				Unique:  false,
-				Columns: []*schema.Column{PurchaseOrderColumns[1], PurchaseOrderColumns[4]},
+				Columns: []*schema.Column{PurchaseOrderColumns[1], PurchaseOrderColumns[5]},
+			},
+			{
+				Name:    "uq_purchase_order_owner_idempotency",
+				Unique:  true,
+				Columns: []*schema.Column{PurchaseOrderColumns[1], PurchaseOrderColumns[2]},
 			},
 		},
 	}

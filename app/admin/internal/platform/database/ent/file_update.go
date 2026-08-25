@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -27,6 +28,26 @@ func (_u *FileUpdate) Where(ps ...predicate.File) *FileUpdate {
 	return _u
 }
 
+// SetState sets the "state" field.
+func (_u *FileUpdate) SetState(v string) *FileUpdate {
+	_u.mutation.SetState(v)
+	return _u
+}
+
+// SetNillableState sets the "state" field if the given value is not nil.
+func (_u *FileUpdate) SetNillableState(v *string) *FileUpdate {
+	if v != nil {
+		_u.SetState(*v)
+	}
+	return _u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (_u *FileUpdate) SetUpdatedAt(v time.Time) *FileUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
+}
+
 // Mutation returns the FileMutation object of the builder.
 func (_u *FileUpdate) Mutation() *FileMutation {
 	return _u.mutation
@@ -34,6 +55,7 @@ func (_u *FileUpdate) Mutation() *FileMutation {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *FileUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -59,7 +81,28 @@ func (_u *FileUpdate) ExecX(ctx context.Context) {
 	}
 }
 
+// defaults sets the default values of the builder before save.
+func (_u *FileUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
+		v := file.UpdateDefaultUpdatedAt()
+		_u.mutation.SetUpdatedAt(v)
+	}
+}
+
+// check runs all checks and user-defined validators on the builder.
+func (_u *FileUpdate) check() error {
+	if v, ok := _u.mutation.State(); ok {
+		if err := file.StateValidator(v); err != nil {
+			return &ValidationError{Name: "state", err: fmt.Errorf(`ent: validator failed for field "File.state": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (_u *FileUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(file.Table, file.Columns, sqlgraph.NewFieldSpec(file.FieldID, field.TypeString))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
@@ -67,6 +110,12 @@ func (_u *FileUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.State(); ok {
+		_spec.SetField(file.FieldState, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.UpdatedAt(); ok {
+		_spec.SetField(file.FieldUpdatedAt, field.TypeTime, value)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -86,6 +135,26 @@ type FileUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *FileMutation
+}
+
+// SetState sets the "state" field.
+func (_u *FileUpdateOne) SetState(v string) *FileUpdateOne {
+	_u.mutation.SetState(v)
+	return _u
+}
+
+// SetNillableState sets the "state" field if the given value is not nil.
+func (_u *FileUpdateOne) SetNillableState(v *string) *FileUpdateOne {
+	if v != nil {
+		_u.SetState(*v)
+	}
+	return _u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (_u *FileUpdateOne) SetUpdatedAt(v time.Time) *FileUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // Mutation returns the FileMutation object of the builder.
@@ -108,6 +177,7 @@ func (_u *FileUpdateOne) Select(field string, fields ...string) *FileUpdateOne {
 
 // Save executes the query and returns the updated File entity.
 func (_u *FileUpdateOne) Save(ctx context.Context) (*File, error) {
+	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -133,7 +203,28 @@ func (_u *FileUpdateOne) ExecX(ctx context.Context) {
 	}
 }
 
+// defaults sets the default values of the builder before save.
+func (_u *FileUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
+		v := file.UpdateDefaultUpdatedAt()
+		_u.mutation.SetUpdatedAt(v)
+	}
+}
+
+// check runs all checks and user-defined validators on the builder.
+func (_u *FileUpdateOne) check() error {
+	if v, ok := _u.mutation.State(); ok {
+		if err := file.StateValidator(v); err != nil {
+			return &ValidationError{Name: "state", err: fmt.Errorf(`ent: validator failed for field "File.state": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (_u *FileUpdateOne) sqlSave(ctx context.Context) (_node *File, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(file.Table, file.Columns, sqlgraph.NewFieldSpec(file.FieldID, field.TypeString))
 	id, ok := _u.mutation.ID()
 	if !ok {
@@ -158,6 +249,12 @@ func (_u *FileUpdateOne) sqlSave(ctx context.Context) (_node *File, err error) {
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.State(); ok {
+		_spec.SetField(file.FieldState, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.UpdatedAt(); ok {
+		_spec.SetField(file.FieldUpdatedAt, field.TypeTime, value)
 	}
 	_node = &File{config: _u.config}
 	_spec.Assign = _node.assignValues

@@ -6,7 +6,9 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/eagle-go/eagle/app/admin/internal/file/domain"
 )
@@ -34,27 +36,32 @@ func (uc *Usecase) Upload(ctx context.Context, owner, name, contentType string, 
 	if err != nil {
 		return nil, err
 	}
-	if err := uc.blobs.Put(ctx, file.StorageKey, content); err != nil {
-		return nil, err
-	}
-	created, err := uc.repo.Create(ctx, file)
+	pending, err := uc.repo.CreatePending(ctx, file)
 	if err != nil {
-		_ = uc.blobs.Delete(ctx, file.StorageKey)
 		return nil, err
 	}
-	return created, nil
+	if err := uc.blobs.Put(ctx, pending.StorageKey(), content); err != nil {
+		cleanupErr := uc.repo.DeleteMetadata(ctx, pending.ID())
+		return nil, errors.Join(err, cleanupErr)
+	}
+	ready, err := uc.repo.MarkReady(ctx, pending.ID())
+	if err != nil {
+		// 保留 pending 记录，后台清理任务会删除对象和元数据。
+		return nil, err
+	}
+	return ready, nil
 }
 
 func (uc *Usecase) Get(ctx context.Context, owner, id string) (*domain.File, error) {
-	return uc.repo.GetOwned(ctx, owner, id)
+	return uc.repo.GetReadyOwned(ctx, owner, id)
 }
 
 func (uc *Usecase) Download(ctx context.Context, owner, id string) (*domain.File, []byte, error) {
-	file, err := uc.repo.GetOwned(ctx, owner, id)
+	file, err := uc.repo.GetReadyOwned(ctx, owner, id)
 	if err != nil {
 		return nil, nil, err
 	}
-	content, err := uc.blobs.Read(ctx, file.StorageKey)
+	content, err := uc.blobs.Read(ctx, file.StorageKey())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -62,18 +69,37 @@ func (uc *Usecase) Download(ctx context.Context, owner, id string) (*domain.File
 }
 
 func (uc *Usecase) List(ctx context.Context, q domain.ListQuery) ([]*domain.File, int64, error) {
-	return uc.repo.List(ctx, q)
+	return uc.repo.ListReady(ctx, q)
 }
 
 func (uc *Usecase) Delete(ctx context.Context, owner, id string) error {
-	file, err := uc.repo.GetOwned(ctx, owner, id)
+	file, err := uc.repo.MarkDeleting(ctx, owner, id)
 	if err != nil {
 		return err
 	}
-	if err := uc.blobs.Delete(ctx, file.StorageKey); err != nil {
+	if err := uc.blobs.Delete(ctx, file.StorageKey()); err != nil {
 		return err
 	}
-	return uc.repo.DeleteOwned(ctx, owner, id)
+	return uc.repo.DeleteMetadata(ctx, file.ID())
+}
+
+// CleanupStale 收敛上传中断和删除失败留下的非 READY 记录。
+func (uc *Usecase) CleanupStale(ctx context.Context, before time.Time, limit int) (int, error) {
+	files, err := uc.repo.ListStale(ctx, before, limit)
+	if err != nil {
+		return 0, err
+	}
+	cleaned := 0
+	for _, file := range files {
+		if err := uc.blobs.Delete(ctx, file.StorageKey()); err != nil {
+			return cleaned, err
+		}
+		if err := uc.repo.DeleteMetadata(ctx, file.ID()); err != nil {
+			return cleaned, err
+		}
+		cleaned++
+	}
+	return cleaned, nil
 }
 
 func newUUID() (string, error) {

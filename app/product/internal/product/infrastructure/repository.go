@@ -14,28 +14,32 @@ type repository struct{ db *platformdb.Database }
 
 func NewRepository(db *platformdb.Database) domain.Repository { return &repository{db: db} }
 
-func toDomain(row *ent.Product) *domain.Product {
+func toDomain(row *ent.Product) (*domain.Product, error) {
 	if row == nil {
-		return nil
+		return nil, nil
 	}
-	return &domain.Product{
+	value, err := domain.RehydrateProduct(domain.ProductSnapshot{
 		ID: row.ID, SKU: row.Sku, Name: row.Name, Description: row.Description,
 		PriceCents: row.PriceCents, Active: row.Active,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("rehydrate product %d: %w", row.ID, err)
 	}
+	return value, nil
 }
 
 func (r *repository) Create(ctx context.Context, value *domain.Product) (*domain.Product, error) {
 	row, err := r.db.Client().Product.Create().
-		SetSku(value.SKU).SetName(value.Name).SetDescription(value.Description).
-		SetPriceCents(value.PriceCents).SetActive(value.Active).Save(ctx)
+		SetSku(value.SKU()).SetName(value.Name()).SetDescription(value.Description()).
+		SetPriceCents(value.PriceCents()).SetActive(value.Active()).Save(ctx)
 	if err != nil {
 		if platformdb.IsUniqueViolation(err) {
 			return nil, domain.ErrProductSKUDuplicated
 		}
 		return nil, fmt.Errorf("create product: %w", err)
 	}
-	return toDomain(row), nil
+	return toDomain(row)
 }
 
 func (r *repository) Get(ctx context.Context, id int64) (*domain.Product, error) {
@@ -46,7 +50,7 @@ func (r *repository) Get(ctx context.Context, id int64) (*domain.Product, error)
 		}
 		return nil, fmt.Errorf("get product: %w", err)
 	}
-	return toDomain(row), nil
+	return toDomain(row)
 }
 
 func (r *repository) BatchGet(ctx context.Context, ids []int64) ([]*domain.Product, error) {
@@ -56,7 +60,11 @@ func (r *repository) BatchGet(ctx context.Context, ids []int64) ([]*domain.Produ
 	}
 	out := make([]*domain.Product, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, toDomain(row))
+		value, err := toDomain(row)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, value)
 	}
 	return out, nil
 }
@@ -76,22 +84,26 @@ func (r *repository) List(ctx context.Context, q domain.ListQuery) ([]*domain.Pr
 	}
 	out := make([]*domain.Product, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, toDomain(row))
+		value, err := toDomain(row)
+		if err != nil {
+			return nil, 0, err
+		}
+		out = append(out, value)
 	}
 	return out, int64(total), nil
 }
 
 func (r *repository) Update(ctx context.Context, value *domain.Product) (*domain.Product, error) {
-	row, err := r.db.Client().Product.UpdateOneID(value.ID).
-		SetName(value.Name).SetDescription(value.Description).
-		SetPriceCents(value.PriceCents).SetActive(value.Active).Save(ctx)
+	row, err := r.db.Client().Product.UpdateOneID(value.ID()).
+		SetName(value.Name()).SetDescription(value.Description()).
+		SetPriceCents(value.PriceCents()).SetActive(value.Active()).Save(ctx)
 	if err != nil {
 		if platformdb.IsNotFound(err) {
 			return nil, domain.ErrProductNotFound
 		}
 		return nil, fmt.Errorf("update product: %w", err)
 	}
-	return toDomain(row), nil
+	return toDomain(row)
 }
 
 func (r *repository) Delete(ctx context.Context, id int64) error {

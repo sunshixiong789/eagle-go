@@ -26,7 +26,9 @@ func (File) Fields() []ent.Field {
 		field.String("content_type").MaxLen(128).Default("application/octet-stream").Immutable(),
 		field.Int64("size").NonNegative().Immutable(),
 		field.String("sha256").MaxLen(64).Immutable(),
+		field.String("state").MaxLen(16).Default("pending"),
 		field.Time("created_at").Default(time.Now).Immutable(),
+		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),
 	}
 }
 
@@ -35,5 +37,6 @@ func (File) Indexes() []ent.Index {
 		index.Fields("owner_subject", "created_at").
 			StorageKey("idx_stored_file_owner_created").
 			Annotations(entsql.DescColumns("created_at")),
+		index.Fields("state", "updated_at").StorageKey("idx_stored_file_state_updated"),
 	}
 }

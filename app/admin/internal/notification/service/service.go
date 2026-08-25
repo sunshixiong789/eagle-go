@@ -84,15 +84,12 @@ func (s *NotificationService) MarkAllNotificationsRead(ctx context.Context, _ *v
 	return &v1.MarkAllNotificationsReadResponse{Updated: updated}, nil
 }
 
-func paginate(page, size int32) (int32, int32) {
+func paginate(page, size int32) (int64, int32) {
 	if size <= 0 {
 		size = 20
 	}
 	if size > 200 {
 		size = 200
 	}
-	if page <= 0 {
-		page = 1
-	}
-	return (page - 1) * size, size
+	return int64(page) * int64(size), size
 }

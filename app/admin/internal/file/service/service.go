@@ -27,8 +27,8 @@ func toProto(file *domain.File) *v1.File {
 		return nil
 	}
 	return &v1.File{
-		Id: file.ID, Name: file.Name, ContentType: file.ContentType,
-		Size: file.Size, Sha256: file.SHA256, CreatedAt: timestamppb.New(file.CreatedAt),
+		Id: file.ID(), Name: file.Name(), ContentType: file.ContentType(),
+		Size: file.Size(), Sha256: file.SHA256(), CreatedAt: timestamppb.New(file.CreatedAt()),
 	}
 }
 
@@ -55,10 +55,10 @@ func (s *FileService) DownloadFile(ctx context.Context, req *v1.DownloadFileRequ
 		return nil, err
 	}
 	if tr, ok := transport.FromServerContext(ctx); ok && tr.Kind() == transport.KindHTTP {
-		tr.ReplyHeader().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": file.Name}))
+		tr.ReplyHeader().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": file.Name()}))
 	}
 	return &v1.DownloadFileResponse{Content: &httpbody.HttpBody{
-		ContentType: file.ContentType,
+		ContentType: file.ContentType(),
 		Data:        content,
 	}}, nil
 }
@@ -85,15 +85,12 @@ func (s *FileService) DeleteFile(ctx context.Context, req *v1.DeleteFileRequest)
 
 const defaultPageSize int32 = 20
 
-func paginate(page, size int32) (int32, int32) {
+func paginate(page, size int32) (int64, int32) {
 	if size <= 0 {
 		size = defaultPageSize
 	}
 	if size > 200 {
 		size = 200
 	}
-	if page <= 0 {
-		page = 1
-	}
-	return (page - 1) * size, size
+	return int64(page) * int64(size), size
 }

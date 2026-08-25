@@ -13,6 +13,11 @@ service AuthorizationService {
   rpc CheckPermission(CheckPermissionRequest) returns (CheckPermissionResponse) {
     option (eagle.annotations.v1.access) = ACCESS_LEVEL_INTERNAL;
   }
+  // GetPolicySnapshot lets resource services evaluate permissions locally.
+  // A monotonically increasing version makes replacement atomic and observable.
+  rpc GetPolicySnapshot(GetPolicySnapshotRequest) returns (GetPolicySnapshotResponse) {
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_INTERNAL;
+  }
 }
 
 message CheckPermissionRequest {
@@ -28,5 +33,17 @@ message CheckPermissionRequest {
 
 message CheckPermissionResponse {
   bool allowed = 1;
+  int64 policy_version = 2;
+}
+
+message GetPolicySnapshotRequest {}
+
+message PolicyRule {
+  string ptype = 1;
+  repeated string values = 2;
+}
+
+message GetPolicySnapshotResponse {
+  repeated PolicyRule rules = 1;
   int64 policy_version = 2;
 }

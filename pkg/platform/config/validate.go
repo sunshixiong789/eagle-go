@@ -7,6 +7,10 @@ import (
 )
 
 type Requirements struct {
+	Database              bool
+	Auth                  bool
+	HTTP                  bool
+	GRPC                  bool
 	File                  bool
 	AuthorizationUpstream bool
 	ProductUpstream       bool
@@ -31,36 +35,47 @@ func Validate(b *Bootstrap, requirements ...Requirements) error {
 	redis := b.GetCache().GetRedis()
 	rabbit := b.GetMessaging().GetRabbitmq()
 	serviceAuth := b.GetServiceAuth()
-	required := Requirements{
-		File: true, AuthorizationUpstream: true, ProductUpstream: true,
-		Redis: true, RabbitMQ: true, ServiceAuth: true,
-	}
-	if len(requirements) > 0 {
+	required := Requirements{Database: true, Auth: true, HTTP: true, GRPC: true}
+	if len(requirements) == 0 {
+		required.File = true
+		required.AuthorizationUpstream = true
+		required.ProductUpstream = true
+		required.Redis = true
+		required.RabbitMQ = true
+		required.ServiceAuth = true
+	} else {
 		required = requirements[0]
 	}
 
-	if db.GetDsn() == "" {
+	if required.Database && db.GetDsn() == "" {
 		errs = append(errs, errors.New("data.database.dsn is required"))
-	} else if u, err := url.Parse(db.GetDsn()); err != nil || (u.Scheme != "postgres" && u.Scheme != "postgresql") {
-		errs = append(errs, errors.New("data.database.dsn must be a postgres URL"))
+	} else if required.Database {
+		if u, err := url.Parse(db.GetDsn()); err != nil || (u.Scheme != "postgres" && u.Scheme != "postgresql") {
+			errs = append(errs, errors.New("data.database.dsn must be a postgres URL"))
+		}
 	}
-	if db.GetMaxConns() <= 0 || db.GetMaxIdleConns() < 0 || db.GetMaxIdleConns() > db.GetMaxConns() {
+	if required.Database && (db.GetMaxConns() <= 0 || db.GetMaxIdleConns() < 0 || db.GetMaxIdleConns() > db.GetMaxConns()) {
 		errs = append(errs, errors.New("database pool requires 0 <= max_idle_conns <= max_conns and max_conns > 0"))
 	}
-	if err := validateIssuer(auth.GetIssuer()); err != nil {
-		errs = append(errs, err)
+	if required.Auth {
+		if err := validateIssuer(auth.GetIssuer()); err != nil {
+			errs = append(errs, err)
+		}
+		if auth.GetClientId() == "" || auth.GetAudience() == "" {
+			errs = append(errs, errors.New("auth.client_id and auth.audience are required"))
+		}
+		if auth.GetSuperAdminRole() == "" {
+			errs = append(errs, errors.New("auth.super_admin_role is required"))
+		}
+		if len(auth.GetInternalClientIds()) == 0 {
+			errs = append(errs, errors.New("auth.internal_client_ids must not be empty"))
+		}
 	}
-	if auth.GetClientId() == "" || auth.GetAudience() == "" {
-		errs = append(errs, errors.New("auth.client_id and auth.audience are required"))
+	if required.HTTP && server.GetHttp().GetAddr() == "" {
+		errs = append(errs, errors.New("server.http.addr is required"))
 	}
-	if auth.GetSuperAdminRole() == "" {
-		errs = append(errs, errors.New("auth.super_admin_role is required"))
-	}
-	if len(auth.GetInternalClientIds()) == 0 {
-		errs = append(errs, errors.New("auth.internal_client_ids must not be empty"))
-	}
-	if server.GetHttp().GetAddr() == "" || server.GetGrpc().GetAddr() == "" {
-		errs = append(errs, errors.New("server.http.addr and server.grpc.addr are required"))
+	if required.GRPC && server.GetGrpc().GetAddr() == "" {
+		errs = append(errs, errors.New("server.grpc.addr is required"))
 	}
 	if obs.GetTraceSampleRatio() < 0 || obs.GetTraceSampleRatio() > 1 {
 		errs = append(errs, errors.New("observability.trace_sample_ratio must be in [0,1]"))
@@ -104,6 +119,9 @@ func Validate(b *Bootstrap, requirements ...Requirements) error {
 			errs = append(errs, errors.New("upstream.retry_backoff must be positive"))
 		}
 	}
+	if required.AuthorizationUpstream && (upstream.GetAuthorizationRefreshInterval() == nil || upstream.GetAuthorizationRefreshInterval().AsDuration() <= 0) {
+		errs = append(errs, errors.New("upstream.authorization_refresh_interval must be positive"))
+	}
 	if required.Redis {
 		if !redis.GetEnabled() || strings.TrimSpace(redis.GetAddress()) == "" {
 			errs = append(errs, errors.New("cache.redis must be enabled and address is required"))
@@ -121,6 +139,12 @@ func Validate(b *Bootstrap, requirements ...Requirements) error {
 		}
 		if rabbit.GetReconnectBackoff() == nil || rabbit.GetReconnectBackoff().AsDuration() <= 0 {
 			errs = append(errs, errors.New("messaging.rabbitmq.reconnect_backoff must be positive"))
+		}
+		if rabbit.GetConsumerMaxAttempts() < 1 || rabbit.GetConsumerMaxAttempts() > 10 {
+			errs = append(errs, errors.New("messaging.rabbitmq.consumer_max_attempts must be in [1,10]"))
+		}
+		if rabbit.GetConsumerRetryBackoff() == nil || rabbit.GetConsumerRetryBackoff().AsDuration() <= 0 {
+			errs = append(errs, errors.New("messaging.rabbitmq.consumer_retry_backoff must be positive"))
 		}
 	}
 	if required.ServiceAuth && (strings.TrimSpace(serviceAuth.GetTokenUrl()) == "" ||

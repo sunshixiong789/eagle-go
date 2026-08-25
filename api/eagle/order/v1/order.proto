@@ -55,6 +55,10 @@ message CreateOrderRequest {
     min_items: 1
     max_items: 100
   }];
+  string idempotency_key = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
 }
 message CreateOrderResponse { Order order = 1; }
 

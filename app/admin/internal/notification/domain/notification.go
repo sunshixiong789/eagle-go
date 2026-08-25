@@ -22,7 +22,7 @@ type Notification struct {
 type ListQuery struct {
 	RecipientSubject string
 	UnreadOnly       bool
-	Offset           int32
+	Offset           int64
 	PageSize         int32
 }
 

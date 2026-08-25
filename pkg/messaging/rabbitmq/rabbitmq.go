@@ -21,7 +21,7 @@ var (
 	messagePublishFailed = mustCounter("eagle_messaging_publish_failures_total", "RabbitMQ publish attempts that failed")
 	messagesConsumed     = mustCounter("eagle_messaging_consumed_total", "RabbitMQ messages handled and acknowledged")
 	messageConsumeFailed = mustCounter("eagle_messaging_consume_failures_total", "RabbitMQ handler attempts that failed")
-	messagesRetried      = mustCounter("eagle_messaging_retried_total", "RabbitMQ messages requeued once")
+	messagesRetried      = mustCounter("eagle_messaging_retried_total", "RabbitMQ handler retry attempts")
 	messagesDeadLettered = mustCounter("eagle_messaging_dead_lettered_total", "RabbitMQ messages rejected to a dead-letter queue")
 	consumerDisconnects  = mustCounter("eagle_messaging_consumer_disconnects_total", "RabbitMQ consumer disconnects")
 )
@@ -30,6 +30,8 @@ type Config struct {
 	URL              string
 	Exchange         string
 	ReconnectBackoff time.Duration
+	ConsumerAttempts int
+	RetryBackoff     time.Duration
 }
 
 type Message struct {
@@ -143,11 +145,26 @@ func (p *Publisher) reset() {
 
 type Handler func(context.Context, Message) error
 
-// RunConsumer reconnects until ctx is cancelled. A message is retried once,
-// then dead-lettered so a poison event cannot block the queue indefinitely.
+type permanentError struct{ error }
+
+// Permanent marks malformed or unsupported messages that retries cannot repair.
+func Permanent(err error) error {
+	if err == nil {
+		return nil
+	}
+	return permanentError{error: err}
+}
+
+func IsPermanent(err error) bool {
+	var target permanentError
+	return errors.As(err, &target)
+}
+
+// RunConsumer reconnects until ctx is cancelled. Transient handler failures use
+// bounded exponential backoff; malformed permanent failures are dead-lettered immediately.
 func RunConsumer(ctx context.Context, config Config, queue, routingKey string, logger *slog.Logger, handler Handler) {
 	for ctx.Err() == nil {
-		err := consume(ctx, config, queue, routingKey, handler)
+		err := consume(ctx, config, queue, routingKey, logger, handler)
 		if ctx.Err() != nil {
 			return
 		}
@@ -163,7 +180,7 @@ func RunConsumer(ctx context.Context, config Config, queue, routingKey string, l
 	}
 }
 
-func consume(ctx context.Context, config Config, queue, routingKey string, handler Handler) error {
+func consume(ctx context.Context, config Config, queue, routingKey string, logger *slog.Logger, handler Handler) error {
 	conn, err := amqp.Dial(config.URL)
 	if err != nil {
 		return fmt.Errorf("connect: %w", err)
@@ -196,33 +213,64 @@ func consume(ctx context.Context, config Config, queue, routingKey string, handl
 				ID: delivery.MessageId, Type: delivery.Type, RoutingKey: delivery.RoutingKey,
 				Body: delivery.Body, Timestamp: delivery.Timestamp, Headers: delivery.Headers,
 			}
-			if err := handler(ctx, message); err != nil {
-				attrs := metric.WithAttributes(
-					attribute.String("messaging.destination.name", queue),
-					attribute.String("messaging.rabbitmq.routing_key", delivery.RoutingKey),
-					attribute.String("messaging.message.type", delivery.Type),
-				)
+			attrs := metric.WithAttributes(
+				attribute.String("messaging.destination.name", queue),
+				attribute.String("messaging.rabbitmq.routing_key", delivery.RoutingKey),
+				attribute.String("messaging.message.type", delivery.Type),
+			)
+			handleErr := handleWithRetry(ctx, config.ConsumerAttempts, config.RetryBackoff, message, handler, func() {
+				messagesRetried.Add(ctx, 1, attrs)
+			})
+			if handleErr != nil {
 				messageConsumeFailed.Add(ctx, 1, attrs)
-				if delivery.Redelivered {
-					messagesDeadLettered.Add(ctx, 1, attrs)
-				} else {
-					messagesRetried.Add(ctx, 1, attrs)
-				}
-				if nackErr := delivery.Nack(false, !delivery.Redelivered); nackErr != nil {
-					return fmt.Errorf("nack message: %w", errors.Join(err, nackErr))
+				messagesDeadLettered.Add(ctx, 1, attrs)
+				logger.ErrorContext(ctx, "RabbitMQ message dead-lettered",
+					"queue", queue, "message_id", delivery.MessageId, "error", handleErr,
+				)
+				if nackErr := delivery.Nack(false, false); nackErr != nil {
+					return fmt.Errorf("nack message: %w", errors.Join(handleErr, nackErr))
 				}
 				continue
 			}
 			if err := delivery.Ack(false); err != nil {
 				return fmt.Errorf("ack message: %w", err)
 			}
-			messagesConsumed.Add(ctx, 1, metric.WithAttributes(
-				attribute.String("messaging.destination.name", queue),
-				attribute.String("messaging.rabbitmq.routing_key", delivery.RoutingKey),
-				attribute.String("messaging.message.type", delivery.Type),
-			))
+			messagesConsumed.Add(ctx, 1, attrs)
 		}
 	}
+}
+
+func handleWithRetry(
+	ctx context.Context,
+	attempts int,
+	backoff time.Duration,
+	message Message,
+	handler Handler,
+	onRetry func(),
+) error {
+	if attempts < 1 {
+		attempts = 5
+	}
+	if backoff <= 0 {
+		backoff = time.Second
+	}
+	for attempt := 1; attempt <= attempts; attempt++ {
+		err := handler(ctx, message)
+		if err == nil || IsPermanent(err) || attempt == attempts {
+			return err
+		}
+		if onRetry != nil {
+			onRetry()
+		}
+		timer := time.NewTimer(backoff * time.Duration(1<<(attempt-1)))
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return nil
 }
 
 func mustCounter(name, description string) metric.Int64Counter {

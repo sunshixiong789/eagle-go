@@ -4,7 +4,6 @@ import (
 	"context"
 
 	v1 "github.com/eagle-go/eagle/api/eagle/dictionary/v1"
-	"github.com/eagle-go/eagle/app/admin/internal/dictionary/application"
 	"github.com/eagle-go/eagle/app/admin/internal/dictionary/domain"
 )
 
@@ -12,12 +11,12 @@ import (
 type DictService struct {
 	v1.UnimplementedDictServiceServer
 
-	uc *application.DictUsecase
+	repo domain.DictRepo
 }
 
 // NewDictService 构造字典服务。
-func NewDictService(uc *application.DictUsecase) *DictService {
-	return &DictService{uc: uc}
+func NewDictService(repo domain.DictRepo) *DictService {
+	return &DictService{repo: repo}
 }
 
 func toProtoDictType(t *domain.DictType) *v1.DictType {
@@ -58,7 +57,7 @@ func toProtoDictData(d *domain.DictData) *v1.DictData {
 
 // CreateDictType 新建字典类型。
 func (s *DictService) CreateDictType(ctx context.Context, req *v1.CreateDictTypeRequest) (*v1.CreateDictTypeResponse, error) {
-	t, err := s.uc.CreateDictType(ctx, &domain.DictType{
+	t, err := s.repo.CreateType(ctx, &domain.DictType{
 		Name:   req.GetName(),
 		Type:   req.GetType(),
 		Status: toStatus(req.GetStatus()),
@@ -74,7 +73,7 @@ func (s *DictService) CreateDictType(ctx context.Context, req *v1.CreateDictType
 func (s *DictService) ListDictTypes(ctx context.Context, req *v1.ListDictTypesRequest) (*v1.ListDictTypesResponse, error) {
 	offset, limit := paginate(req.GetPage(), req.GetPageSize())
 
-	types, total, err := s.uc.ListDictTypes(ctx, domain.ListDictTypesQuery{
+	types, total, err := s.repo.ListTypes(ctx, domain.ListDictTypesQuery{
 		Keyword:  req.GetKeyword(),
 		Status:   toStatusPtr(req.Status),
 		Offset:   offset,
@@ -93,7 +92,7 @@ func (s *DictService) ListDictTypes(ctx context.Context, req *v1.ListDictTypesRe
 
 // UpdateDictType 更新字典类型。
 func (s *DictService) UpdateDictType(ctx context.Context, req *v1.UpdateDictTypeRequest) (*v1.UpdateDictTypeResponse, error) {
-	t, err := s.uc.UpdateDictType(ctx, &domain.DictType{
+	t, err := s.repo.UpdateType(ctx, &domain.DictType{
 		ID:     req.GetId(),
 		Name:   req.GetName(),
 		Status: toStatus(req.GetStatus()),
@@ -107,7 +106,7 @@ func (s *DictService) UpdateDictType(ctx context.Context, req *v1.UpdateDictType
 
 // DeleteDictType 删除字典类型，其下字典项由外键级联删除。
 func (s *DictService) DeleteDictType(ctx context.Context, req *v1.DeleteDictTypeRequest) (*v1.DeleteDictTypeResponse, error) {
-	if err := s.uc.DeleteDictType(ctx, req.GetId()); err != nil {
+	if err := s.repo.DeleteType(ctx, req.GetId()); err != nil {
 		return nil, err
 	}
 	return &v1.DeleteDictTypeResponse{}, nil
@@ -117,7 +116,7 @@ func (s *DictService) DeleteDictType(ctx context.Context, req *v1.DeleteDictType
 
 // CreateDictData 新建字典项。
 func (s *DictService) CreateDictData(ctx context.Context, req *v1.CreateDictDataRequest) (*v1.CreateDictDataResponse, error) {
-	d, err := s.uc.CreateDictData(ctx, &domain.DictData{
+	d, err := s.repo.CreateData(ctx, &domain.DictData{
 		DictType:  req.GetDictType(),
 		Label:     req.GetLabel(),
 		Value:     req.GetValue(),
@@ -137,7 +136,7 @@ func (s *DictService) CreateDictData(ctx context.Context, req *v1.CreateDictData
 func (s *DictService) ListDictData(ctx context.Context, req *v1.ListDictDataRequest) (*v1.ListDictDataResponse, error) {
 	offset, limit := paginate(req.GetPage(), req.GetPageSize())
 
-	data, total, err := s.uc.ListDictData(ctx, domain.ListDictDataQuery{
+	data, total, err := s.repo.ListData(ctx, domain.ListDictDataQuery{
 		DictType: req.DictType,
 		Keyword:  req.GetKeyword(),
 		Status:   toStatusPtr(req.Status),
@@ -157,7 +156,7 @@ func (s *DictService) ListDictData(ctx context.Context, req *v1.ListDictDataRequ
 
 // UpdateDictData 更新字典项。
 func (s *DictService) UpdateDictData(ctx context.Context, req *v1.UpdateDictDataRequest) (*v1.UpdateDictDataResponse, error) {
-	d, err := s.uc.UpdateDictData(ctx, &domain.DictData{
+	d, err := s.repo.UpdateData(ctx, domain.UpdateDictData{
 		ID:        req.GetId(),
 		Label:     req.GetLabel(),
 		Value:     req.GetValue(),
@@ -175,7 +174,7 @@ func (s *DictService) UpdateDictData(ctx context.Context, req *v1.UpdateDictData
 
 // DeleteDictData 删除字典项。
 func (s *DictService) DeleteDictData(ctx context.Context, req *v1.DeleteDictDataRequest) (*v1.DeleteDictDataResponse, error) {
-	if err := s.uc.DeleteDictData(ctx, req.GetId()); err != nil {
+	if err := s.repo.DeleteData(ctx, req.GetId()); err != nil {
 		return nil, err
 	}
 	return &v1.DeleteDictDataResponse{}, nil
@@ -183,7 +182,7 @@ func (s *DictService) DeleteDictData(ctx context.Context, req *v1.DeleteDictData
 
 // GetDictDataByType 按类型取字典项，供前端渲染下拉框。
 func (s *DictService) GetDictDataByType(ctx context.Context, req *v1.GetDictDataByTypeRequest) (*v1.GetDictDataByTypeResponse, error) {
-	data, err := s.uc.GetDictDataByType(ctx, req.GetDictType())
+	data, err := s.repo.ListDataByType(ctx, req.GetDictType())
 	if err != nil {
 		return nil, err
 	}

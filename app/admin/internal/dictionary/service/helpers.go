@@ -14,17 +14,16 @@ const (
 	maxPageSize     int32 = 200
 )
 
-func paginate(page, pageSize int32) (offset, limit int32) {
+// paginate 使用统一的 0-based 页码契约：page=0 是第一页。
+// offset 使用 int64，避免合法 int32 参数相乘时先发生 int32 溢出。
+func paginate(page, pageSize int32) (offset int64, limit int32) {
 	if pageSize <= 0 {
 		pageSize = defaultPageSize
 	}
 	if pageSize > maxPageSize {
 		pageSize = maxPageSize
 	}
-	if page <= 0 {
-		page = 1
-	}
-	return (page - 1) * pageSize, pageSize
+	return int64(page) * int64(pageSize), pageSize
 }
 
 func toStatus(v int32) domain.Status   { return domain.Status(v) }

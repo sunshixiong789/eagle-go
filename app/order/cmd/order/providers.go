@@ -36,6 +36,8 @@ var providerSet = wire.NewSet(
 	orderinfra.NewProductClient,
 	provideProductCatalog,
 	orderinfra.NewRepository,
+	provideOrderWriter,
+	provideOrderReader,
 	orderapp.NewUsecase,
 	orderservice.NewOrderService,
 	providePublisher,
@@ -63,6 +65,9 @@ func provideRabbitMQ(bc *config.Bootstrap) *config.Messaging_RabbitMQ {
 func provideProductCatalog(client *orderinfra.ProductClient) orderdomain.ProductCatalog {
 	return client
 }
+
+func provideOrderReader(repo orderdomain.Repository) orderdomain.Reader { return repo }
+func provideOrderWriter(repo orderdomain.Repository) orderdomain.Writer { return repo }
 
 func provideAuthorizer() authz.Authorizer {
 	return nil

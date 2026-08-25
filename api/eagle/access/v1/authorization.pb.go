@@ -127,6 +127,146 @@ func (x *CheckPermissionResponse) GetPolicyVersion() int64 {
 	return 0
 }
 
+type GetPolicySnapshotRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetPolicySnapshotRequest) Reset() {
+	*x = GetPolicySnapshotRequest{}
+	mi := &file_eagle_access_v1_authorization_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetPolicySnapshotRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetPolicySnapshotRequest) ProtoMessage() {}
+
+func (x *GetPolicySnapshotRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_eagle_access_v1_authorization_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetPolicySnapshotRequest.ProtoReflect.Descriptor instead.
+func (*GetPolicySnapshotRequest) Descriptor() ([]byte, []int) {
+	return file_eagle_access_v1_authorization_proto_rawDescGZIP(), []int{2}
+}
+
+type PolicyRule struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ptype         string                 `protobuf:"bytes,1,opt,name=ptype,proto3" json:"ptype,omitempty"`
+	Values        []string               `protobuf:"bytes,2,rep,name=values,proto3" json:"values,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PolicyRule) Reset() {
+	*x = PolicyRule{}
+	mi := &file_eagle_access_v1_authorization_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PolicyRule) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PolicyRule) ProtoMessage() {}
+
+func (x *PolicyRule) ProtoReflect() protoreflect.Message {
+	mi := &file_eagle_access_v1_authorization_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PolicyRule.ProtoReflect.Descriptor instead.
+func (*PolicyRule) Descriptor() ([]byte, []int) {
+	return file_eagle_access_v1_authorization_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *PolicyRule) GetPtype() string {
+	if x != nil {
+		return x.Ptype
+	}
+	return ""
+}
+
+func (x *PolicyRule) GetValues() []string {
+	if x != nil {
+		return x.Values
+	}
+	return nil
+}
+
+type GetPolicySnapshotResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Rules         []*PolicyRule          `protobuf:"bytes,1,rep,name=rules,proto3" json:"rules,omitempty"`
+	PolicyVersion int64                  `protobuf:"varint,2,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetPolicySnapshotResponse) Reset() {
+	*x = GetPolicySnapshotResponse{}
+	mi := &file_eagle_access_v1_authorization_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetPolicySnapshotResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetPolicySnapshotResponse) ProtoMessage() {}
+
+func (x *GetPolicySnapshotResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_eagle_access_v1_authorization_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetPolicySnapshotResponse.ProtoReflect.Descriptor instead.
+func (*GetPolicySnapshotResponse) Descriptor() ([]byte, []int) {
+	return file_eagle_access_v1_authorization_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *GetPolicySnapshotResponse) GetRules() []*PolicyRule {
+	if x != nil {
+		return x.Rules
+	}
+	return nil
+}
+
+func (x *GetPolicySnapshotResponse) GetPolicyVersion() int64 {
+	if x != nil {
+		return x.PolicyVersion
+	}
+	return 0
+}
+
 var File_eagle_access_v1_authorization_proto protoreflect.FileDescriptor
 
 const file_eagle_access_v1_authorization_proto_rawDesc = "" +
@@ -140,9 +280,18 @@ const file_eagle_access_v1_authorization_proto_rawDesc = "" +
 	"permission\"Z\n" +
 	"\x17CheckPermissionResponse\x12\x18\n" +
 	"\aallowed\x18\x01 \x01(\bR\aallowed\x12%\n" +
-	"\x0epolicy_version\x18\x02 \x01(\x03R\rpolicyVersion2\x82\x01\n" +
+	"\x0epolicy_version\x18\x02 \x01(\x03R\rpolicyVersion\"\x1a\n" +
+	"\x18GetPolicySnapshotRequest\":\n" +
+	"\n" +
+	"PolicyRule\x12\x14\n" +
+	"\x05ptype\x18\x01 \x01(\tR\x05ptype\x12\x16\n" +
+	"\x06values\x18\x02 \x03(\tR\x06values\"u\n" +
+	"\x19GetPolicySnapshotResponse\x121\n" +
+	"\x05rules\x18\x01 \x03(\v2\x1b.eagle.access.v1.PolicyRuleR\x05rules\x12%\n" +
+	"\x0epolicy_version\x18\x02 \x01(\x03R\rpolicyVersion2\xf4\x01\n" +
 	"\x14AuthorizationService\x12j\n" +
-	"\x0fCheckPermission\x12'.eagle.access.v1.CheckPermissionRequest\x1a(.eagle.access.v1.CheckPermissionResponse\"\x04\x98\xb5\x18\x04B8Z6github.com/eagle-go/eagle/api/eagle/access/v1;accessv1b\x06proto3"
+	"\x0fCheckPermission\x12'.eagle.access.v1.CheckPermissionRequest\x1a(.eagle.access.v1.CheckPermissionResponse\"\x04\x98\xb5\x18\x04\x12p\n" +
+	"\x11GetPolicySnapshot\x12).eagle.access.v1.GetPolicySnapshotRequest\x1a*.eagle.access.v1.GetPolicySnapshotResponse\"\x04\x98\xb5\x18\x04B8Z6github.com/eagle-go/eagle/api/eagle/access/v1;accessv1b\x06proto3"
 
 var (
 	file_eagle_access_v1_authorization_proto_rawDescOnce sync.Once
@@ -156,19 +305,25 @@ func file_eagle_access_v1_authorization_proto_rawDescGZIP() []byte {
 	return file_eagle_access_v1_authorization_proto_rawDescData
 }
 
-var file_eagle_access_v1_authorization_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_eagle_access_v1_authorization_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_eagle_access_v1_authorization_proto_goTypes = []any{
-	(*CheckPermissionRequest)(nil),  // 0: eagle.access.v1.CheckPermissionRequest
-	(*CheckPermissionResponse)(nil), // 1: eagle.access.v1.CheckPermissionResponse
+	(*CheckPermissionRequest)(nil),    // 0: eagle.access.v1.CheckPermissionRequest
+	(*CheckPermissionResponse)(nil),   // 1: eagle.access.v1.CheckPermissionResponse
+	(*GetPolicySnapshotRequest)(nil),  // 2: eagle.access.v1.GetPolicySnapshotRequest
+	(*PolicyRule)(nil),                // 3: eagle.access.v1.PolicyRule
+	(*GetPolicySnapshotResponse)(nil), // 4: eagle.access.v1.GetPolicySnapshotResponse
 }
 var file_eagle_access_v1_authorization_proto_depIdxs = []int32{
-	0, // 0: eagle.access.v1.AuthorizationService.CheckPermission:input_type -> eagle.access.v1.CheckPermissionRequest
-	1, // 1: eagle.access.v1.AuthorizationService.CheckPermission:output_type -> eagle.access.v1.CheckPermissionResponse
-	1, // [1:2] is the sub-list for method output_type
-	0, // [0:1] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	3, // 0: eagle.access.v1.GetPolicySnapshotResponse.rules:type_name -> eagle.access.v1.PolicyRule
+	0, // 1: eagle.access.v1.AuthorizationService.CheckPermission:input_type -> eagle.access.v1.CheckPermissionRequest
+	2, // 2: eagle.access.v1.AuthorizationService.GetPolicySnapshot:input_type -> eagle.access.v1.GetPolicySnapshotRequest
+	1, // 3: eagle.access.v1.AuthorizationService.CheckPermission:output_type -> eagle.access.v1.CheckPermissionResponse
+	4, // 4: eagle.access.v1.AuthorizationService.GetPolicySnapshot:output_type -> eagle.access.v1.GetPolicySnapshotResponse
+	3, // [3:5] is the sub-list for method output_type
+	1, // [1:3] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_eagle_access_v1_authorization_proto_init() }
@@ -182,7 +337,7 @@ func file_eagle_access_v1_authorization_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_eagle_access_v1_authorization_proto_rawDesc), len(file_eagle_access_v1_authorization_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

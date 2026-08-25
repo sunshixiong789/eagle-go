@@ -51,7 +51,7 @@ type DictData struct {
 type ListDictTypesQuery struct {
 	Keyword  string
 	Status   *Status
-	Offset   int32
+	Offset   int64
 	PageSize int32
 }
 
@@ -60,8 +60,21 @@ type ListDictDataQuery struct {
 	DictType *string
 	Keyword  string
 	Status   *Status
-	Offset   int32
+	Offset   int64
 	PageSize int32
+}
+
+// UpdateDictData 只暴露字典项允许修改的字段。
+// DictType 创建后不可变，因此不出现在更新参数中。
+type UpdateDictData struct {
+	ID        int64
+	Label     string
+	Value     string
+	Sort      int32
+	CSSClass  string
+	IsDefault bool
+	Status    Status
+	Remark    string
 }
 
 // DictRepo 是字典的仓储接口，由基础设施层实现。
@@ -77,6 +90,6 @@ type DictRepo interface {
 	ListData(ctx context.Context, q ListDictDataQuery) ([]*DictData, int64, error)
 	// ListDataByType 是前端下拉框的主要来源。
 	ListDataByType(ctx context.Context, dictType string) ([]*DictData, error)
-	UpdateData(ctx context.Context, d *DictData) (*DictData, error)
+	UpdateData(ctx context.Context, update UpdateDictData) (*DictData, error)
 	DeleteData(ctx context.Context, id int64) error
 }

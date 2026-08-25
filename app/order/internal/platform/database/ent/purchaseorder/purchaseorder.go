@@ -15,6 +15,8 @@ const (
 	FieldID = "id"
 	// FieldOwnerSubject holds the string denoting the owner_subject field in the database.
 	FieldOwnerSubject = "owner_subject"
+	// FieldIdempotencyKey holds the string denoting the idempotency_key field in the database.
+	FieldIdempotencyKey = "idempotency_key"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
 	// FieldTotalCents holds the string denoting the total_cents field in the database.
@@ -29,6 +31,7 @@ const (
 var Columns = []string{
 	FieldID,
 	FieldOwnerSubject,
+	FieldIdempotencyKey,
 	FieldStatus,
 	FieldTotalCents,
 	FieldCreatedAt,
@@ -47,6 +50,8 @@ func ValidColumn(column string) bool {
 var (
 	// OwnerSubjectValidator is a validator for the "owner_subject" field. It is called by the builders before save.
 	OwnerSubjectValidator func(string) error
+	// IdempotencyKeyValidator is a validator for the "idempotency_key" field. It is called by the builders before save.
+	IdempotencyKeyValidator func(string) error
 	// StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	StatusValidator func(string) error
 	// TotalCentsValidator is a validator for the "total_cents" field. It is called by the builders before save.
@@ -68,6 +73,11 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 // ByOwnerSubject orders the results by the owner_subject field.
 func ByOwnerSubject(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldOwnerSubject, opts...).ToFunc()
+}
+
+// ByIdempotencyKey orders the results by the idempotency_key field.
+func ByIdempotencyKey(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIdempotencyKey, opts...).ToFunc()
 }
 
 // ByStatus orders the results by the status field.

@@ -132,6 +132,36 @@ func (en *Enforcer) ReloadPolicy(ctx context.Context) error {
 	return nil
 }
 
+// ReplacePolicySnapshot builds a complete replacement before taking the write
+// lock, so concurrent decisions see either the old or the new policy set.
+// It is used by resource services that receive versioned policy snapshots.
+func (en *Enforcer) ReplacePolicySnapshot(ctx context.Context, rows []StoredPolicy, version int64) error {
+	m, err := model.NewModelFromString(ModelText)
+	if err != nil {
+		return fmt.Errorf("authz: 解析 Casbin 模型: %w", err)
+	}
+	for _, row := range rows {
+		line := append([]string{row.PType}, row.Values...)
+		if err := persist.LoadPolicyArray(line, m); err != nil {
+			return fmt.Errorf("authz: load policy %v: %w", line, err)
+		}
+	}
+	replacement, err := casbin.NewEnforcer(m)
+	if err != nil {
+		return fmt.Errorf("authz: 构造策略快照: %w", err)
+	}
+	if err := replacement.BuildRoleLinks(); err != nil {
+		return fmt.Errorf("authz: 构建角色继承: %w", err)
+	}
+
+	en.mu.Lock()
+	en.e = replacement
+	en.loadedVersion.Store(version)
+	en.mu.Unlock()
+	recordPolicyReload(ctx, "success")
+	return nil
+}
+
 // LoadedPolicyVersion 返回当前内存快照对应的数据库版本。
 func (en *Enforcer) LoadedPolicyVersion() int64 { return en.loadedVersion.Load() }
 

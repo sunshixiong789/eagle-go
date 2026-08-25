@@ -10,12 +10,11 @@ import (
 	"github.com/eagle-go/eagle/app/admin/internal/access/application"
 	"github.com/eagle-go/eagle/app/admin/internal/access/infrastructure"
 	"github.com/eagle-go/eagle/app/admin/internal/access/service"
-	application2 "github.com/eagle-go/eagle/app/admin/internal/dictionary/application"
 	infrastructure2 "github.com/eagle-go/eagle/app/admin/internal/dictionary/infrastructure"
 	service2 "github.com/eagle-go/eagle/app/admin/internal/dictionary/service"
 	infrastructure3 "github.com/eagle-go/eagle/app/admin/internal/file/infrastructure"
 	service3 "github.com/eagle-go/eagle/app/admin/internal/file/service"
-	application3 "github.com/eagle-go/eagle/app/admin/internal/notification/application"
+	application2 "github.com/eagle-go/eagle/app/admin/internal/notification/application"
 	infrastructure4 "github.com/eagle-go/eagle/app/admin/internal/notification/infrastructure"
 	service4 "github.com/eagle-go/eagle/app/admin/internal/notification/service"
 	"github.com/eagle-go/eagle/app/admin/internal/platform/database"
@@ -55,11 +54,9 @@ func wireApp(bc *config.Bootstrap, logger *slog.Logger) (runtime.Components, fun
 	roleBindingUsecase := application.NewRoleBindingUsecase(policyRepo, permissionRepo)
 	roleBindingService := service.NewRoleBindingService(roleBindingUsecase)
 	authorizationChecker := infrastructure.NewAuthorizationChecker(enforcer, policyStore)
-	authorizationUsecase := application.NewAuthorizationUsecase(authorizationChecker)
-	authorizationService := service.NewAuthorizationService(authorizationUsecase)
+	authorizationService := service.NewAuthorizationService(authorizationChecker)
 	dictRepo := infrastructure2.NewDictRepo(databaseDatabase)
-	dictUsecase := application2.NewDictUsecase(dictRepo)
-	dictService := service2.NewDictService(dictUsecase)
+	dictService := service2.NewDictService(dictRepo)
 	repository := infrastructure3.NewRepository(databaseDatabase)
 	file := provideFile(bc)
 	blobStore, err := infrastructure3.NewBlobStore(file)
@@ -70,7 +67,7 @@ func wireApp(bc *config.Bootstrap, logger *slog.Logger) (runtime.Components, fun
 	usecase := provideFileUsecase(repository, blobStore, file)
 	fileService := service3.NewFileService(usecase)
 	domainRepository := infrastructure4.NewRepository(databaseDatabase)
-	applicationUsecase := application3.NewUsecase(domainRepository)
+	applicationUsecase := application2.NewUsecase(domainRepository)
 	notificationService := service4.NewNotificationService(applicationUsecase)
 	grpcServer := provideGRPCServer(configServer, v, permissionService, roleBindingService, authorizationService, dictService, fileService, notificationService)
 	httpServer := provideHTTPServer(configServer, v, file, permissionService, roleBindingService, dictService, fileService, notificationService)
@@ -101,8 +98,18 @@ func wireApp(bc *config.Bootstrap, logger *slog.Logger) (runtime.Components, fun
 		cleanup()
 		return runtime.Components{}, nil, err
 	}
-	components := newComponents(grpcServer, httpServer, mainPolicyHealth, mainPolicyReconciler, mainOrderCreatedConsumer, mainInboxJanitor)
+	mainFileCleanupWorker, cleanup6, err := provideFileCleanupWorker(usecase, logger)
+	if err != nil {
+		cleanup5()
+		cleanup4()
+		cleanup3()
+		cleanup2()
+		cleanup()
+		return runtime.Components{}, nil, err
+	}
+	components := newComponents(grpcServer, httpServer, mainPolicyHealth, mainPolicyReconciler, mainOrderCreatedConsumer, mainInboxJanitor, mainFileCleanupWorker)
 	return components, func() {
+		cleanup6()
 		cleanup5()
 		cleanup4()
 		cleanup3()

@@ -284,10 +284,11 @@ func (x *CreateOrderItem) GetQuantity() int32 {
 }
 
 type CreateOrderRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Items         []*CreateOrderItem     `protobuf:"bytes,1,rep,name=items,proto3" json:"items,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Items          []*CreateOrderItem     `protobuf:"bytes,1,rep,name=items,proto3" json:"items,omitempty"`
+	IdempotencyKey string                 `protobuf:"bytes,2,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *CreateOrderRequest) Reset() {
@@ -325,6 +326,13 @@ func (x *CreateOrderRequest) GetItems() []*CreateOrderItem {
 		return x.Items
 	}
 	return nil
+}
+
+func (x *CreateOrderRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
 }
 
 type CreateOrderResponse struct {
@@ -589,10 +597,11 @@ const file_eagle_order_v1_order_proto_rawDesc = "" +
 	"\n" +
 	"product_id\x18\x01 \x01(\x03B\a\xbaH\x04\"\x02 \x00R\tproductId\x12&\n" +
 	"\bquantity\x18\x02 \x01(\x05B\n" +
-	"\xbaH\a\x1a\x05\x18\xe7\a \x00R\bquantity\"W\n" +
+	"\xbaH\a\x1a\x05\x18\xe7\a \x00R\bquantity\"\x8b\x01\n" +
 	"\x12CreateOrderRequest\x12A\n" +
 	"\x05items\x18\x01 \x03(\v2\x1f.eagle.order.v1.CreateOrderItemB\n" +
-	"\xbaH\a\x92\x01\x04\b\x01\x10dR\x05items\"B\n" +
+	"\xbaH\a\x92\x01\x04\b\x01\x10dR\x05items\x122\n" +
+	"\x0fidempotency_key\x18\x02 \x01(\tB\t\xbaH\x06r\x04\x10\x01\x18@R\x0eidempotencyKey\"B\n" +
 	"\x13CreateOrderResponse\x12+\n" +
 	"\x05order\x18\x01 \x01(\v2\x15.eagle.order.v1.OrderR\x05order\"-\n" +
 	"\x11GetMyOrderRequest\x12\x18\n" +

@@ -25,8 +25,12 @@ const (
 	FieldSize = "size"
 	// FieldSha256 holds the string denoting the sha256 field in the database.
 	FieldSha256 = "sha256"
+	// FieldState holds the string denoting the state field in the database.
+	FieldState = "state"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
+	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
+	FieldUpdatedAt = "updated_at"
 	// Table holds the table name of the file in the database.
 	Table = "stored_file"
 )
@@ -40,7 +44,9 @@ var Columns = []string{
 	FieldContentType,
 	FieldSize,
 	FieldSha256,
+	FieldState,
 	FieldCreatedAt,
+	FieldUpdatedAt,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -68,8 +74,16 @@ var (
 	SizeValidator func(int64) error
 	// Sha256Validator is a validator for the "sha256" field. It is called by the builders before save.
 	Sha256Validator func(string) error
+	// DefaultState holds the default value on creation for the "state" field.
+	DefaultState string
+	// StateValidator is a validator for the "state" field. It is called by the builders before save.
+	StateValidator func(string) error
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
+	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
+	DefaultUpdatedAt func() time.Time
+	// UpdateDefaultUpdatedAt holds the default value on update for the "updated_at" field.
+	UpdateDefaultUpdatedAt func() time.Time
 	// IDValidator is a validator for the "id" field. It is called by the builders before save.
 	IDValidator func(string) error
 )
@@ -112,7 +126,17 @@ func BySha256(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSha256, opts...).ToFunc()
 }
 
+// ByState orders the results by the state field.
+func ByState(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldState, opts...).ToFunc()
+}
+
 // ByCreatedAt orders the results by the created_at field.
 func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
+}
+
+// ByUpdatedAt orders the results by the updated_at field.
+func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUpdatedAt, opts...).ToFunc()
 }

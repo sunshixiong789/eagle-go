@@ -34,6 +34,7 @@ func wireApp(bc *config.Bootstrap, logger *slog.Logger) (runtime.Components, fun
 		return runtime.Components{}, nil, err
 	}
 	repository := infrastructure.NewRepository(databaseDatabase)
+	writer := provideOrderWriter(repository)
 	upstream := provideUpstream(bc)
 	serviceAuth := provideServiceAuth(bc)
 	productClient, cleanup2, err := infrastructure.NewProductClient(upstream, serviceAuth)
@@ -42,8 +43,9 @@ func wireApp(bc *config.Bootstrap, logger *slog.Logger) (runtime.Components, fun
 		return runtime.Components{}, nil, err
 	}
 	productCatalog := provideProductCatalog(productClient)
-	usecase := application.NewUsecase(repository, productCatalog)
-	orderService := service.NewOrderService(usecase)
+	usecase := application.NewUsecase(writer, productCatalog)
+	reader := provideOrderReader(repository)
+	orderService := service.NewOrderService(usecase, reader)
 	grpcServer := provideGRPCServer(configServer, v, orderService)
 	httpServer := provideHTTPServer(configServer, v, orderService)
 	messaging_RabbitMQ := provideRabbitMQ(bc)

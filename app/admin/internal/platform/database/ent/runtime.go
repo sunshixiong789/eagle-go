@@ -208,10 +208,22 @@ func init() {
 	fileDescSha256 := fileFields[6].Descriptor()
 	// file.Sha256Validator is a validator for the "sha256" field. It is called by the builders before save.
 	file.Sha256Validator = fileDescSha256.Validators[0].(func(string) error)
+	// fileDescState is the schema descriptor for state field.
+	fileDescState := fileFields[7].Descriptor()
+	// file.DefaultState holds the default value on creation for the state field.
+	file.DefaultState = fileDescState.Default.(string)
+	// file.StateValidator is a validator for the "state" field. It is called by the builders before save.
+	file.StateValidator = fileDescState.Validators[0].(func(string) error)
 	// fileDescCreatedAt is the schema descriptor for created_at field.
-	fileDescCreatedAt := fileFields[7].Descriptor()
+	fileDescCreatedAt := fileFields[8].Descriptor()
 	// file.DefaultCreatedAt holds the default value on creation for the created_at field.
 	file.DefaultCreatedAt = fileDescCreatedAt.Default.(func() time.Time)
+	// fileDescUpdatedAt is the schema descriptor for updated_at field.
+	fileDescUpdatedAt := fileFields[9].Descriptor()
+	// file.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	file.DefaultUpdatedAt = fileDescUpdatedAt.Default.(func() time.Time)
+	// file.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	file.UpdateDefaultUpdatedAt = fileDescUpdatedAt.UpdateDefault.(func() time.Time)
 	// fileDescID is the schema descriptor for id field.
 	fileDescID := fileFields[0].Descriptor()
 	// file.IDValidator is a validator for the "id" field. It is called by the builders before save.

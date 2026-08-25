@@ -36,6 +36,8 @@ message Upstream {
   google.protobuf.Duration timeout = 3;
   int32 max_attempts = 4;
   google.protobuf.Duration retry_backoff = 5;
+  // Resource services periodically replace their local authorization snapshot.
+  google.protobuf.Duration authorization_refresh_interval = 6;
 }
 
 // File configures the development/local blob adapter. The module keeps a
@@ -75,6 +77,8 @@ message Messaging {
     string exchange = 3;
     string order_created_queue = 4;
     google.protobuf.Duration reconnect_backoff = 5;
+    int32 consumer_max_attempts = 6;
+    google.protobuf.Duration consumer_retry_backoff = 7;
   }
   RabbitMQ rabbitmq = 1;
 }

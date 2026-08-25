@@ -16,7 +16,6 @@ import (
 	accessapp "github.com/eagle-go/eagle/app/admin/internal/access/application"
 	accessinfra "github.com/eagle-go/eagle/app/admin/internal/access/infrastructure"
 	accessservice "github.com/eagle-go/eagle/app/admin/internal/access/service"
-	dictionaryapp "github.com/eagle-go/eagle/app/admin/internal/dictionary/application"
 	dictionaryinfra "github.com/eagle-go/eagle/app/admin/internal/dictionary/infrastructure"
 	dictionaryservice "github.com/eagle-go/eagle/app/admin/internal/dictionary/service"
 	fileapp "github.com/eagle-go/eagle/app/admin/internal/file/application"
@@ -38,6 +37,7 @@ type policyHealth struct{}
 type policyReconciler struct{}
 type orderCreatedConsumer struct{}
 type inboxJanitor struct{}
+type fileCleanupWorker struct{}
 
 var providerSet = wire.NewSet(
 	provideData,
@@ -56,17 +56,16 @@ var providerSet = wire.NewSet(
 	providePolicyReconciler,
 	accessapp.NewPermissionUsecase,
 	accessapp.NewRoleBindingUsecase,
-	accessapp.NewAuthorizationUsecase,
 	accessservice.NewPermissionService,
 	accessservice.NewRoleBindingService,
 	accessservice.NewAuthorizationService,
 	dictionaryinfra.NewDictRepo,
-	dictionaryapp.NewDictUsecase,
 	dictionaryservice.NewDictService,
 	fileinfra.NewBlobStore,
 	fileinfra.NewRepository,
 	provideFileUsecase,
 	fileservice.NewFileService,
+	provideFileCleanupWorker,
 	notificationinfra.NewRepository,
 	notificationapp.NewUsecase,
 	notificationservice.NewNotificationService,
@@ -106,8 +105,12 @@ func provideFileUsecase(repo filedomain.Repository, blobs filedomain.BlobStore, 
 	return fileapp.NewUsecase(repo, blobs, c.GetMaxSizeBytes())
 }
 
+func provideFileCleanupWorker(uc *fileapp.Usecase, logger *slog.Logger) (fileCleanupWorker, func(), error) {
+	return fileCleanupWorker{}, fileservice.NewCleanupWorker(uc, logger), nil
+}
+
 func provideOrderCreatedConsumer(c *config.Messaging_RabbitMQ, uc *notificationapp.Usecase, logger *slog.Logger) (orderCreatedConsumer, func(), error) {
-	return orderCreatedConsumer{}, notificationinfra.NewOrderCreatedConsumer(c, uc, logger), nil
+	return orderCreatedConsumer{}, notificationservice.NewOrderCreatedConsumer(c, uc, logger), nil
 }
 
 func provideInboxJanitor(db *platformdb.Database, logger *slog.Logger) (inboxJanitor, func(), error) {
@@ -171,6 +174,7 @@ func newComponents(
 	_ policyReconciler,
 	_ orderCreatedConsumer,
 	_ inboxJanitor,
+	_ fileCleanupWorker,
 ) platformruntime.Components {
 	return platformruntime.Components{Servers: []transport.Server{gs, hs}}
 }

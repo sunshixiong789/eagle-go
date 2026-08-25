@@ -19,6 +19,8 @@ type PurchaseOrder struct {
 	ID string `json:"id,omitempty"`
 	// OwnerSubject holds the value of the "owner_subject" field.
 	OwnerSubject string `json:"owner_subject,omitempty"`
+	// IdempotencyKey holds the value of the "idempotency_key" field.
+	IdempotencyKey string `json:"idempotency_key,omitempty"`
 	// Status holds the value of the "status" field.
 	Status string `json:"status,omitempty"`
 	// TotalCents holds the value of the "total_cents" field.
@@ -35,7 +37,7 @@ func (*PurchaseOrder) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case purchaseorder.FieldTotalCents:
 			values[i] = new(sql.NullInt64)
-		case purchaseorder.FieldID, purchaseorder.FieldOwnerSubject, purchaseorder.FieldStatus:
+		case purchaseorder.FieldID, purchaseorder.FieldOwnerSubject, purchaseorder.FieldIdempotencyKey, purchaseorder.FieldStatus:
 			values[i] = new(sql.NullString)
 		case purchaseorder.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -65,6 +67,12 @@ func (_m *PurchaseOrder) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field owner_subject", values[i])
 			} else if value.Valid {
 				_m.OwnerSubject = value.String
+			}
+		case purchaseorder.FieldIdempotencyKey:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field idempotency_key", values[i])
+			} else if value.Valid {
+				_m.IdempotencyKey = value.String
 			}
 		case purchaseorder.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -122,6 +130,9 @@ func (_m *PurchaseOrder) String() string {
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("owner_subject=")
 	builder.WriteString(_m.OwnerSubject)
+	builder.WriteString(", ")
+	builder.WriteString("idempotency_key=")
+	builder.WriteString(_m.IdempotencyKey)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(_m.Status)

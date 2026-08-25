@@ -89,9 +89,9 @@ func TestConfigParses(t *testing.T) {
 		metricsAddr  string
 		database     string
 	}{
-		{service: "admin", requirements: appconfig.Requirements{File: true, RabbitMQ: true}, httpAddr: "0.0.0.0:8001", grpcAddr: "0.0.0.0:9001", metricsAddr: "0.0.0.0:9101", database: "eagle_admin"},
-		{service: "product", requirements: appconfig.Requirements{AuthorizationUpstream: true, Redis: true, ServiceAuth: true}, httpAddr: "0.0.0.0:8002", grpcAddr: "0.0.0.0:9002", metricsAddr: "0.0.0.0:9102", database: "eagle_product"},
-		{service: "order", requirements: appconfig.Requirements{ProductUpstream: true, RabbitMQ: true, ServiceAuth: true}, httpAddr: "0.0.0.0:8003", grpcAddr: "0.0.0.0:9003", metricsAddr: "0.0.0.0:9103", database: "eagle_order"},
+		{service: "admin", requirements: appconfig.Requirements{Database: true, Auth: true, HTTP: true, GRPC: true, File: true, RabbitMQ: true}, httpAddr: "0.0.0.0:8001", grpcAddr: "0.0.0.0:9001", metricsAddr: "0.0.0.0:9101", database: "eagle_admin"},
+		{service: "product", requirements: appconfig.Requirements{Database: true, Auth: true, HTTP: true, GRPC: true, AuthorizationUpstream: true, Redis: true, ServiceAuth: true}, httpAddr: "0.0.0.0:8002", grpcAddr: "0.0.0.0:9002", metricsAddr: "0.0.0.0:9102", database: "eagle_product"},
+		{service: "order", requirements: appconfig.Requirements{Database: true, Auth: true, HTTP: true, GRPC: true, ProductUpstream: true, RabbitMQ: true, ServiceAuth: true}, httpAddr: "0.0.0.0:8003", grpcAddr: "0.0.0.0:9003", metricsAddr: "0.0.0.0:9103", database: "eagle_order"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.service, func(t *testing.T) {

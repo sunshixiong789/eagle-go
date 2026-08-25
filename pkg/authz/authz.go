@@ -40,8 +40,8 @@ type options struct {
 }
 
 // Authorizer is the narrow policy decision port used by the middleware. The
-// admin service supplies a local Casbin enforcer; other services use the
-// access-service gRPC client.
+// admin service supplies its database-backed Casbin enforcer; resource services
+// supply a local enforcer refreshed from versioned access-service snapshots.
 type Authorizer interface {
 	AllowContext(context.Context, []string, string) (bool, error)
 }

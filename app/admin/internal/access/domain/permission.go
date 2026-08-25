@@ -95,9 +95,6 @@ func NewPermission(p NewPermissionParams) (*Permission, error) {
 }
 
 // PermissionSnapshot 是从存储读出的权限节点，仅供 infrastructure 重建实体。
-//
-// 刻意不走 NewPermission：库里的历史数据可能是在规则收紧之前写入的，
-// 重建时报错会让整张表读不出来。校验只在写入路径上执行。
 type PermissionSnapshot struct {
 	ID, ParentID          int64
 	Name, Code            string
@@ -110,8 +107,10 @@ type PermissionSnapshot struct {
 }
 
 // RehydratePermission 从持久化快照重建实体，仅供 infrastructure 调用。
-func RehydratePermission(s PermissionSnapshot) *Permission {
-	return &Permission{
+// 持久化数据也必须满足领域不变量；若历史数据不合法，应通过迁移修复，
+// 而不是把一个无法由正常写路径创建的实体带入运行时。
+func RehydratePermission(s PermissionSnapshot) (*Permission, error) {
+	p := &Permission{
 		id:        s.ID,
 		parentID:  s.ParentID,
 		name:      s.Name,
@@ -127,6 +126,10 @@ func RehydratePermission(s PermissionSnapshot) *Permission {
 		updatedAt: s.UpdatedAt,
 		revision:  s.Revision,
 	}
+	if err := p.validate(); err != nil {
+		return nil, fmt.Errorf("rehydrate permission %d: %w", s.ID, err)
+	}
+	return p, nil
 }
 
 func (p *Permission) validate() error {

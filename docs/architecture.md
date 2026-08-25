@@ -7,7 +7,7 @@
 | 进程 | 拥有的模块 | 拥有的数据 | 依赖 |
 |---|---|---|---|
 | admin | access、dictionary、file、notification | 权限、字典、文件元数据、站内通知、事件 Inbox | Keycloak、S3、RabbitMQ |
-| product | product | 商品 | admin 授权判定、Redis 缓存 |
+| product | product | 商品 | admin 策略快照、Redis 缓存 |
 | order | order | 订单、商品快照、事件 Outbox | product 查询、RabbitMQ |
 
 Keycloak 是独立认证中心，负责用户、口令、角色和 token。本仓库不建用户表。
@@ -29,18 +29,22 @@ admin 不是业务流量网关。它组合四个基础模块，是因为这些�
 
 `app/<service>/internal` 是 Go 的编译器可见性边界：其他服务连实现包都无法 import。服务边界同时由独立 module、入口、Ent Client、数据库、API 调用和架构测试保证。根 `go.work` 只组合本地开发工作区，每个模块的依赖仍由自己的 `go.mod/go.sum` 管理。进程对象图由该服务 `cmd/<service>` 的 Wire injector 生成；`google/wire` 不能进入业务四层。
 
-## 模块内四层
+## 模块内渐进式分层
 
-每个模块固定使用：
+模块不按目录数量评价 DDD，而是按用例复杂度选择最小结构。纯 CRUD 或查询使用：
+
+    service → domain ← infrastructure
+
+存在多端口协作、聚合加载-变更-保存、事务、Outbox/Inbox、幂等、补偿、审计或多入口复用时使用：
 
     service → application → domain ← infrastructure
 
 - domain：模型、不变量、领域错误和端口，只依赖标准库。
-- application：编排用例，只依赖本模块 domain。
+- application：可选；编排用例，只依赖本模块 domain。
 - infrastructure：实现数据库、文件存储和跨服务客户端端口。
-- service：实现 protobuf Service，完成 protobuf 与 domain 转换并传递当前主体。
+- service：入站适配，包括 protobuf Service、消息消费者和任务入口；完成协议转换并传递当前主体。
 
-DDD 是依赖边界，不是代码数量指标。商品是简单 CRUD；订单有“商品不可用、重复商品、金额快照和总额”这些真实不变量，才使用聚合根。不要为了四层引入工厂、领域事件或通用 DTO 体系。
+DDD 是依赖边界和不变量保护，不是代码数量指标。字典等纯 CRUD 不保留只做仓储代理的 application；订单有“商品不可用、重复商品、金额快照和总额”这些真实不变量，才使用聚合根和 application。不要为了目录对称引入工厂、领域事件或通用 DTO 体系。
 
 ## 数据所有权
 
@@ -53,10 +57,12 @@ DDD 是依赖边界，不是代码数量指标。商品是简单 CRUD；订单�
 
 订单不会读取商品表，也不会把客户端报价当真。创建订单时通过 product gRPC 批量读取商品，将 SKU、名称和单价保存为订单快照，再只在订单库内提交一次事务。商品以后改名或改价不会篡改历史订单。
 
-订单创建事务会同时写入 `event_outbox`，后台 relay 经 RabbitMQ publisher confirm
-发布 `OrderCreatedV1`。admin 的通知消费者在同一事务内先写 `event_inbox`，再写
-通知，因此重复投递不会产生重复通知。RabbitMQ 不参与权限策略同步；权限仍使用
-数据库 version + 周期对账。
+订单创建要求调用方提供 owner 范围内的幂等键；数据库唯一约束保证重试只得到同一订单。
+同一事务会写入带独立 `event_id` 的 `event_outbox`，事件由包含 producer、schema version、
+aggregate、traceparent 的统一 envelope 承载，后台 relay 经 RabbitMQ publisher confirm 发布
+`OrderCreatedV1`。admin 的通知消费者先校验 envelope 和 payload，再在同一事务内写
+`event_inbox` 与通知，因此重复投递不会产生重复通知。短暂消费失败做有界指数退避，
+畸形消息或重试耗尽进入 DLQ，不产生无限热循环。
 
 这条链路只演示可靠事件发布与幂等消费，不意味着库存、支付已经实现。将来出现
 跨服务业务写入时，在 Outbox/Inbox 基础上增加 Saga，而不是引入跨库事务或 2PC。
@@ -65,25 +71,24 @@ DDD 是依赖边界，不是代码数量指标。商品是简单 CRUD；订单�
 
     用户 token
        ↓ 每个服务本地验签
-    资源服务 ──gRPC CheckPermission──> admin
+    资源服务 ──周期拉取版本化策略──> admin
        ↓                                  ↓
-    业务用例                         本地 Casbin 快照
+    本地 Casbin 判定                  策略唯一写入方
 
 - 所有服务本地校验 JWT，admin 不成为认证代理。
 - 权限要求声明在 proto 的 access / perm 上，handler 不写鉴权分支。
-- admin 是策略写入方和判定点；其他服务不连接权限库。
-- 远程判定失败时 fail closed，只影响 PERMISSION_REQUIRED 接口；公开或只要求登录的接口不依赖 admin。
-- admin 的判定 gRPC 只读，不提供策略写接口；`CheckPermission` 与
+- admin 是策略唯一写入方；其他服务不连接权限库，只读取版本化快照并原子替换本地 Casbin 模型。
+- 请求路径不做远程授权 RPC。刷新失败时保留上一份有效快照；超过三个刷新周期会使 readiness 失败，
+  但不会用半份策略或空策略覆盖已有判定状态。首次启动无法取得快照则 fail closed 并拒绝启动。
+- admin 的授权 gRPC 只读，不提供策略写接口；`GetPolicySnapshot`、`CheckPermission` 与
   `BatchGetProducts` 是 `INTERNAL` RPC，调用方必须携带 Keycloak
   `client_credentials` 服务令牌。
-
-当判定吞吐成为瓶颈时，可以增加带版本号的本地策略缓存，但不应提前引入 MQ 或把权限表开放给所有服务。
 
 ## 同步调用
 
 只有两条同步服务依赖：
 
-- product → admin：权限判定；
+- product → admin：周期拉取授权策略快照（不在业务请求路径）；
 - order → product：批量获取下单商品。
 
 客户端在调用方业务模块的 infrastructure，application/domain 不依赖 protobuf。

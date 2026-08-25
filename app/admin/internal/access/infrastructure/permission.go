@@ -20,9 +20,9 @@ func NewPermissionRepo(db *platformdb.Database) domain.PermissionRepo {
 	return &permissionRepo{db: db}
 }
 
-func toDomainPermission(p *ent.Permission, revision int64) *domain.Permission {
+func toDomainPermission(p *ent.Permission, revision int64) (*domain.Permission, error) {
 	if p == nil {
-		return nil
+		return nil, nil
 	}
 	parentID := domain.RootPermissionID
 	if p.ParentID != nil {
@@ -99,8 +99,8 @@ func (r *permissionRepo) Create(ctx context.Context, p *domain.Permission) (*dom
 		if err != nil {
 			return err
 		}
-		created = toDomainPermission(row, next)
-		return nil
+		created, err = toDomainPermission(row, next)
+		return err
 	})
 	return created, err
 }
@@ -117,7 +117,7 @@ func (r *permissionRepo) GetByID(ctx context.Context, id int64) (*domain.Permiss
 		}
 		return nil, fmt.Errorf("get permission %d: %w", id, err)
 	}
-	return toDomainPermission(p, revision), nil
+	return toDomainPermission(p, revision)
 }
 
 // List 平铺返回权限。总量只有百级，一次全量取出比递归 CTE 更简单也更快。
@@ -143,7 +143,11 @@ func (r *permissionRepo) List(ctx context.Context, q domain.ListPermissionsQuery
 
 	out := make([]*domain.Permission, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, toDomainPermission(row, revision))
+		value, err := toDomainPermission(row, revision)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, value)
 	}
 	return out, nil
 }
@@ -157,7 +161,11 @@ func (r *permissionRepo) Update(ctx context.Context, p *domain.Permission, expec
 		}
 		perms := make([]*domain.Permission, 0, len(rows))
 		for _, row := range rows {
-			perms = append(perms, toDomainPermission(row, state.Revision))
+			value, err := toDomainPermission(row, state.Revision)
+			if err != nil {
+				return err
+			}
+			perms = append(perms, value)
 		}
 		if err := domain.NewPermissionTree(perms).EnsureNoCycle(p.ID(), p.ParentID()); err != nil {
 			return err
@@ -190,8 +198,8 @@ func (r *permissionRepo) Update(ctx context.Context, p *domain.Permission, expec
 		if err != nil {
 			return err
 		}
-		updated = toDomainPermission(row, next)
-		return nil
+		updated, err = toDomainPermission(row, next)
+		return err
 	})
 	return updated, err
 }

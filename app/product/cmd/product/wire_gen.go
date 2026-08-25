@@ -26,7 +26,7 @@ func wireApp(bc *config.Bootstrap, logger *slog.Logger) (runtime.Components, fun
 	verifier := server.NewVerifier(auth)
 	upstream := provideUpstream(bc)
 	serviceAuth := provideServiceAuth(bc)
-	authorizer, cleanup, err := accessclient.NewAuthorizer(upstream, serviceAuth)
+	authorizer, cleanup, err := accessclient.NewAuthorizer(upstream, serviceAuth, logger)
 	if err != nil {
 		return runtime.Components{}, nil, err
 	}
@@ -50,8 +50,9 @@ func wireApp(bc *config.Bootstrap, logger *slog.Logger) (runtime.Components, fun
 		return runtime.Components{}, nil, err
 	}
 	repository := provideRepository(databaseDatabase, redisProductCache, logger)
-	usecase := application.NewUsecase(repository)
-	productService := service.NewProductService(usecase)
+	commands := application.NewCommands(repository)
+	reader := provideProductReader(repository)
+	productService := service.NewProductService(commands, reader)
 	grpcServer := provideGRPCServer(configServer, v, productService)
 	httpServer := provideHTTPServer(configServer, v, productService)
 	components := newComponents(grpcServer, httpServer)

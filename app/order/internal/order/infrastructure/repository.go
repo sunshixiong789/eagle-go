@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -26,31 +28,55 @@ func (r *repository) Create(ctx context.Context, value *domain.Order) (*domain.O
 	}
 	defer func() { _ = tx.Rollback() }()
 	row, err := tx.PurchaseOrder.Create().
-		SetID(value.ID).SetOwnerSubject(value.OwnerSubject).SetStatus(value.Status).
-		SetTotalCents(value.TotalCents).Save(ctx)
+		SetID(value.ID()).SetOwnerSubject(value.OwnerSubject()).SetIdempotencyKey(value.IdempotencyKey()).SetStatus(value.Status()).
+		SetTotalCents(value.TotalCents()).Save(ctx)
 	if err != nil {
+		if platformdb.IsUniqueViolation(err) {
+			_ = tx.Rollback()
+			existing, lookupErr := r.getByIdempotencyKey(ctx, value.OwnerSubject(), value.IdempotencyKey())
+			if lookupErr == nil {
+				return existing, nil
+			}
+			return nil, fmt.Errorf("resolve idempotent order after conflict: %w", lookupErr)
+		}
 		return nil, fmt.Errorf("create order: %w", err)
 	}
-	builders := make([]*ent.OrderItemCreate, 0, len(value.Items))
-	for _, item := range value.Items {
+	items := value.Items()
+	builders := make([]*ent.OrderItemCreate, 0, len(items))
+	for _, item := range items {
 		builders = append(builders, tx.OrderItem.Create().
-			SetOrderID(value.ID).SetProductID(item.ProductID).SetProductSku(item.ProductSKU).
+			SetOrderID(value.ID()).SetProductID(item.ProductID).SetProductSku(item.ProductSKU).
 			SetProductName(item.ProductName).SetUnitPriceCents(item.UnitPriceCents).
 			SetQuantity(item.Quantity).SetSubtotalCents(item.SubtotalCents))
 	}
 	if _, err := tx.OrderItem.CreateBulk(builders...).Save(ctx); err != nil {
 		return nil, fmt.Errorf("create order items: %w", err)
 	}
-	event := &eventv1.OrderCreatedV1{
-		EventId: value.ID, OrderId: value.ID, OwnerSubject: value.OwnerSubject,
-		TotalCents: value.TotalCents, OccurredAt: timestamppb.New(row.CreatedAt),
+	eventID, err := domain.NewID()
+	if err != nil {
+		return nil, fmt.Errorf("generate order-created event id: %w", err)
 	}
-	payload, err := proto.Marshal(event)
+	event := &eventv1.OrderCreatedV1{
+		EventId: eventID, OrderId: value.ID(), OwnerSubject: value.OwnerSubject(),
+		TotalCents: value.TotalCents(), OccurredAt: timestamppb.New(row.CreatedAt),
+	}
+	eventPayload, err := proto.Marshal(event)
 	if err != nil {
 		return nil, fmt.Errorf("marshal order-created event: %w", err)
 	}
+	carrier := propagation.MapCarrier{}
+	otel.GetTextMapPropagator().Inject(ctx, carrier)
+	envelope := &eventv1.EventEnvelope{
+		EventId: eventID, EventType: "eagle.event.v1.OrderCreatedV1",
+		AggregateId: value.ID(), AggregateType: "order", OccurredAt: timestamppb.New(row.CreatedAt),
+		Producer: "order", SchemaVersion: 1, Traceparent: carrier.Get("traceparent"), Payload: eventPayload,
+	}
+	payload, err := proto.Marshal(envelope)
+	if err != nil {
+		return nil, fmt.Errorf("marshal order-created envelope: %w", err)
+	}
 	if _, err := tx.OutboxEvent.Create().
-		SetID(event.GetEventId()).SetAggregateID(value.ID).
+		SetID(eventID).SetAggregateID(value.ID()).
 		SetEventType("eagle.event.v1.OrderCreatedV1").SetRoutingKey("order.created.v1").
 		SetPayload(payload).SetCreatedAt(row.CreatedAt).Save(ctx); err != nil {
 		return nil, fmt.Errorf("write order outbox: %w", err)
@@ -58,8 +84,10 @@ func (r *repository) Create(ctx context.Context, value *domain.Order) (*domain.O
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit order: %w", err)
 	}
-	value.CreatedAt = row.CreatedAt
-	return value, nil
+	return domain.RehydrateOrder(domain.OrderSnapshot{
+		ID: value.ID(), OwnerSubject: value.OwnerSubject(), IdempotencyKey: value.IdempotencyKey(),
+		Status: value.Status(), TotalCents: value.TotalCents(), Items: items, CreatedAt: row.CreatedAt,
+	})
 }
 
 func (r *repository) GetOwned(ctx context.Context, owner, id string) (*domain.Order, error) {
@@ -71,6 +99,19 @@ func (r *repository) GetOwned(ctx context.Context, owner, id string) (*domain.Or
 			return nil, domain.ErrOrderNotFound
 		}
 		return nil, fmt.Errorf("get order: %w", err)
+	}
+	return r.withItems(ctx, row)
+}
+
+func (r *repository) getByIdempotencyKey(ctx context.Context, owner, key string) (*domain.Order, error) {
+	row, err := r.db.Client().PurchaseOrder.Query().Where(
+		purchaseorder.OwnerSubjectEQ(owner), purchaseorder.IdempotencyKeyEQ(key),
+	).Only(ctx)
+	if err != nil {
+		if platformdb.IsNotFound(err) {
+			return nil, domain.ErrOrderNotFound
+		}
+		return nil, fmt.Errorf("get order by idempotency key: %w", err)
 	}
 	return r.withItems(ctx, row)
 }
@@ -103,7 +144,11 @@ func (r *repository) ListOwned(ctx context.Context, q domain.ListQuery) ([]*doma
 	}
 	out := make([]*domain.Order, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, toDomainOrder(row, itemsByOrder[row.ID]))
+		value, err := toDomainOrder(row, itemsByOrder[row.ID])
+		if err != nil {
+			return nil, 0, err
+		}
+		out = append(out, value)
 	}
 	return out, int64(total), nil
 }
@@ -117,7 +162,7 @@ func (r *repository) withItems(ctx context.Context, row *ent.PurchaseOrder) (*do
 	for _, item := range rows {
 		items = append(items, toDomainItem(item))
 	}
-	return toDomainOrder(row, items), nil
+	return toDomainOrder(row, items)
 }
 
 func toDomainItem(item *ent.OrderItem) domain.Item {
@@ -127,9 +172,13 @@ func toDomainItem(item *ent.OrderItem) domain.Item {
 	}
 }
 
-func toDomainOrder(row *ent.PurchaseOrder, items []domain.Item) *domain.Order {
-	return &domain.Order{
-		ID: row.ID, OwnerSubject: row.OwnerSubject, Status: row.Status,
-		TotalCents: row.TotalCents, Items: items, CreatedAt: row.CreatedAt,
+func toDomainOrder(row *ent.PurchaseOrder, items []domain.Item) (*domain.Order, error) {
+	value, err := domain.RehydrateOrder(domain.OrderSnapshot{
+		ID: row.ID, OwnerSubject: row.OwnerSubject, IdempotencyKey: row.IdempotencyKey,
+		Status: row.Status, TotalCents: row.TotalCents, Items: items, CreatedAt: row.CreatedAt,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("rehydrate order %s: %w", row.ID, err)
 	}
+	return value, nil
 }

@@ -18,20 +18,20 @@ type ErrorMappingRule struct {
 }
 
 func NotFound(domainErr error, reason errorReason) ErrorMappingRule {
-	return ErrorMappingRule{domainErr: domainErr, toKratos: func(err error) *kerrors.Error {
-		return kerrors.NotFound(reason.String(), err.Error())
+	return ErrorMappingRule{domainErr: domainErr, toKratos: func(error) *kerrors.Error {
+		return kerrors.NotFound(reason.String(), domainErr.Error())
 	}}
 }
 
 func Conflict(domainErr error, reason errorReason) ErrorMappingRule {
-	return ErrorMappingRule{domainErr: domainErr, toKratos: func(err error) *kerrors.Error {
-		return kerrors.Conflict(reason.String(), err.Error())
+	return ErrorMappingRule{domainErr: domainErr, toKratos: func(error) *kerrors.Error {
+		return kerrors.Conflict(reason.String(), domainErr.Error())
 	}}
 }
 
 func BadRequest(domainErr error, reason errorReason) ErrorMappingRule {
-	return ErrorMappingRule{domainErr: domainErr, toKratos: func(err error) *kerrors.Error {
-		return kerrors.BadRequest(reason.String(), err.Error())
+	return ErrorMappingRule{domainErr: domainErr, toKratos: func(error) *kerrors.Error {
+		return kerrors.BadRequest(reason.String(), domainErr.Error())
 	}}
 }
 
