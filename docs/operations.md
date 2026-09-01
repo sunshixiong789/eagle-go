@@ -101,10 +101,13 @@ kustomization 中，复制 `restore-job.example.yaml`，明确修改数据库、
 `RESTORE_CONFIRMED` 改为 `yes` 后才可应用。生产建议目标：数据库 RPO ≤ 15 分钟（PITR）、
 RTO ≤ 60 分钟；对象存储 RPO 由供应商复制策略定义。每半年做一次区域级演练并记录实际 RTO。
 
-## Kubernetes 上线检查
+## K3s 上线检查
 
-- 使用 `production` overlay：restricted Pod Security、非 root、只读根文件系统、最小权限
+- 使用 `production-k3s` overlay：restricted Pod Security、非 root、只读根文件系统、最小权限
   ServiceAccount、PDB、HPA、topology spread、ResourceQuota、LimitRange、PriorityClass。
+- 三个 server/etcd 节点保持 Ready；一次只维护一台，恢复 quorum 和工作负载后再处理下一台。
+- 控制面 LB 健康检查三个节点 6443，业务 LB 健康检查三个节点 80/443，不能共享单点入口。
+- K3s etcd snapshot 复制到集群之外并定期恢复验证；local-path 卷不承载生产数据库高可用。
 - 使用支持 NetworkPolicy 的 CNI；按实际数据库、OIDC、MQ、对象存储地址补环境级 egress 白名单。
 - Secret 由 External Secrets/Vault 提供并轮换，禁止把填值后的示例提交到仓库。
 - 所有镜像以 digest 部署，集群启用准入策略校验签名/provenance 和禁止特权容器。

@@ -67,7 +67,7 @@ flowchart TB
 ```
 
 更完整的服务边界、分层和数据所有权见[架构说明](docs/architecture.md)。启动和调试见
-[开发环境部署](docs/development-deployment.md)，镜像与 Kubernetes 发布见
+[开发环境部署](docs/development-deployment.md)，镜像与三节点 K3s 生产发布见
 [生产环境部署](docs/deployment.md)。
 
 ## 目录结构
@@ -464,7 +464,7 @@ make images VERSION=v1.2.0 REGISTRY=registry.example.com/eagle
 make push-images VERSION=v1.2.0 REGISTRY=registry.example.com/eagle
 ```
 
-生产中每个服务使用独立 Deployment、Service、迁移 Job 和数据库账号。仓库提供 Gateway API、TLS 跳转、HPA、PDB、NetworkPolicy、探针和安全上下文基线；迁移成功后再滚动服务，应用容器启动时不自动迁移。详细发布顺序、端口、网络和存储边界见 [部署说明](docs/deployment.md)。
+生产默认使用三节点 K3s HA。每个服务使用独立 Deployment、Service、迁移 Job 和数据库账号；仓库提供 Envoy Gateway、TLS 跳转、HPA、PDB、NetworkPolicy、探针和安全上下文基线。迁移成功后再滚动服务，应用容器启动时不自动迁移。详细建群、发布、网络和存储边界见 [部署说明](docs/deployment.md)与 [K3s 集群说明](deploy/kubernetes/k3s/README.md)。
 
 ## 可观测性
 
@@ -508,8 +508,9 @@ race detector 需要 C 编译器。可在 WSL/Linux 中运行，或安装可用�
 
 - [架构说明](docs/architecture.md)：服务边界、分层、数据所有权和跨服务调用
 - [开发环境部署](docs/development-deployment.md)：Compose、宿主机调试、IDEA 入口和本地联调
-- [生产环境部署](docs/deployment.md)：不可变镜像、Kubernetes、迁移顺序、网关和上线检查
+- [生产环境部署](docs/deployment.md)：不可变镜像、三节点 K3s、迁移顺序、网关和上线检查
 - [生产运行手册](docs/operations.md)：告警、MQ、备份恢复、回滚和故障处置
+- [K3s 生产模式](deploy/kubernetes/k3s/README.md)：三节点集群、Envoy Gateway、入口和上线验证
 - [Kubernetes 基线](deploy/kubernetes/README.md)：Gateway API、Secret、发布与可观测性清单
 - [Keycloak 配置说明](deploy/keycloak/README.md)：realm、安全设置和客户端设计
 - [AI 编码约束](AGENTS.md)：常驻硬约束；细则在 [`.agents/rules/`](.agents/rules/)

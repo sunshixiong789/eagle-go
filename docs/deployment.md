@@ -1,6 +1,7 @@
 # 生产环境部署
 
-本文只描述生产制品、平台前置条件和安全发布顺序。本地 Compose、宿主机调试和 IDEA 入口见
+本文以三节点 K3s HA 作为默认生产模式，描述生产制品、平台前置条件和安全发布顺序。本地
+Compose、宿主机调试和 IDEA 入口见
 [开发环境部署](development-deployment.md)，告警、MQ、备份恢复和故障处置见
 [生产运行手册](operations.md)。
 
@@ -45,12 +46,19 @@ make image SERVICE=product VERSION=v1.2.0 REGISTRY=registry.example.com/eagle
 
 ## 平台前置条件
 
+默认拓扑是三台 K3s server 同时承担 control-plane、embedded etcd 和 worker。三个节点必须使用
+SSD 和稳定私网，任意两台的剩余容量能够承载核心工作负载；该拓扑容忍一个节点故障，但不容忍
+同时失去两个节点。建群和入口配置见
+[三节点 K3s 生产集群](../deploy/kubernetes/k3s/README.md)。
+
 应用进入集群前，平台必须已经提供：
 
 | 能力 | 要求 |
 |---|---|
-| Kubernetes | Gateway API CRD、支持 NetworkPolicy 的 CNI、metrics-server |
-| 边缘网关 | 与 `GatewayClass` 匹配的 Envoy Gateway 控制器 |
+| K3s | 三个 server/etcd/worker 节点、固定版本、SSD、etcd 异地 snapshot |
+| 控制面入口 | 固定内网 DNS/VIP 或 LB，将 `6443` 健康转发到三个 server |
+| 边缘入口 | 外部 LB 将 `80/443` 转发到三个节点的 K3s ServiceLB |
+| 边缘网关 | 固定版本 Envoy Gateway 控制器、Gateway API 与 Envoy Gateway CRD |
 | 身份 | 生产 Keycloak/OIDC、独立服务身份和 Client Credentials |
 | 数据 | 三个独立 PostgreSQL database 与最小权限账号 |
 | 中间件 | 高可用 Redis、RabbitMQ、S3 兼容对象存储 |
@@ -63,8 +71,9 @@ make image SERVICE=product VERSION=v1.2.0 REGISTRY=registry.example.com/eagle
 
 `deploy/kubernetes/base` 定义三个服务的 Deployment/Service、Gateway API、HPA、PDB、探针、
 安全上下文和 NetworkPolicy。迁移 Job 模板按服务拆分在 `deploy/kubernetes/migrations/`，
-不属于应用 base，避免与 Deployment 同时 apply。staging/production overlay 提供可渲染示例，
-实际环境必须在独立 GitOps 配置中替换以下内容：
+不属于应用 base，避免与 Deployment 同时 apply。`production-k3s` 组合通用 `production` 基线，
+并增加三副本 Envoy 数据面和 `GatewayClass`，是默认生产入口。实际环境必须在独立 GitOps 配置
+中替换以下内容：
 
 - 三个镜像的仓库和 digest；
 - API 域名、TLS Secret、GatewayClass 和 CORS origin；
@@ -80,6 +89,7 @@ make validate-deploy
 ```
 
 该命令只证明 Compose 和 Kustomize 可以解析，不证明生产依赖存在，也不执行迁移或发布。
+只查看默认生产结果可执行 `make render-prod-k3s`。
 
 ## 迁移与滚动发布
 
@@ -127,9 +137,10 @@ create 语义创建。迁移 Job 必须满足：
 
 ## 网关与服务通信
 
-生产只使用 Gateway API + Envoy Gateway，不部署 Compose 的 nginx。仓库中的 `Gateway` 和
-`HTTPRoute` 是路由声明，集群必须预先安装 `GatewayClass/envoy` 对应的控制器；没有控制器时，
-资源可以创建但不会产生可用入口。
+生产只使用 Gateway API + Envoy Gateway，不部署 Compose 的 nginx。K3s 初始化时禁用默认
+Traefik，保留 ServiceLB；ServiceLB 在三个节点承接 80/443，外部 LB 负责节点健康检查。
+Envoy Gateway 控制器通过固定版本 Helm chart 安装，`production-k3s` 创建
+`GatewayClass/envoy`、`Gateway`、`HTTPRoute` 和三副本 Envoy 数据面。
 
 外部流量按路径进入三个 HTTP Service：
 
@@ -162,6 +173,9 @@ create 语义创建。迁移 Job 必须满足：
 把流量发送给 readiness 通过的 Pod。滚动策略保持 `maxUnavailable: 0`，发布平台仍需等待
 Deployment rollout，而不是只等待资源 apply 成功。
 
+K3s ServiceLB 本身不代替外部 LB 的节点健康检查。外部 LB 必须在节点或 Envoy 不健康时停止向
+该节点转发；控制面 6443 与业务 80/443 使用独立后端池和健康策略。
+
 HPA、PDB、topology spread、ResourceQuota、LimitRange、网关限流和熔断值都是基线，不是生产
 容量结论，必须由压测和真实流量校准。NetworkPolicy 只允许网关访问 HTTP、指定服务访问内部
 gRPC、Prometheus 访问 metrics；环境仓库还应按实际外部依赖补 egress 白名单。
@@ -169,9 +183,10 @@ gRPC、Prometheus 访问 metrics；环境仓库还应按实际外部依赖补 eg
 ## 上线检查
 
 - 镜像使用 digest，签名/provenance 校验通过；
+- 三个 K3s 节点、embedded etcd 和控制面固定入口健康，异地 snapshot 可恢复；
 - 只运行发生变更服务的唯一迁移 Job，且状态为 Complete；
 - Deployment 已更新到同一 digest，rollout 和 readiness 通过；
-- Gateway 状态为 Programmed，证书、域名和 CORS 正确；
+- Gateway 状态为 Programmed，Envoy 控制面/数据面跨节点分布，证书、域名和 CORS 正确；
 - Secret 来自受控系统，示例 Secret 未被应用；
 - 资源、HPA、限流和熔断已经按环境容量校准；
 - 错误率、p99、Pod 重启、Outbox 年龄、DLQ 和消费失败进入观察面板；

@@ -11,7 +11,9 @@
 | `migrations/` | 三个服务的一次性 Job 模板 | 每次发布选择服务、替换 digest 后 create |
 | `overlays/staging/` | staging 可渲染示例 | 复制到环境仓库后定制 |
 | `overlays/production/` | production 可渲染示例 | 复制到环境仓库后定制 |
+| `overlays/production-k3s/` | 三节点 K3s production 入口 | 默认生产部署模式 |
 | `overlays/production-mtls/` | production + Istio mTLS | 替代普通 production overlay |
+| `k3s/` | K3s server 配置、Envoy Gateway values 和建群说明 | 集群初始化与升级时使用 |
 | `gateway/` | Envoy Gateway 流量、安全和弹性策略 | 与应用 overlay 一起管理 |
 | `observability/` | Prometheus Operator 资源 | 平台已安装 CRD 后应用 |
 | `backup/` | PostgreSQL 便携备份兜底 | 托管 PITR 不可用时采用 |
@@ -30,7 +32,7 @@ make validate-deploy
 也可以只渲染生产示例：
 
 ```bash
-kubectl kustomize deploy/kubernetes/overlays/production
+make render-prod-k3s
 ```
 
 渲染成功只说明 YAML 可以解析，不表示示例仓库、域名、Secret 或外部依赖可用于生产。
@@ -65,8 +67,9 @@ PodTemplate 不可修改；失败的迁移必须修复后创建新 Job，不能�
 ## 网关
 
 生产入口使用 Gateway API + Envoy Gateway，不使用 Compose nginx。`base/gateway.yaml` 只创建
-`Gateway` 和 `HTTPRoute`，不会安装控制器。集群必须已经存在匹配的 `GatewayClass/envoy`；如果
-使用其他实现，需要在环境 overlay 中替换。
+`Gateway` 和 `HTTPRoute`。默认的 `production-k3s` overlay 额外创建 `GatewayClass/envoy` 和
+三副本 Envoy 数据面；控制器按 [K3s 生产说明](k3s/README.md) 用固定版本 Helm chart 安装。
+通用 `production` overlay 仍要求平台预先提供匹配的 GatewayClass。
 
 `gateway/` 的策略依赖 Envoy Gateway CRD，提供 TLS 版本、连接/请求超时、连接上限、限流、
 least-request 和熔断。应用前确认控制器版本支持这些 API。

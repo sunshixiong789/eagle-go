@@ -93,7 +93,7 @@ aggregate、traceparent 的统一 envelope 承载，后台 relay 经 RabbitMQ pu
 
 客户端在调用方业务模块的 infrastructure，application/domain 不依赖 protobuf。
 调用链统一具备短期服务令牌、trace/metadata、客户端指标、熔断和有界重试；只有
-两个幂等读 RPC 可以重试。开发环境使用静态地址，Compose/Kubernetes 通过服务
+两个幂等读 RPC 可以重试。开发环境使用静态地址，Compose/K3s 通过服务
 DNS 解析，不嵌入注册中心 SDK。
 
 ## 部署拓扑
@@ -111,16 +111,17 @@ DNS 解析，不嵌入注册中心 SDK。
 
 docker compose -f deploy/docker-compose.yml up -d --build 会先执行每个服务的迁移任务，再启动服务和网关。OTel、Prometheus、Tempo、Grafana 通过 --profile obs 按需启动。
 
-生产推荐 Kubernetes：
+生产默认使用三节点 K3s HA：
 
-- 网关/Ingress 只暴露 HTTP；gRPC、metrics 和数据库保持集群内可达；
+- 三个 server 节点同时运行 control-plane、embedded etcd 和工作负载，容忍一个节点故障；
+- 外部 LB 访问三个节点的 Envoy Gateway；gRPC、metrics 和数据库保持集群内可达；
 - 每个服务独立 Deployment、Service、HPA 和 PodDisruptionBudget；
 - 迁移使用一次性 Job，成功后再滚动 Deployment；
 - 配置进 ConfigMap，DSN/凭据进 Secret；
 - file 多副本时把本地 BlobStore 替换为 S3/OSS/MinIO；
 - NetworkPolicy 限制 order→product、资源服务→admin 和 Prometheus→metrics。
 
-生产应用基线位于 `deploy/kubernetes/base`，包含 Deployment、Service、Gateway API、
+生产入口为 `deploy/kubernetes/overlays/production-k3s`，复用 `base` 中的 Deployment、Service、Gateway API、
 HPA、PDB 与 NetworkPolicy。一次性迁移模板独立位于 `deploy/kubernetes/migrations`，
 由发布平台等待成功后再滚动 Deployment。Redis、RabbitMQ、PostgreSQL 和 S3 在生产环境
 通过 Secret 接入托管实例，不在应用清单里伪装成单副本生产集群。具体发布顺序见

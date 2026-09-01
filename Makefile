@@ -144,11 +144,17 @@ validate-deploy:
 		deploy/kubernetes/gateway \
 		deploy/kubernetes/overlays/staging \
 		deploy/kubernetes/overlays/production \
+		deploy/kubernetes/overlays/production-k3s \
 		deploy/kubernetes/overlays/production-mtls \
 		deploy/kubernetes/observability \
 		deploy/kubernetes/backup; do \
 		kubectl kustomize $$manifest >/dev/null || exit 1; \
 	done
+
+.PHONY: render-prod-k3s
+# 渲染三节点 K3s 生产应用清单，不连接集群、不执行发布
+render-prod-k3s:
+	kubectl kustomize deploy/kubernetes/overlays/production-k3s
 
 .PHONY: down
 down:
