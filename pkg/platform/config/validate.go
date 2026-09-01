@@ -7,20 +7,14 @@ import (
 )
 
 type Requirements struct {
-	Database              bool
-	Auth                  bool
-	HTTP                  bool
-	GRPC                  bool
-	File                  bool
-	AuthorizationUpstream bool
-	ProductUpstream       bool
-	Redis                 bool
-	RabbitMQ              bool
-	ServiceAuth           bool
+	Database bool
+	Auth     bool
+	HTTP     bool
+	File     bool
 }
 
 // Validate 校验部署时最终合并出的配置。requirements 为空时校验示例配置
-// 的全部字段；服务进程只声明自己真实使用的可选配置。
+// 的全部字段；进程只声明自己真实使用的可选配置。
 func Validate(b *Bootstrap, requirements ...Requirements) error {
 	if b == nil {
 		return errors.New("config: bootstrap is nil")
@@ -31,18 +25,9 @@ func Validate(b *Bootstrap, requirements ...Requirements) error {
 	server := b.GetServer()
 	obs := b.GetObservability()
 	file := b.GetFile()
-	upstream := b.GetUpstream()
-	redis := b.GetCache().GetRedis()
-	rabbit := b.GetMessaging().GetRabbitmq()
-	serviceAuth := b.GetServiceAuth()
-	required := Requirements{Database: true, Auth: true, HTTP: true, GRPC: true}
+	required := Requirements{Database: true, Auth: true, HTTP: true}
 	if len(requirements) == 0 {
 		required.File = true
-		required.AuthorizationUpstream = true
-		required.ProductUpstream = true
-		required.Redis = true
-		required.RabbitMQ = true
-		required.ServiceAuth = true
 	} else {
 		required = requirements[0]
 	}
@@ -61,21 +46,18 @@ func Validate(b *Bootstrap, requirements ...Requirements) error {
 		if err := validateIssuer(auth.GetIssuer()); err != nil {
 			errs = append(errs, err)
 		}
+		if err := validateJWKS(auth.GetJwksUrl(), auth.GetJwksPath()); err != nil {
+			errs = append(errs, err)
+		}
 		if auth.GetClientId() == "" || auth.GetAudience() == "" {
 			errs = append(errs, errors.New("auth.client_id and auth.audience are required"))
 		}
 		if auth.GetSuperAdminRole() == "" {
 			errs = append(errs, errors.New("auth.super_admin_role is required"))
 		}
-		if len(auth.GetInternalClientIds()) == 0 {
-			errs = append(errs, errors.New("auth.internal_client_ids must not be empty"))
-		}
 	}
 	if required.HTTP && server.GetHttp().GetAddr() == "" {
 		errs = append(errs, errors.New("server.http.addr is required"))
-	}
-	if required.GRPC && server.GetGrpc().GetAddr() == "" {
-		errs = append(errs, errors.New("server.grpc.addr is required"))
 	}
 	if obs.GetTraceSampleRatio() < 0 || obs.GetTraceSampleRatio() > 1 {
 		errs = append(errs, errors.New("observability.trace_sample_ratio must be in [0,1]"))
@@ -102,68 +84,39 @@ func Validate(b *Bootstrap, requirements ...Requirements) error {
 			errs = append(errs, errors.New("file.provider must be local or s3"))
 		}
 	}
-	if required.AuthorizationUpstream && strings.TrimSpace(upstream.GetAuthorizationEndpoint()) == "" {
-		errs = append(errs, errors.New("upstream.authorization_endpoint is required"))
-	}
-	if required.ProductUpstream && strings.TrimSpace(upstream.GetProductEndpoint()) == "" {
-		errs = append(errs, errors.New("upstream.product_endpoint is required"))
-	}
-	if (required.AuthorizationUpstream || required.ProductUpstream) && (upstream.GetTimeout() == nil || upstream.GetTimeout().AsDuration() <= 0) {
-		errs = append(errs, errors.New("upstream.timeout must be positive"))
-	}
-	if required.AuthorizationUpstream || required.ProductUpstream {
-		if upstream.GetMaxAttempts() < 1 || upstream.GetMaxAttempts() > 5 {
-			errs = append(errs, errors.New("upstream.max_attempts must be in [1,5]"))
-		}
-		if upstream.GetRetryBackoff() == nil || upstream.GetRetryBackoff().AsDuration() <= 0 {
-			errs = append(errs, errors.New("upstream.retry_backoff must be positive"))
-		}
-	}
-	if required.AuthorizationUpstream && (upstream.GetAuthorizationRefreshInterval() == nil || upstream.GetAuthorizationRefreshInterval().AsDuration() <= 0) {
-		errs = append(errs, errors.New("upstream.authorization_refresh_interval must be positive"))
-	}
-	if required.Redis {
-		if !redis.GetEnabled() || strings.TrimSpace(redis.GetAddress()) == "" {
-			errs = append(errs, errors.New("cache.redis must be enabled and address is required"))
-		}
-		if redis.GetTtl() == nil || redis.GetTtl().AsDuration() <= 0 {
-			errs = append(errs, errors.New("cache.redis.ttl must be positive"))
-		}
-	}
-	if required.RabbitMQ {
-		if !rabbit.GetEnabled() || strings.TrimSpace(rabbit.GetUrl()) == "" || strings.TrimSpace(rabbit.GetExchange()) == "" ||
-			strings.TrimSpace(rabbit.GetOrderCreatedQueue()) == "" {
-			errs = append(errs, errors.New("messaging.rabbitmq must be enabled and url/exchange/order_created_queue are required"))
-		} else if u, err := url.Parse(rabbit.GetUrl()); err != nil || (u.Scheme != "amqp" && u.Scheme != "amqps") || u.Host == "" {
-			errs = append(errs, errors.New("messaging.rabbitmq.url must be an amqp or amqps URL"))
-		}
-		if rabbit.GetReconnectBackoff() == nil || rabbit.GetReconnectBackoff().AsDuration() <= 0 {
-			errs = append(errs, errors.New("messaging.rabbitmq.reconnect_backoff must be positive"))
-		}
-		if rabbit.GetConsumerMaxAttempts() < 1 || rabbit.GetConsumerMaxAttempts() > 10 {
-			errs = append(errs, errors.New("messaging.rabbitmq.consumer_max_attempts must be in [1,10]"))
-		}
-		if rabbit.GetConsumerRetryBackoff() == nil || rabbit.GetConsumerRetryBackoff().AsDuration() <= 0 {
-			errs = append(errs, errors.New("messaging.rabbitmq.consumer_retry_backoff must be positive"))
-		}
-	}
-	if required.ServiceAuth && (strings.TrimSpace(serviceAuth.GetTokenUrl()) == "" ||
-		strings.TrimSpace(serviceAuth.GetClientId()) == "" || strings.TrimSpace(serviceAuth.GetClientSecret()) == "") {
-		errs = append(errs, errors.New("service_auth token_url, client_id and client_secret are required"))
-	}
 	return errors.Join(errs...)
 }
 
+// validateIssuer 只要求 issuer 是一个不带尾斜杠的绝对 URL。
+//
+// 这里刻意不校验路径形态：Keycloak 是 /realms/<realm>，Auth0 是裸域名，
+// Logto 是 /oidc，Authing 又是另一套。把 Keycloak 的路径约定写死在校验里，
+// 换 IdP 时进程会直接启动失败，而这与「IdP 可替换」的设计目标冲突。
 func validateIssuer(raw string) error {
 	if raw == "" {
 		return errors.New("auth.issuer is required")
 	}
 	u, err := url.Parse(raw)
-	if err != nil || u.Scheme == "" || u.Host == "" || !strings.Contains(u.Path, "/realms/") {
-		return errors.New("auth.issuer must be an absolute Keycloak realm URL")
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return errors.New("auth.issuer must be an absolute URL with scheme and host")
 	}
 	if strings.HasSuffix(raw, "/") {
 		return errors.New("auth.issuer must not have a trailing slash")
+	}
+	return nil
+}
+
+// validateJWKS 校验两种取 JWKS 的方式：显式 jwks_url，或 issuer + jwks_path。
+func validateJWKS(jwksURL, jwksPath string) error {
+	if jwksURL != "" {
+		u, err := url.Parse(jwksURL)
+		if err != nil || u.Scheme == "" || u.Host == "" {
+			return errors.New("auth.jwks_url must be an absolute URL with scheme and host")
+		}
+		return nil
+	}
+	if jwksPath != "" && !strings.HasPrefix(jwksPath, "/") {
+		return errors.New("auth.jwks_path must start with /")
 	}
 	return nil
 }

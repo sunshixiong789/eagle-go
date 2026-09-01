@@ -14,13 +14,15 @@ groups:
   - name: eagle-slo-alerts
     rules:
       - alert: EagleServiceUnavailable
-        expr: up{job="eagle-services"} == 0
+        expr: up{job="eagle"} == 0
         for: 2m
         labels: {severity: critical}
         annotations:
           summary: "Eagle service target is unavailable"
           description: "{{ $labels.instance }} has not been scraped for more than 2 minutes."
 
+      # 多窗口多燃烧率：快窗口保证及时，长窗口过滤掉一次抖动就报警的噪音。
+      # 两个窗口同时越线才触发，单点毛刺不会把人叫起来。
       - alert: EagleAvailabilityErrorBudgetFastBurn
         expr: |
           (
@@ -62,57 +64,3 @@ groups:
         annotations:
           summary: "Eagle p99 latency is above 2 seconds"
           description: "{{ $labels.service_name }} p99 latency is {{ $value }} seconds."
-
-      - alert: EagleRabbitMQBacklog
-        expr: rabbitmq_queue_messages_ready{queue="eagle.admin.order-created.v1"} > 100
-        for: 10m
-        labels: {severity: warning}
-        annotations:
-          summary: "Order-created notification queue is backing up"
-          description: "RabbitMQ has {{ $value }} ready messages for the admin consumer."
-
-      - alert: EagleRabbitMQDeadLetters
-        expr: increase(eagle_messaging_dead_lettered_total[10m]) > 0
-        labels: {severity: critical}
-        annotations:
-          summary: "Messages entered a dead-letter queue"
-          description: "{{ $labels.messaging_destination_name }} dead-lettered {{ $value }} messages in 10 minutes."
-
-      - alert: EagleOutboxParked
-        expr: eagle_outbox_failed > 0
-        for: 5m
-        labels: {severity: critical}
-        annotations:
-          summary: "Order outbox contains parked events"
-          description: "{{ $value }} events exhausted their retry budget and need investigation."
-
-      - alert: EagleOutboxStalled
-        expr: eagle_outbox_oldest_pending_seconds > 300
-        for: 10m
-        labels: {severity: warning}
-        annotations:
-          summary: "Order outbox relay is stalled"
-          description: "The oldest pending event is {{ $value }} seconds old."
-
-      - alert: EagleMQConsumerFailures
-        expr: increase(eagle_messaging_consume_failures_total[10m]) > 5
-        labels: {severity: warning}
-        annotations:
-          summary: "RabbitMQ consumer failures are elevated"
-          description: "{{ $labels.messaging_destination_name }} failed {{ $value }} handler attempts in 10 minutes."
-
-      - alert: EagleDatabaseBackupFailed
-        expr: kube_job_status_failed{namespace="eagle",job_name=~"(admin|product|order)-database-backup-.*"} > 0
-        for: 5m
-        labels: {severity: critical}
-        annotations:
-          summary: "A database backup job failed"
-          description: "{{ $labels.job_name }} failed; preserve logs and verify the last restorable object."
-
-      - alert: EagleRedisUnavailable
-        expr: redis_up == 0
-        for: 5m
-        labels: {severity: warning}
-        annotations:
-          summary: "Redis cache is unavailable"
-          description: "Product reads will fall back to PostgreSQL until Redis recovers."

@@ -1,19 +1,5 @@
 name: eagle
 
-x-service-environment: &service-environment
-  EAGLE_SERVER_HTTP_ADDR: 0.0.0.0:8000
-  EAGLE_SERVER_GRPC_ADDR: 0.0.0.0:9000
-  EAGLE_OBSERVABILITY_METRICS_ADDR: 0.0.0.0:9100
-  EAGLE_OBSERVABILITY_OTLP_ENDPOINT: otel-collector:4317
-  EAGLE_AUTH_ISSUER: http://127.0.0.1:8080/realms/eagle
-  EAGLE_AUTH_JWKS_URL: http://keycloak:8080/realms/eagle/protocol/openid-connect/certs
-  EAGLE_UPSTREAM_AUTHORIZATION_ENDPOINT: admin:9000
-  EAGLE_UPSTREAM_PRODUCT_ENDPOINT: product:9000
-  EAGLE_SERVICE_AUTH_TOKEN_URL: http://keycloak:8080/realms/eagle/protocol/openid-connect/token
-  EAGLE_SERVICE_AUTH_CLIENT_ID: eagle-worker
-  EAGLE_SERVICE_AUTH_CLIENT_SECRET: dev-only-worker-secret
-  EAGLE_MESSAGING_RABBITMQ_URL: amqp://eagle:eagle@rabbitmq:5672/
-
 services:
   postgres:
     image: postgres:17-alpine
@@ -32,6 +18,8 @@ services:
       timeout: 3s
       retries: 10
 
+  # 默认本地 IdP。换成 Logto / Auth0 / Authing 时不需要改应用代码，
+  # 只要把 eagle 的 EAGLE_AUTH_ISSUER / JWKS_PATH / *_ROLES_CLAIM 指过去。
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
     command: ["start-dev", "--import-realm"]
@@ -51,30 +39,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-
-  redis:
-    image: redis:7.4-alpine
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "eagle"]
-    ports: ["6379:6379"]
-    volumes: [redisdata:/data]
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "eagle", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  rabbitmq:
-    image: rabbitmq:4.1-management-alpine
-    environment:
-      RABBITMQ_DEFAULT_USER: eagle
-      RABBITMQ_DEFAULT_PASS: eagle
-    ports: ["5672:5672", "15672:15672", "15692:15692"]
-    volumes: [rabbitdata:/var/lib/rabbitmq]
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 12
 
   minio:
     image: minio/minio:RELEASE.2025-04-22T22-12-26Z
@@ -101,93 +65,49 @@ services:
     depends_on:
       minio: {condition: service_healthy}
 
-  admin-migrate:
-    image: eagle/admin:dev
+  # 迁移与服务是同一个镜像的两个 entrypoint：schema 与代码同版本发布，
+  # 不会出现「服务已升级、迁移还没跑」的窗口。
+  eagle-migrate:
+    image: eagle/eagle:dev
     build:
       context: ..
-      args: {SERVICE: admin, VERSION: dev}
+      args: {VERSION: dev}
     entrypoint: ["/app/migrate"]
     command: ["-dir", "/app/migrations"]
     environment:
-      EAGLE_DATABASE_DSN: postgres://eagle:eagle@postgres:5432/eagle_admin?sslmode=disable
+      EAGLE_DATABASE_DSN: postgres://eagle:eagle@postgres:5432/eagle?sslmode=disable
     depends_on:
       postgres:
         condition: service_healthy
 
-  product-migrate:
-    image: eagle/product:dev
-    build:
-      context: ..
-      args: {SERVICE: product, VERSION: dev}
-    entrypoint: ["/app/migrate"]
-    command: ["-dir", "/app/migrations"]
+  eagle:
+    image: eagle/eagle:dev
     environment:
-      EAGLE_DATABASE_DSN: postgres://eagle:eagle@postgres:5432/eagle_product?sslmode=disable
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  order-migrate:
-    image: eagle/order:dev
-    build:
-      context: ..
-      args: {SERVICE: order, VERSION: dev}
-    entrypoint: ["/app/migrate"]
-    command: ["-dir", "/app/migrations"]
-    environment:
-      EAGLE_DATABASE_DSN: postgres://eagle:eagle@postgres:5432/eagle_order?sslmode=disable
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  admin:
-    image: eagle/admin:dev
-    environment:
-      <<: *service-environment
-      EAGLE_DATABASE_DSN: postgres://eagle:eagle@postgres:5432/eagle_admin?sslmode=disable
-      EAGLE_AUTH_CLIENT_ID: eagle-admin
-      EAGLE_AUTH_AUDIENCE: eagle-admin
+      EAGLE_SERVER_HTTP_ADDR: 0.0.0.0:8000
+      EAGLE_OBSERVABILITY_METRICS_ADDR: 0.0.0.0:9100
+      EAGLE_OBSERVABILITY_OTLP_ENDPOINT: otel-collector:4317
+      EAGLE_DATABASE_DSN: postgres://eagle:eagle@postgres:5432/eagle?sslmode=disable
+      # issuer 必须与 token 里的 iss 逐字相同，所以用宿主机可见的地址；
+      # JWKS 是服务端自己去拉，走容器网络。
+      EAGLE_AUTH_ISSUER: http://127.0.0.1:8080/realms/eagle
+      EAGLE_AUTH_JWKS_URL: http://keycloak:8080/realms/eagle/protocol/openid-connect/certs
+      EAGLE_AUTH_CLIENT_ID: eagle-api
+      EAGLE_AUTH_AUDIENCE: eagle-api
       EAGLE_FILE_LOCAL_DIR: /data/uploads
       EAGLE_FILE_PROVIDER: s3
       EAGLE_FILE_S3_ENDPOINT: minio:9000
       EAGLE_FILE_S3_BUCKET: eagle-files
       EAGLE_FILE_S3_ACCESS_KEY: eagle
       EAGLE_FILE_S3_SECRET_KEY: eagle-local-secret
-    ports: ["8001:8000", "9001:9000", "9101:9100"]
+    ports: ["8001:8000", "9101:9100"]
     depends_on:
-      admin-migrate: {condition: service_completed_successfully}
+      eagle-migrate: {condition: service_completed_successfully}
       keycloak: {condition: service_started}
-      rabbitmq: {condition: service_healthy}
       minio-init: {condition: service_completed_successfully}
 
-  product:
-    image: eagle/product:dev
-    environment:
-      <<: *service-environment
-      EAGLE_DATABASE_DSN: postgres://eagle:eagle@postgres:5432/eagle_product?sslmode=disable
-      EAGLE_AUTH_CLIENT_ID: eagle-product
-      EAGLE_AUTH_AUDIENCE: eagle-product
-      EAGLE_CACHE_REDIS_ADDRESS: redis:6379
-      EAGLE_CACHE_REDIS_PASSWORD: eagle
-    ports: ["8002:8000", "9002:9000", "9102:9100"]
-    depends_on:
-      product-migrate: {condition: service_completed_successfully}
-      admin: {condition: service_healthy}
-      redis: {condition: service_healthy}
-
-  order:
-    image: eagle/order:dev
-    environment:
-      <<: *service-environment
-      EAGLE_DATABASE_DSN: postgres://eagle:eagle@postgres:5432/eagle_order?sslmode=disable
-      EAGLE_AUTH_CLIENT_ID: eagle-order
-      EAGLE_AUTH_AUDIENCE: eagle-order
-    ports: ["8003:8000", "9003:9000", "9103:9100"]
-    depends_on:
-      order-migrate: {condition: service_completed_successfully}
-      product: {condition: service_healthy}
-      rabbitmq: {condition: service_healthy}
-
+  # 单体只有一个上游，网关看起来是多余的。保留它是因为生产入口该有的东西
+  # （TLS 终止、请求体上限、真实客户端 IP）都在这一层，本地就带上可以避免
+  # 「本地能传 50MB、生产被网关拦掉」这类只在上线时才暴露的差异。
   gateway:
     image: nginx:1.27-alpine
     ports: ["8000:8000"]
@@ -195,9 +115,7 @@ services:
       - ./gateway/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./gateway/proxy.conf:/etc/nginx/proxy.conf:ro
     depends_on:
-      admin: {condition: service_healthy}
-      product: {condition: service_healthy}
-      order: {condition: service_healthy}
+      eagle: {condition: service_healthy}
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.121.0
@@ -224,7 +142,7 @@ services:
       - ./observability/rules:/etc/prometheus/rules:ro
       - prometheusdata:/prometheus
     ports: ["9090:9090"]
-    depends_on: [alertmanager, redis-exporter]
+    depends_on: [alertmanager]
 
   alertmanager:
     image: prom/alertmanager:v0.28.1
@@ -253,16 +171,6 @@ services:
       - alloydata:/var/lib/alloy/data
     depends_on: [loki]
 
-  redis-exporter:
-    image: oliver006/redis_exporter:v1.72.1
-    profiles: ["obs"]
-    environment:
-      REDIS_ADDR: redis://redis:6379
-      REDIS_PASSWORD: eagle
-    ports: ["9121:9121"]
-    depends_on:
-      redis: {condition: service_healthy}
-
   grafana:
     image: grafana/grafana:11.6.0
     profiles: ["obs"]
@@ -273,14 +181,12 @@ services:
     volumes:
       - ./observability/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/ds.yaml:ro
       - ./observability/grafana-dashboards.yaml:/etc/grafana/provisioning/dashboards/eagle.yaml:ro
-      - ./kubernetes/observability/dashboards:/var/lib/grafana/dashboards:ro
+      - ./observability/dashboards:/var/lib/grafana/dashboards:ro
     ports: ["3000:3000"]
     depends_on: [prometheus, tempo, loki]
 
 volumes:
   pgdata:
-  redisdata:
-  rabbitdata:
   miniodata:
   prometheusdata:
   lokidata:

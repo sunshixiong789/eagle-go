@@ -4,25 +4,24 @@
 
 ## 开始修改前
 
-- 先确认改动属于哪个服务、哪个业务模块，并阅读相邻实现；只修改完成任务必需的文件。
-- 优先沿用仓库已有模式：简单 CRUD 参考 `dictionary`，有业务不变量的模型参考 `order` 或 `access`。
+- 先确认改动属于哪个业务模块，并阅读相邻实现；只修改完成任务必需的文件。
+- 优先沿用仓库已有模式：简单 CRUD 参考 `dictionary`，需要用例编排的参考 `file`，有业务不变量的参考 `access`。
 - 不从 Java / Spring 搬运 controller-service-repository、starter、统一 DTO/DO、通用 mapper 等体系，也不为未来需求预埋接口、表或抽象。
 - 工作区可能已有用户改动；不要覆盖、回滚或顺手整理无关文件。
 
 ## 架构与 DDD
 
-本仓库是 Go Workspace 组织的多模块微服务单仓库。代码先按服务划分，再按业务模块划分：
+本仓库是单进程单体，只有一个业务 module（`tools/` 另有独立 module，仅用于锁定生成工具链）。代码按业务模块划分：
 
 ```text
-app/<service>/
-├── cmd/<service>               # 进程入口和 Wire 组合根
-├── internal/<module>/
-│   ├── service                 # 入站适配：Protobuf、消息消费和任务入口
-│   ├── application             # 可选；只在存在用例编排时创建
-│   ├── domain                  # 领域模型、规则、错误和端口
-│   └── infrastructure          # 出站适配：数据库、缓存、消息发布和远程调用
-├── internal/platform/database  # 当前服务独占的数据库与 Ent Client
-└── migrations                  # 当前服务独占的迁移
+cmd/eagle                       # 进程入口和 Wire 组合根
+internal/<module>/
+├── service                     # 入站适配：Protobuf handler 和任务入口
+├── application                 # 可选；只在存在用例编排时创建
+├── domain                      # 领域模型、规则、错误和端口
+└── infrastructure              # 出站适配：数据库、对象存储和外部服务调用
+internal/platform/database      # 全进程共用的数据库与 Ent Client
+migrations                      # goose SQL 迁移
 ```
 
 模块按复杂度渐进生长，允许两种依赖形态：
@@ -37,7 +36,7 @@ service -> application -> domain <- infrastructure
 
 - `domain` 只依赖标准库，负责业务概念、纯业务不变量、领域错误，以及被用例实际需要的仓储或外部能力端口。
 - `application` 是可选的，只依赖本模块 `domain`，负责一个用例的流程编排；不依赖 Proto、Kratos、Ent、Casbin 或具体客户端。
-- `infrastructure` 实现 domain 端口，负责 Ent/SQL、事务、缓存、消息、文件存储和跨服务客户端，并把技术错误翻译为领域错误。
+- `infrastructure` 实现 domain 端口，负责 Ent/SQL、事务、文件存储和外部服务调用，并把技术错误翻译为领域错误。
 - `service` 承载入站适配，只做协议对象转换、主体传递和错误边界适配；不写业务规则、事务、补偿或持久化逻辑，也不 import `infrastructure`。
 
 DDD 用来保护边界和不变量，不用来增加代码量：
@@ -50,25 +49,25 @@ DDD 用来保护边界和不变量，不用来增加代码量：
 - domain 定义的是业务需要的最小端口，不是对 Ent API 的包装。端口方法必须有当前生产调用方。
 - 不为了“完整 DDD”强行加入工厂、领域事件、通用 BaseRepository、DTO/DO 或多余分层。
 
-## 服务与数据边界
+## 模块与数据边界
 
-- 每个 `app/<service>` 独立拥有 `go.mod`、入口、配置、Ent Client、迁移和数据库。组合根只能装配当前服务拥有的模块，Wire 只允许出现在 `cmd/<service>`。
-- 服务之间禁止 import 对方 `app/` 实现、查询对方数据库、建立跨服务外键或事务。同步调用只依赖 `api/` 契约，异步协作使用已定义事件。
-- 跨服务客户端放在调用方模块的 `infrastructure`，由它实现本模块 domain 端口；domain/application 不接触生成的 Protobuf client。
-- `pkg/` 只放无业务语义、可被多个服务复用的技术能力，禁止 import `app/`。业务模型留在拥有它的模块。
+- 单进程不等于可以互相穿透。模块之间禁止 import 对方的 `service` 或 `infrastructure`；需要协作时依赖对方 `domain` 定义的端口或 `application` 用例。
+- 新增模块就是在 `internal/` 下新建一个带 `domain` 的目录，并在 `cmd/eagle` 的组合根装配。Wire 只允许出现在 `cmd/eagle`。
+- 全进程共用一个数据库与 Ent Client；表由模块拥有，跨模块读写对方的表要经过对方端口，不在 infrastructure 里直连别人的表。
+- `pkg/` 只放无业务语义、可复用的技术能力，禁止 import `internal/`。业务模型留在拥有它的模块。
 
 ## API、身份与数据
 
-- API 先改 `api/**/*.proto`。每个 RPC 必须显式声明 `access`；需要权限时同时声明 `perm`。鉴权由中间件完成，handler 不写重复鉴权分支。
-- Keycloak 负责用户和角色，本仓库不建用户表。当前主体统一从 `pkg/identity` 获取，不自行解析 JWT 或创建第二套 Principal。
-- 表结构通过服务内 Ent schema 表达，生产迁移通过同一服务的 goose SQL 表达；禁止跨服务共享 Ent Client 或迁移目录。
+- API 先改 `api/**/*.proto`，只生成 HTTP。每个 RPC 必须显式声明 `access`；需要权限时同时声明 `perm`。鉴权由中间件完成，handler 不写重复鉴权分支。
+- IdP 负责用户和角色，本仓库不建用户表。当前主体统一从 `pkg/identity` 获取，不自行解析 JWT 或创建第二套 Principal。
+- 表结构通过 `internal/platform/database/ent/schema` 表达，生产迁移通过 `migrations/` 的 goose SQL 表达；两者必须同步维护。
 - 只修改源文件。禁止手改 `*.pb.go`、`internal/platform/database/ent/`、`wire_gen.go` 等生成文件；分别通过 `make api`、`make ent`、`make wire` 或 `make generate` 生成。
 
 ## 质量底线
 
 - Go 标准库优先，新增生产依赖前先确认现有依赖或 `pkg/` 不能解决；不要引入通用复制、转换、集合辅助库替代几行明确代码。
 - 测试跟随风险：domain 测不变量，application 测用例编排，infrastructure 测真实适配和事务，service/e2e 测协议、身份与授权边界。
-- 完成后至少对修改过的 Go 文件执行格式化并运行相关包测试。涉及跨层依赖、生成代码、迁移或服务装配时，再运行对应生成命令、架构测试或 `make lint && make test`。
+- 完成后至少对修改过的 Go 文件执行格式化并运行相关包测试。涉及跨层依赖、生成代码、迁移或组合根装配时，再运行对应生成命令、架构测试或 `make lint && make test`。
 - 未实际运行的命令不要声称通过；如果受环境限制无法验证，明确说明未验证项。
 
 ## 按需阅读
@@ -79,7 +78,7 @@ DDD 用来保护边界和不变量，不用来增加代码量：
 |---|---|
 | 新增或修改 API | `README.md` 的“新增或修改 API” + `.agents/rules/api-authz.md` |
 | 新增模块或 CRUD | `README.md` 的“新增业务模块或 CRUD” |
-| 判断服务边界或跨服务协作 | `docs/architecture.md` |
+| 判断模块边界或模块间协作 | `docs/architecture.md` |
 | 修改 schema、迁移或 Ent | `.agents/rules/data.md` |
 | 新写 Go 或引入依赖 | `.agents/rules/style.md` |
 | 设计或补充测试 | `.agents/rules/testing.md` |

@@ -1,0 +1,20 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "graphTooltip": 1,
+  "panels": [
+    {"datasource":{"type":"prometheus","uid":"prometheus"},"fieldConfig":{"defaults":{"unit":"percentunit"}},"gridPos":{"h":8,"w":8,"x":0,"y":0},"id":1,"targets":[{"expr":"eagle:availability:ratio5m","legendFormat":"{{service_name}}","refId":"A"}],"title":"5m availability","type":"timeseries"},
+    {"datasource":{"type":"prometheus","uid":"prometheus"},"fieldConfig":{"defaults":{"unit":"s"}},"gridPos":{"h":8,"w":8,"x":8,"y":0},"id":2,"targets":[{"expr":"eagle:latency:p99_5m","legendFormat":"{{service_name}}","refId":"A"}],"title":"p99 latency","type":"timeseries"},
+    {"datasource":{"type":"prometheus","uid":"prometheus"},"fieldConfig":{"defaults":{"unit":"reqps"}},"gridPos":{"h":8,"w":8,"x":16,"y":0},"id":3,"targets":[{"expr":"sum by (service_name) (rate(server_requests_code_total[5m]))","legendFormat":"{{service_name}}","refId":"A"}],"title":"Request throughput","type":"timeseries"},
+    {"datasource":{"type":"prometheus","uid":"prometheus"},"fieldConfig":{"defaults":{"unit":"reqps"}},"gridPos":{"h":8,"w":12,"x":0,"y":8},"id":4,"targets":[{"expr":"sum by (code) (rate(server_requests_code_total{code!~\"2..\"}[5m]))","legendFormat":"{{code}}","refId":"A"}],"title":"Non-2xx by status code","type":"timeseries"},
+    {"datasource":{"type":"prometheus","uid":"prometheus"},"fieldConfig":{"defaults":{"unit":"reqps"}},"gridPos":{"h":8,"w":12,"x":12,"y":8},"id":5,"targets":[{"expr":"topk(10, sum by (operation) (rate(server_requests_code_total[5m])))","legendFormat":"{{operation}}","refId":"A"}],"title":"Top endpoints","type":"timeseries"}
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["eagle", "slo"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "title": "Eagle overview",
+  "uid": "eagle-overview",
+  "version": 1
+}

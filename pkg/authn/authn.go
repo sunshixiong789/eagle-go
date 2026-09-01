@@ -35,27 +35,37 @@ const (
 	ReasonTokenExpired    = "TOKEN_EXPIRED"
 )
 
+// DefaultJWKSPath 是 Keycloak 的 JWKS 路径。
+// 注意它不是 OIDC 常见的 /.well-known/jwks.json——Auth0、Logto 用后者，
+// 所以这个路径必须可配置。
+const DefaultJWKSPath = "/protocol/openid-connect/certs"
+
 // Config 是资源服务器的验证参数。
 type Config struct {
-	// Issuer 必须与 Keycloak realm 的 issuer 完全一致，
-	// 形如 https://keycloak.example.com/realms/eagle
+	// Issuer 必须与 IdP 签发的 iss 完全一致，
+	// 形如 https://idp.example.com/realms/eagle
 	Issuer string
-	// JWKSURL 为空时按 Keycloak 约定推导为 <issuer>/protocol/openid-connect/certs。
-	// 注意 Keycloak 的 JWKS 路径不是 OIDC 常见的 /.well-known/jwks.json
+	// JWKSURL 为空时拼接为 <issuer><JWKSPath>。
 	JWKSURL string
-	// ClientID 是本服务在 Keycloak 中的 client id，
-	// 用于从 resource_access 中取出本服务的 client 角色
+	// JWKSPath 是 JWKS 相对 issuer 的路径，留空取 DefaultJWKSPath。
+	// JWKSURL 非空时本字段被忽略。
+	JWKSPath string
+	// ClientID 是本服务在 IdP 中的 client id，
+	// 用于从 client 角色 claim 中取出本服务的角色
 	ClientID string
 	// Audience 非空时校验 aud 声明。
 	// Keycloak 默认把 aud 设为 "account"，通常需要配 audience mapper 才有意义，
 	// 因此默认不校验
 	Audience string
+	// Claims 指定角色在 token 载荷里的位置，留空取 Keycloak 约定。
+	Claims ClaimPaths
 }
 
 // Verifier 验证 access token。
 type Verifier struct {
 	verifier *oidc.IDTokenVerifier
 	clientID string
+	claims   ClaimPaths
 }
 
 // NewVerifier 构造验证器。
@@ -66,7 +76,11 @@ type Verifier struct {
 func NewVerifier(ctx context.Context, cfg Config) *Verifier {
 	jwksURL := cfg.JWKSURL
 	if jwksURL == "" {
-		jwksURL = strings.TrimSuffix(cfg.Issuer, "/") + "/protocol/openid-connect/certs"
+		path := cfg.JWKSPath
+		if path == "" {
+			path = DefaultJWKSPath
+		}
+		jwksURL = strings.TrimSuffix(cfg.Issuer, "/") + path
 	}
 	return &Verifier{
 		verifier: oidc.NewVerifier(cfg.Issuer, oidc.NewRemoteKeySet(ctx, jwksURL), &oidc.Config{
@@ -75,6 +89,7 @@ func NewVerifier(ctx context.Context, cfg Config) *Verifier {
 			SupportedSigningAlgs: []string{"RS256"},
 		}),
 		clientID: cfg.ClientID,
+		claims:   cfg.Claims,
 	}
 }
 
@@ -149,10 +164,8 @@ func (v *Verifier) toPrincipal(c *Claims) *identity.Principal {
 		ClientID: c.AuthorizedParty,
 		Scopes:   c.Scopes(),
 		// realm 角色 + 本服务的 client 角色一并取出。
-		// 服务账号同样可以在 Keycloak 里被授予角色，所以不分支处理。
-		Roles:       c.Roles(v.clientID),
-		ClientRoles: c.ClientRoles(v.clientID),
-		IsService:   c.IsServiceToken(),
+		Roles:       c.Roles(v.claims, v.clientID),
+		ClientRoles: c.ClientRoles(v.claims, v.clientID),
 	}
 }
 

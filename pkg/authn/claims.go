@@ -1,25 +1,60 @@
 package authn
 
 import (
+	"encoding/json"
 	"strings"
 
 	"github.com/eagle-go/eagle/pkg/identity"
 )
 
-// serviceAccountPrefix 是 Keycloak 为 client_credentials 服务账号
-// 生成的用户名前缀，形如 service-account-eagle-system。
-// 这是 Keycloak 的既定约定，也是区分「服务令牌」与「用户令牌」最可靠的信号。
-const serviceAccountPrefix = "service-account-"
-
-// Claims 是 Keycloak 签发的 access token 载荷。
+// 角色 claim 的默认路径，取 Keycloak 的约定。
 //
-// 只声明本项目实际消费的字段。Keycloak 的 token 还带 session_state、
-// allowed-origins、email_verified 等一堆字段，全声明进来会造成
+// 之所以做成可配置而不是常量：各家 IdP 放角色的位置完全不同。
+// Keycloak 是 realm_access.roles 与 resource_access.<client>.roles，
+// Auth0 用带命名空间的自定义 claim（https://example.com/roles），
+// Logto、Authing 又各有一套。路径写死就意味着换 IdP 要改代码。
+const (
+	DefaultRealmRolesClaim  = "realm_access.roles"
+	DefaultClientRolesClaim = "resource_access"
+)
+
+// ClaimPaths 指定角色在 token 载荷中的位置，点号分隔逐层下钻。
+// 两个字段留空时分别取上面的 Keycloak 默认值。
+type ClaimPaths struct {
+	// RealmRoles 指向一个字符串数组，是不区分客户端的全局角色。
+	RealmRoles string
+	// ClientRoles 指向 {"<client-id>": {"roles": [...]}} 结构；
+	// 若该路径直接是一个字符串数组，则整体视为本 client 的角色。
+	ClientRoles string
+}
+
+func (p ClaimPaths) realmRoles() string {
+	if p.RealmRoles == "" {
+		return DefaultRealmRolesClaim
+	}
+	return p.RealmRoles
+}
+
+func (p ClaimPaths) clientRoles() string {
+	if p.ClientRoles == "" {
+		return DefaultClientRolesClaim
+	}
+	return p.ClientRoles
+}
+
+// Claims 是 IdP 签发的 access token 载荷。
+//
+// 标准字段用结构体接：sub / azp / scope / preferred_username / email
+// 在各家 IdP 之间是一致的。角色不走结构体而是从 raw 里按配置路径取，
+// 原因见 ClaimPaths。
+//
+// 只声明本项目实际消费的字段。token 里还带 session_state、
+// allowed-origins、email_verified 等一堆内容，全声明进来会造成
 // 「这些都参与判定」的错觉——鉴权结构体尤其要避免这种误导。
 type Claims struct {
 	Subject string `json:"sub"`
-	// AuthorizedParty 是 Keycloak 的 azp，即换取该 token 的客户端。
-	// 注意不是 client_id——Keycloak 的 access token 里用的是 azp。
+	// AuthorizedParty 是 azp，即换取该 token 的客户端。
+	// 注意不是 client_id——access token 里用的是 azp。
 	AuthorizedParty string `json:"azp"`
 
 	// Scope 为空格分隔，遵循 RFC 6749
@@ -28,16 +63,20 @@ type Claims struct {
 	Username string `json:"preferred_username"`
 	Email    string `json:"email"`
 
-	// RealmAccess 是 realm 级角色。Keycloak 把角色嵌在这里，
-	// 而不是放在顶层 roles claim——直接读 roles 会永远拿到空。
-	RealmAccess struct {
-		Roles []string `json:"roles"`
-	} `json:"realm_access"`
+	// raw 是完整载荷，供按路径取角色使用。
+	raw map[string]any
+}
 
-	// ResourceAccess 是各客户端的 client 级角色，键为 client id。
-	ResourceAccess map[string]struct {
-		Roles []string `json:"roles"`
-	} `json:"resource_access"`
+// UnmarshalJSON 在填充结构化字段的同时保留原始载荷。
+func (c *Claims) UnmarshalJSON(data []byte) error {
+	// 定义新类型剥掉方法集，否则 Unmarshal 会递归调用本方法。
+	type plain Claims
+	var p plain
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*c = Claims(p)
+	return json.Unmarshal(data, &c.raw)
 }
 
 // Scopes 把空格分隔的 scope 串拆成切片。
@@ -51,24 +90,18 @@ func (c *Claims) Scopes() []string {
 // Roles 汇总 realm 角色与指定客户端的 client 角色。
 //
 // clientID 为空时只返回 realm 角色。Casbin 判定和超管短路都基于这个结果，
-// 所以两级角色必须一起返回——只看其中一级会让在 Keycloak 里
+// 所以两级角色必须一起返回——只看其中一级会让在 IdP 里
 // 按 client 授权的角色静默失效。
-func (c *Claims) Roles(clientID string) []string {
-	roles := make([]string, 0, len(c.RealmAccess.Roles))
-	for _, role := range c.RealmAccess.Roles {
-		if role != "" {
-			roles = append(roles, identity.RealmRoleKey(role))
-		}
-	}
+func (c *Claims) Roles(paths ClaimPaths, clientID string) []string {
+	realm := stringSlice(lookupClaim(c.raw, paths.realmRoles()))
+	client := c.ClientRoles(paths, clientID)
 
-	if clientID != "" {
-		if ra, ok := c.ResourceAccess[clientID]; ok {
-			for _, role := range ra.Roles {
-				if role != "" {
-					roles = append(roles, identity.ClientRoleKey(clientID, role))
-				}
-			}
-		}
+	roles := make([]string, 0, len(realm)+len(client))
+	for _, role := range realm {
+		roles = append(roles, identity.RealmRoleKey(role))
+	}
+	for _, role := range client {
+		roles = append(roles, identity.ClientRoleKey(clientID, role))
 	}
 	return roles
 }
@@ -76,22 +109,67 @@ func (c *Claims) Roles(clientID string) []string {
 // ClientRoles 只返回指定资源服务器命名空间内的角色。
 // 超级管理员之类的高影响短路只能基于这份集合，避免同名 realm 角色
 // 意外获得所有服务的全局管理能力。
-func (c *Claims) ClientRoles(clientID string) []string {
+func (c *Claims) ClientRoles(paths ClaimPaths, clientID string) []string {
 	if clientID == "" {
 		return nil
 	}
-	ra, ok := c.ResourceAccess[clientID]
+
+	node := lookupClaim(c.raw, paths.clientRoles())
+	// 路径直接指向数组：该 claim 整体就是本 client 的角色列表。
+	// Auth0 这类把角色平铺进单个自定义 claim 的 IdP 走这条分支，
+	// 否则它们的角色永远进不了 ClientRoles，超管短路也就永远不触发。
+	if roles := stringSlice(node); len(roles) > 0 {
+		return roles
+	}
+
+	group, ok := node.(map[string]any)
 	if !ok {
 		return nil
 	}
-	return append([]string(nil), ra.Roles...)
+	entry, ok := group[clientID].(map[string]any)
+	if !ok {
+		return nil
+	}
+	return stringSlice(entry["roles"])
 }
 
-// IsServiceToken 判断这是不是 client_credentials 签发的服务令牌。
+// lookupClaim 按点号分隔的路径在载荷里逐层下钻。
 //
-// Keycloak 下不能用「sub == client_id」判断：服务账号有自己的用户 UUID，
-// sub 是那个 UUID 而不是客户端标识。可靠信号是用户名的
-// service-account- 前缀。
-func (c *Claims) IsServiceToken() bool {
-	return strings.HasPrefix(c.Username, serviceAccountPrefix)
+// 先整体当作一个 key 命中再逐层拆分：Auth0 风格的 claim 名本身就是 URL
+// （https://eagle.example.com/roles），里面带点，按点拆会直接找不到。
+func lookupClaim(raw map[string]any, path string) any {
+	if raw == nil || path == "" {
+		return nil
+	}
+	if v, ok := raw[path]; ok {
+		return v
+	}
+
+	var cur any = raw
+	for _, seg := range strings.Split(path, ".") {
+		m, ok := cur.(map[string]any)
+		if !ok {
+			return nil
+		}
+		cur, ok = m[seg]
+		if !ok {
+			return nil
+		}
+	}
+	return cur
+}
+
+// stringSlice 把 JSON 数组转成字符串切片，忽略非字符串与空串元素。
+func stringSlice(v any) []string {
+	items, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		if s, ok := item.(string); ok && s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }

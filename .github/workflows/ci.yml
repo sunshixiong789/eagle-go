@@ -27,18 +27,22 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
-          cache-dependency-path: |
-            go.work.sum
-            **/go.sum
+          cache-dependency-path: "**/go.sum"
+
+      # 工具从 tools module 编译到 bin/ 后在仓库根目录执行。
+      # 用 `go -C tools tool buf` 会把工作目录切到 tools/，
+      # buf.gen.yaml 里的 `directory: api` 会解析错。
+      - name: 编译 buf
+        run: go -C tools build -o "$PWD/bin/buf" github.com/bufbuild/buf/cmd/buf
 
       - name: buf lint
-        run: go tool buf lint
+        run: ./bin/buf lint
 
-      # PR 上拦截破坏性契约变更。契约是跨服务、跨语言的公共依赖，
-      # 破坏性改动一旦合入，下游要到运行时才会发现。
+      # PR 上拦截破坏性契约变更。契约是前后端共同依赖的公共接口，
+      # 破坏性改动一旦合入，调用方要到运行时才会发现。
       - name: buf breaking
         if: github.event_name == 'pull_request'
-        run: go tool buf breaking api --against ".git#branch=${{ github.base_ref }},subdir=api"
+        run: ./bin/buf breaking api --against ".git#branch=${{ github.base_ref }},subdir=api"
 
       # 生成代码必须与 proto 保持同步。不检查的话，
       # 改了 proto 却忘记重新生成的提交会一路合进主干。
@@ -60,9 +64,7 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
-          cache-dependency-path: |
-            go.work.sum
-            **/go.sum
+          cache-dependency-path: "**/go.sum"
 
       # 集成测试用 embedded-postgres 在进程内拉起真实 PostgreSQL，
       # 因此 CI 不需要声明 services，本地也不需要 Docker。
@@ -78,17 +80,14 @@ jobs:
 
       - name: go vet
         run: |
-          for module in api pkg app/admin app/product app/order tests tools; do
-            go vet "./$module/..."
-          done
+          go vet ./...
+          go -C tools vet ./...
 
       - name: 测试
         run: |
           mkdir -p coverage
-          for module in api pkg app/admin app/product app/order tests tools; do
-            profile="${module//\//-}"
-            go test -race -coverprofile="coverage/$profile.out" "./$module/..."
-          done
+          go test -race -coverprofile=coverage/eagle.out ./...
+          go -C tools test ./...
 
       - name: 上传覆盖率报告
         uses: actions/upload-artifact@v4
@@ -106,12 +105,10 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
-          cache-dependency-path: |
-            go.work.sum
-            **/go.sum
+          cache-dependency-path: "**/go.sum"
 
       - name: golangci-lint
-        run: go tool golangci-lint run ./api/... ./pkg/... ./app/admin/... ./app/product/... ./app/order/... ./tests/... ./tools/...
+        run: make lint
 
   migrations:
     name: 迁移可回滚性
@@ -136,9 +133,10 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
-          cache-dependency-path: |
-            go.work.sum
-            **/go.sum
+          cache-dependency-path: "**/go.sum"
+
+      - name: 编译 goose
+        run: go -C tools build -o "$PWD/bin/goose" github.com/pressly/goose/v3/cmd/goose
 
       # up 能跑通不代表 down 也能。回滚脚本平时没人执行，
       # 等到线上真要回滚时才发现写错，代价极高。
@@ -146,13 +144,11 @@ jobs:
         env:
           DSN: postgres://eagle:eagle@127.0.0.1:5432/eagle?sslmode=disable
         run: |
-          for service in admin product order; do
-            go tool goose -dir "app/$service/migrations" postgres "$DSN" up
-            go tool goose -dir "app/$service/migrations" postgres "$DSN" down-to 0
-            go tool goose -dir "app/$service/migrations" postgres "$DSN" up
-            go tool goose -dir "app/$service/migrations" postgres "$DSN" status
-            go tool goose -dir "app/$service/migrations" postgres "$DSN" down-to 0
-          done
+          ./bin/goose -dir migrations postgres "$DSN" up
+          ./bin/goose -dir migrations postgres "$DSN" down-to 0
+          ./bin/goose -dir migrations postgres "$DSN" up
+          ./bin/goose -dir migrations postgres "$DSN" status
+          ./bin/goose -dir migrations postgres "$DSN" down-to 0
 
   deployment:
     name: 部署清单检查
@@ -160,23 +156,5 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: azure/setup-kubectl@v4
-        with:
-          version: v1.32.3
-
       - name: Compose 解析
         run: docker compose -f deploy/docker-compose.yml config --quiet
-
-      - name: Kustomize 渲染
-        run: |
-          for manifest in \
-            deploy/kubernetes/base \
-            deploy/kubernetes/migrations \
-            deploy/kubernetes/gateway \
-            deploy/kubernetes/overlays/staging \
-            deploy/kubernetes/overlays/production \
-            deploy/kubernetes/overlays/production-mtls \
-            deploy/kubernetes/observability \
-            deploy/kubernetes/backup; do
-            kubectl kustomize "$manifest" >/dev/null
-          done

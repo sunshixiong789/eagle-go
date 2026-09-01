@@ -12,19 +12,25 @@ import (
 	appconfig "github.com/eagle-go/eagle/pkg/platform/config"
 )
 
-// 配置文件里的字段名拼错不会导致编译失败——proto 解析时对不上的键
-// 会被静默丢弃，直到运行时发现某个功能"没配置"才暴露。
-// 这些测试真实加载服务的 configs/config.yaml，把这类错误提前到 CI。
-func loadConfig(t *testing.T, service string) *appconfig.Bootstrap {
+// configDir 是仓库根下唯一的配置目录。
+func configDir(t *testing.T) string {
 	t.Helper()
 
-	path, err := filepath.Abs(filepath.Join("..", "..", "..", "app", service, "configs"))
+	path, err := filepath.Abs(filepath.Join("..", "..", "..", "configs"))
 	if err != nil {
 		t.Fatalf("解析配置目录: %v", err)
 	}
+	return path
+}
+
+// 配置文件里的字段名拼错不会导致编译失败——proto 解析时对不上的键
+// 会被静默丢弃，直到运行时发现某个功能"没配置"才暴露。
+// 这些测试真实加载 configs/config.yaml，把这类错误提前到 CI。
+func loadConfig(t *testing.T) *appconfig.Bootstrap {
+	t.Helper()
 
 	c := kratosconfig.New(
-		kratosconfig.WithSource(file.NewSource(path)),
+		kratosconfig.WithSource(file.NewSource(configDir(t))),
 		kratosconfig.WithResolveActualTypes(true),
 	)
 	t.Cleanup(func() { _ = c.Close() })
@@ -41,14 +47,11 @@ func loadConfig(t *testing.T, service string) *appconfig.Bootstrap {
 }
 
 func TestEnvironmentOverridesSensitiveDefaults(t *testing.T) {
-	path, err := filepath.Abs(filepath.Join("..", "..", "..", "app", "admin", "configs"))
-	if err != nil {
-		t.Fatalf("解析配置目录: %v", err)
-	}
+	path := configDir(t)
 	t.Setenv("EAGLE_DATABASE_DSN", "postgres://runtime:secret@db.internal:5432/eagle?sslmode=require")
 	t.Setenv("EAGLE_SERVER_HTTP_ADDR", "0.0.0.0:18000")
-	t.Setenv("EAGLE_AUTH_INTERNAL_CLIENT_ID", "eagle-product-worker")
-	t.Setenv("EAGLE_MESSAGING_RABBITMQ_URL", "amqps://rabbit.internal/eagle")
+	t.Setenv("EAGLE_AUTH_JWKS_PATH", "/.well-known/jwks.json")
+	t.Setenv("EAGLE_AUTH_REALM_ROLES_CLAIM", "https://eagle.example.com/roles")
 	t.Setenv("EAGLE_OBSERVABILITY_TRACE_SAMPLE_RATIO", "0.05")
 
 	c := kratosconfig.New(
@@ -69,11 +72,11 @@ func TestEnvironmentOverridesSensitiveDefaults(t *testing.T) {
 	if got := bc.GetServer().GetHttp().GetAddr(); got != "0.0.0.0:18000" {
 		t.Fatalf("SERVER_HTTP_ADDR override not applied: %q", got)
 	}
-	if got := bc.GetAuth().GetInternalClientIds(); len(got) != 1 || got[0] != "eagle-product-worker" {
-		t.Fatalf("AUTH_INTERNAL_CLIENT_ID override not applied: %v", got)
+	if got := bc.GetAuth().GetJwksPath(); got != "/.well-known/jwks.json" {
+		t.Fatalf("AUTH_JWKS_PATH override not applied: %q", got)
 	}
-	if got := bc.GetMessaging().GetRabbitmq().GetUrl(); got != "amqps://rabbit.internal/eagle" {
-		t.Fatalf("MESSAGING_RABBITMQ_URL override not applied: %q", got)
+	if got := bc.GetAuth().GetRealmRolesClaim(); got != "https://eagle.example.com/roles" {
+		t.Fatalf("AUTH_REALM_ROLES_CLAIM override not applied: %q", got)
 	}
 	if got := bc.GetObservability().GetTraceSampleRatio(); got != 0.05 {
 		t.Fatalf("OBSERVABILITY_TRACE_SAMPLE_RATIO override not applied: %v", got)
@@ -81,81 +84,46 @@ func TestEnvironmentOverridesSensitiveDefaults(t *testing.T) {
 }
 
 func TestConfigParses(t *testing.T) {
-	tests := []struct {
-		service      string
-		requirements appconfig.Requirements
-		httpAddr     string
-		grpcAddr     string
-		metricsAddr  string
-		database     string
-	}{
-		{service: "admin", requirements: appconfig.Requirements{Database: true, Auth: true, HTTP: true, GRPC: true, File: true, RabbitMQ: true}, httpAddr: "0.0.0.0:8001", grpcAddr: "0.0.0.0:9001", metricsAddr: "0.0.0.0:9101", database: "eagle_admin"},
-		{service: "product", requirements: appconfig.Requirements{Database: true, Auth: true, HTTP: true, GRPC: true, AuthorizationUpstream: true, Redis: true, ServiceAuth: true}, httpAddr: "0.0.0.0:8002", grpcAddr: "0.0.0.0:9002", metricsAddr: "0.0.0.0:9102", database: "eagle_product"},
-		{service: "order", requirements: appconfig.Requirements{Database: true, Auth: true, HTTP: true, GRPC: true, ProductUpstream: true, RabbitMQ: true, ServiceAuth: true}, httpAddr: "0.0.0.0:8003", grpcAddr: "0.0.0.0:9003", metricsAddr: "0.0.0.0:9103", database: "eagle_order"},
+	bc := loadConfig(t)
+	if err := appconfig.Validate(bc, appconfig.Requirements{Database: true, Auth: true, HTTP: true, File: true}); err != nil {
+		t.Fatalf("配置校验失败: %v", err)
 	}
-	for _, tt := range tests {
-		t.Run(tt.service, func(t *testing.T) {
-			bc := loadConfig(t, tt.service)
-			if err := appconfig.Validate(bc, tt.requirements); err != nil {
-				t.Fatalf("配置校验失败: %v", err)
-			}
-			if got := bc.GetServer().GetHttp().GetAddr(); got != tt.httpAddr {
-				t.Errorf("server.http.addr = %q, want %q", got, tt.httpAddr)
-			}
-			if got := bc.GetServer().GetGrpc().GetAddr(); got != tt.grpcAddr {
-				t.Errorf("server.grpc.addr = %q, want %q", got, tt.grpcAddr)
-			}
-			if got := bc.GetObservability().GetMetricsAddr(); got != tt.metricsAddr {
-				t.Errorf("observability.metrics_addr = %q, want %q", got, tt.metricsAddr)
-			}
-			if got := bc.GetData().GetDatabase().GetDsn(); !strings.Contains(got, "/"+tt.database+"?") {
-				t.Errorf("data.database.dsn = %q, want database %q", got, tt.database)
-			}
-
-			switch tt.service {
-			case "admin":
-				if bc.GetFile().GetLocalDir() == "" || bc.GetFile().GetMaxSizeBytes() <= 0 {
-					t.Error("admin file 配置未解析出来")
-				}
-				if bc.GetUpstream().GetAuthorizationEndpoint() != "" || bc.GetUpstream().GetProductEndpoint() != "" {
-					t.Error("admin 不应携带 upstream 配置")
-				}
-			case "product":
-				if bc.GetFile().GetLocalDir() != "" || bc.GetUpstream().GetProductEndpoint() != "" {
-					t.Error("product 不应携带 file 或 product upstream 配置")
-				}
-			case "order":
-				if bc.GetFile().GetLocalDir() != "" || bc.GetUpstream().GetAuthorizationEndpoint() != "" {
-					t.Error("order 不应携带 file 或 authorization upstream 配置")
-				}
-			}
-		})
+	if got := bc.GetServer().GetHttp().GetAddr(); got != "0.0.0.0:8001" {
+		t.Errorf("server.http.addr = %q, want %q", got, "0.0.0.0:8001")
+	}
+	if got := bc.GetObservability().GetMetricsAddr(); got != "0.0.0.0:9101" {
+		t.Errorf("observability.metrics_addr = %q, want %q", got, "0.0.0.0:9101")
+	}
+	if got := bc.GetData().GetDatabase().GetDsn(); !strings.Contains(got, "/eagle?") {
+		t.Errorf("data.database.dsn = %q, want database %q", got, "eagle")
+	}
+	if bc.GetFile().GetLocalDir() == "" || bc.GetFile().GetMaxSizeBytes() <= 0 {
+		t.Error("file 配置未解析出来")
 	}
 }
 
-func TestServiceRequirementsDoNotCoupleUnrelatedConfig(t *testing.T) {
-	bc := loadConfig(t, "admin")
+func TestRequirementsDoNotCoupleUnrelatedConfig(t *testing.T) {
+	bc := loadConfig(t)
 	bc.File = nil
-	bc.Upstream = nil
 	if err := appconfig.Validate(bc, appconfig.Requirements{}); err != nil {
-		t.Fatalf("admin should not require file or upstream config: %v", err)
+		t.Fatalf("未声明 File 时不应要求文件配置: %v", err)
 	}
 	if err := appconfig.Validate(bc, appconfig.Requirements{File: true}); err == nil {
-		t.Fatal("file service must reject missing file config")
+		t.Fatal("声明 File 时必须拒绝缺失的文件配置")
 	}
 }
 
-// issuer 必须与 Keycloak realm 的 iss 完全一致，否则所有 token
-// 都会因 iss 不匹配被拒——而报错信息不会指向这里，很难定位。
-func TestAuthConfigPointsAtKeycloakRealm(t *testing.T) {
-	auth := loadConfig(t, "admin").GetAuth()
+// issuer 必须与 IdP 签发的 iss 完全一致，否则所有 token 都会因 iss
+// 不匹配被拒——而报错信息不会指向这里，很难定位。
+//
+// 这里刻意不断言 issuer 形如 /realms/<realm>：那是 Keycloak 的路径约定，
+// 把它写进测试等于把 IdP 焊死（见 validate.go 的 validateIssuer）。
+func TestAuthConfigIsUsable(t *testing.T) {
+	auth := loadConfig(t).GetAuth()
 
 	issuer := auth.GetIssuer()
 	if issuer == "" {
 		t.Fatal("auth.issuer 未配置，token 验签无法进行")
-	}
-	if !strings.Contains(issuer, "/realms/") {
-		t.Errorf("issuer = %q，Keycloak 的 issuer 形如 http(s)://host/realms/<realm>", issuer)
 	}
 	// 尾斜杠会让 iss 比对失败，且肉眼极难发现
 	if strings.HasSuffix(issuer, "/") {
@@ -163,16 +131,22 @@ func TestAuthConfigPointsAtKeycloakRealm(t *testing.T) {
 	}
 
 	if auth.GetClientId() == "" {
-		t.Error("auth.client_id 未配置，取不到 resource_access 里的 client 角色")
+		t.Error("auth.client_id 未配置，取不到本服务的 client 角色")
 	}
 	if auth.GetSuperAdminRole() == "" {
 		t.Error("auth.super_admin_role 未配置")
+	}
+	// jwks_path 留空是合法的（取 Keycloak 约定），但写了就必须是绝对路径，
+	// 否则会和 issuer 拼出 https://idp.example.com/realmsprotocol/... 这种地址。
+	if jwksPath := auth.GetJwksPath(); jwksPath != "" && !strings.HasPrefix(jwksPath, "/") {
+		t.Errorf("auth.jwks_path = %q，必须以 / 开头", jwksPath)
 	}
 }
 
 // 采样率越界会被 otelx 收敛到 [0,1]，但配置文件本身不该写错。
 func TestObservabilityConfigIsSane(t *testing.T) {
-	o := loadConfig(t, "admin").GetObservability()
+	bc := loadConfig(t)
+	o := bc.GetObservability()
 
 	if r := o.GetTraceSampleRatio(); r < 0 || r > 1 {
 		t.Errorf("trace_sample_ratio = %v, 应在 [0,1] 区间", r)
@@ -185,7 +159,6 @@ func TestObservabilityConfigIsSane(t *testing.T) {
 	}
 	// 指标端点必须与业务端口分开：它不经过认证鉴权中间件，
 	// 与业务共用端口就等于给业务服务开了个免鉴权的口子
-	bc := loadConfig(t, "admin")
 	if o.GetMetricsAddr() == bc.GetServer().GetHttp().GetAddr() {
 		t.Error("metrics_addr 与业务 HTTP 端口相同，指标端点会绕过鉴权暴露业务接口")
 	}

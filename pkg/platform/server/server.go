@@ -1,4 +1,4 @@
-// Package server 装配 HTTP / gRPC 服务器与中间件链。
+// Package server 装配 HTTP 服务器与中间件链。
 package server
 
 import (
@@ -24,7 +24,7 @@ import (
 // meterName 是本服务所有自定义指标的 instrumentation scope。
 const meterName = "github.com/eagle-go/eagle/pkg/platform/server"
 
-// NewVerifier 构造 Keycloak token 验证器。
+// NewVerifier 构造 access token 验证器。
 func NewVerifier(c *config.Auth) *authn.Verifier {
 	return authn.NewVerifier(
 		context.Background(),
@@ -35,18 +35,24 @@ func NewVerifier(c *config.Auth) *authn.Verifier {
 			// 留空时 authn 会按 Keycloak 约定从 issuer 推导。
 			// 容器/K8s 里通常要显式指定：token 里的公开 issuer
 			// 与本服务可达的集群内地址往往不是同一个。
-			JWKSURL: c.GetJwksUrl(),
+			JWKSURL:  c.GetJwksUrl(),
+			JWKSPath: c.GetJwksPath(),
+			// 角色 claim 路径可配置，换 IdP 不必改代码。
+			Claims: authn.ClaimPaths{
+				RealmRoles:  c.GetRealmRolesClaim(),
+				ClientRoles: c.GetClientRolesClaim(),
+			},
 		},
 	)
 }
 
-// NewMiddlewares 构造 HTTP 与 gRPC 共用的中间件链。
+// NewMiddlewares 构造 HTTP 服务端中间件链。
 //
 // 顺序是有讲究的：
 //   - recovery 必须在最外层，否则内层 panic 会直接打挂进程
 //   - logging 紧随其后，才能记录到后面被拒绝的请求
 //   - ratelimit 在鉴权之前：过载保护不该依赖「先把 token 验完」
-//   - authn -> authz：先确认你是谁（Keycloak 验签），再判断你能不能做（Casbin）
+//   - authn -> authz：先确认你是谁（token 验签），再判断你能不能做（Casbin）
 //   - 参数校验放最内层：只有通过鉴权的请求才值得花这个代价
 func NewMiddlewares(
 	logger *slog.Logger,
@@ -81,7 +87,6 @@ func NewMiddlewares(
 		authz.Server(
 			authz.WithSuperAdminRole(superAdmin),
 			authz.WithAuthorizer(authorizer),
-			authz.WithInternalClientIDs(authConf.GetInternalClientIds()...),
 		),
 		ErrorMapping(errorMappings...),
 		protovalidatemw.ProtoValidate(),

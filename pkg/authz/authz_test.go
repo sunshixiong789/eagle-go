@@ -50,33 +50,6 @@ func newTestEnforcer(t *testing.T, policies map[string][]string) *Enforcer {
 }
 
 const opCreatePermission = "/eagle.access.v1.PermissionService/CreatePermission"
-const opCheckPermission = "/eagle.access.v1.AuthorizationService/CheckPermission"
-
-func TestServerInternalAccessRequiresWhitelistedService(t *testing.T) {
-	tests := []struct {
-		name      string
-		principal *identity.Principal
-		wantCode  int
-	}{
-		{name: "human", principal: &identity.Principal{Subject: "u-1", ClientID: "eagle-web"}, wantCode: 403},
-		{name: "untrusted service", principal: &identity.Principal{Subject: "s-1", ClientID: "other-worker", IsService: true}, wantCode: 403},
-		{name: "trusted service", principal: &identity.Principal{Subject: "s-1", ClientID: "eagle-worker", IsService: true}, wantCode: 200},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var called bool
-			mw := Server(WithInternalClientIDs("eagle-worker"))
-			ctx := identity.NewContext(serverCtx(opCheckPermission), tt.principal)
-			_, err := mw(probeHandler(&called))(ctx, nil)
-			if got := kratoserrors.Code(err); got != tt.wantCode {
-				t.Fatalf("状态码 = %d, want %d, err=%v", got, tt.wantCode, err)
-			}
-			if called != (tt.wantCode == 200) {
-				t.Fatalf("handler called = %v, want %v", called, tt.wantCode == 200)
-			}
-		})
-	}
-}
 
 func TestServerRejectsAnonymous(t *testing.T) {
 	var called bool
@@ -319,42 +292,6 @@ func TestServerAllowsAuthenticatedWhenNoPermDeclared(t *testing.T) {
 	if !called {
 		t.Error("handler 应被执行")
 	}
-}
-
-// 服务账号与终端用户走同一套判定：两者的角色都由 Keycloak 下发。
-func TestServerTreatsServiceAccountsLikeUsers(t *testing.T) {
-	mw := Server(WithEnforcer(newTestEnforcer(t, map[string][]string{
-		"svc-writer": {"system:permission:add"},
-	})))
-
-	t.Run("角色命中则放行", func(t *testing.T) {
-		var called bool
-		ctx := identity.NewContext(serverCtx(opCreatePermission), &identity.Principal{
-			Subject: "svc-uuid", IsService: true, ClientID: "eagle-worker",
-			Roles: []string{"svc-writer"},
-		})
-		if _, err := mw(probeHandler(&called))(ctx, nil); err != nil {
-			t.Fatalf("服务账号持有角色时应放行, got %v", err)
-		}
-		if !called {
-			t.Error("handler 应被执行")
-		}
-	})
-
-	t.Run("角色不匹配则 403", func(t *testing.T) {
-		var called bool
-		ctx := identity.NewContext(serverCtx(opCreatePermission), &identity.Principal{
-			Subject: "svc-uuid", IsService: true, ClientID: "other",
-			Roles: []string{"svc-reader"},
-		})
-		_, err := mw(probeHandler(&called))(ctx, nil)
-		if kratoserrors.Code(err) != 403 {
-			t.Errorf("状态码 = %d, want 403", kratoserrors.Code(err))
-		}
-		if called {
-			t.Error("handler 不应被执行")
-		}
-	})
 }
 
 // 未配置判定器属于装配错误，必须拒绝而非放行。

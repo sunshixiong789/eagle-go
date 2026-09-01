@@ -2,49 +2,65 @@ SHELL := /bin/bash
 VERSION := $(shell git describe --tags --always 2>/dev/null || echo "dev")
 LDFLAGS := -X main.Version=$(VERSION)
 
-SERVICES := admin product order
-MODULES := api pkg app/admin app/product app/order tests tools
-SERVICE ?= admin
+# 业务代码是单一 module；tools 独立成模块，用来锁定生成工具链版本，
+# 不让 buf/goose/golangci-lint/wire 的依赖污染业务依赖图。
+MODULES := . tools
 REGISTRY ?= eagle
-BUF := go tool buf
-GOOSE := go tool goose
-GOLANGCI_LINT := go tool golangci-lint
-# 每个服务拥有独立 database；可用 EAGLE_DSN 覆盖。
-EAGLE_DSN ?= postgres://eagle:eagle@127.0.0.1:5432/eagle_$(SERVICE)?sslmode=disable
-MIGRATION_DIR := app/$(SERVICE)/migrations
+IMAGE ?= $(REGISTRY)/eagle
+
+# 工具从 tools module 编译成二进制后在仓库根目录执行。
+# 不用 `go -C tools tool xxx`：那会把工作目录切到 tools/，
+# buf.gen.yaml 里的 `directory: api`、goose 的 -dir、wire 的包路径都会解析错。
+BIN := $(CURDIR)/bin
+BUF := $(BIN)/buf
+ENT := $(BIN)/ent
+GOOSE := $(BIN)/goose
+GOLANGCI_LINT := $(BIN)/golangci-lint
+WIRE := $(BIN)/wire
+
+TOOL_PKG_buf := github.com/bufbuild/buf/cmd/buf
+TOOL_PKG_ent := entgo.io/ent/cmd/ent
+TOOL_PKG_goose := github.com/pressly/goose/v3/cmd/goose
+TOOL_PKG_golangci-lint := github.com/golangci/golangci-lint/v2/cmd/golangci-lint
+TOOL_PKG_wire := github.com/google/wire/cmd/wire
+
+$(BIN)/%:
+	@mkdir -p $(BIN)
+	go -C tools build -o $@ $(TOOL_PKG_$*)
+
+EAGLE_DSN ?= postgres://eagle:eagle@127.0.0.1:5432/eagle?sslmode=disable
+MIGRATION_DIR := migrations
 
 .PHONY: init
 # 下载并验证项目锁定的开发期工具链
-init:
+init: $(BUF) $(GOOSE) $(GOLANGCI_LINT) $(WIRE)
 	$(BUF) --version
 	$(GOOSE) -version
 	$(GOLANGCI_LINT) --version
 
 .PHONY: api
 # 生成对外契约代码（api/ 下的 proto）
-api:
+api: $(BUF)
 	$(BUF) generate --template buf.gen.yaml
 
 .PHONY: config
-# 生成共享进程配置代码（pkg/platform/config）
-config:
+# 生成进程配置代码（pkg/platform/config）
+config: $(BUF)
 	$(BUF) generate --template buf.gen.config.yaml
 
 .PHONY: lint-proto
 # proto 风格检查 + 兼容性检查（against master）
-lint-proto:
+lint-proto: $(BUF)
 	$(BUF) lint
 	$(BUF) breaking api --against '.git#branch=master,subdir=api'
 
 .PHONY: ent
-# 为每个服务生成独占的 Ent 数据访问代码
-ent:
-	@for service in $(SERVICES); do \
-		go generate ./app/$$service/internal/platform/database/ent || exit 1; \
-	done
+# 生成 Ent 数据访问代码。--target 省略时默认取 schema 目录的父目录，
+# 即 internal/platform/database/ent。
+ent: $(ENT)
+	$(ENT) generate --feature sql/execquery,sql/upsert ./internal/platform/database/ent/schema
 
 .PHONY: tidy
-# 分别整理每个 Go 模块的依赖
 tidy:
 	@for module in $(MODULES); do \
 		go -C $$module mod tidy || exit 1; \
@@ -52,109 +68,72 @@ tidy:
 
 .PHONY: migrate-up
 # 执行数据库迁移
-migrate-up:
+migrate-up: $(GOOSE)
 	$(GOOSE) -dir $(MIGRATION_DIR) postgres "$(EAGLE_DSN)" up
 
 .PHONY: migrate-down
 # 回滚一个版本
-migrate-down:
+migrate-down: $(GOOSE)
 	$(GOOSE) -dir $(MIGRATION_DIR) postgres "$(EAGLE_DSN)" down
 
 .PHONY: migrate-status
-migrate-status:
+migrate-status: $(GOOSE)
 	$(GOOSE) -dir $(MIGRATION_DIR) postgres "$(EAGLE_DSN)" status
 
 .PHONY: wire
-# 为每个服务组合根生成 Wire 注入代码
-wire:
-	@for service in $(SERVICES); do \
-		go -C app/$$service run github.com/google/wire/cmd/wire ./cmd/$$service || exit 1; \
-	done
+# 生成组合根的 Wire 注入代码
+wire: $(WIRE)
+	$(WIRE) ./cmd/eagle
 
 .PHONY: generate
-# 全量生成：对外契约 + 内部配置 + Ent + Wire
+# 全量生成：对外契约 + 进程配置 + Ent + Wire
 generate: api config ent wire tidy
 
 .PHONY: build
-# 编译全部可部署服务到 bin/
+# 编译服务与迁移工具到 bin/
 build:
-	mkdir -p bin/
-	@for service in $(SERVICES); do \
-		go build -ldflags "$(LDFLAGS)" -o ./bin/$$service ./app/$$service/cmd/$$service || exit 1; \
-	done
-	go build -o ./bin/migrate ./tools/migrate
-	go build -o ./bin/outboxctl ./tools/outboxctl
-	go build -o ./bin/mqctl ./tools/mqctl
+	@mkdir -p $(BIN)
+	go build -ldflags "$(LDFLAGS)" -o $(BIN)/eagle ./cmd/eagle
+	go -C tools build -o $(BIN)/migrate ./migrate
 
 .PHONY: image
-# 构建一个服务镜像，例如 make image SERVICE=product VERSION=v1.2.0 REGISTRY=registry.example.com/eagle
+# 构建服务镜像，例如 make image VERSION=v1.2.0 REGISTRY=registry.example.com/eagle
 image:
-	@case " $(SERVICES) " in *" $(SERVICE) "*) ;; *) echo "unknown SERVICE=$(SERVICE), choose: $(SERVICES)"; exit 2;; esac
-	docker build --build-arg SERVICE=$(SERVICE) --build-arg VERSION=$(VERSION) \
-		-t $(REGISTRY)/$(SERVICE):$(VERSION) .
+	docker build --build-arg VERSION=$(VERSION) -t $(IMAGE):$(VERSION) .
 
-.PHONY: images
-# 分别构建三个可独立发布的服务镜像
-images:
-	@for service in $(SERVICES); do \
-		docker build --build-arg SERVICE=$$service --build-arg VERSION=$(VERSION) \
-			-t $(REGISTRY)/$$service:$(VERSION) . || exit 1; \
-	done
-
-.PHONY: push-images
-# 推送三个服务镜像；生产发布时显式执行，不绑定到 build
-push-images:
-	@for service in $(SERVICES); do \
-		docker push $(REGISTRY)/$$service:$(VERSION) || exit 1; \
-	done
+.PHONY: push-image
+# 推送服务镜像；生产发布时显式执行，不绑定到 build
+push-image:
+	docker push $(IMAGE):$(VERSION)
 
 .PHONY: run
-# 启动一个服务，例如 make run SERVICE=product
+# 本地直接启动服务（依赖 make up-deps 起好的基础组件）
 run:
-	EAGLE_DATABASE_DSN="$(EAGLE_DSN)" go run -ldflags "$(LDFLAGS)" ./app/$(SERVICE)/cmd/$(SERVICE) -conf app/$(SERVICE)/configs
+	EAGLE_DATABASE_DSN="$(EAGLE_DSN)" go run -ldflags "$(LDFLAGS)" ./cmd/eagle -conf configs
 
 .PHONY: lint
-lint:
-	$(GOLANGCI_LINT) run ./api/... ./pkg/... ./app/admin/... ./app/product/... ./app/order/... ./tests/... ./tools/...
+lint: $(GOLANGCI_LINT)
+	$(GOLANGCI_LINT) run ./...
 
 .PHONY: test
 # 单测 + 集成测试（embedded-postgres，不需要 Docker）
 test:
-	@for module in $(MODULES); do \
-		go test -race -cover ./$$module/... || exit 1; \
-	done
+	go test -race -cover ./...
 
 .PHONY: up
-# 构建并启动三服务开发环境
+# 构建并启动完整本地环境
 up:
 	docker compose -f deploy/docker-compose.yml up -d --build
 
 .PHONY: up-deps
 # 只启动本地基础依赖，服务由 make run 单独启动
 up-deps:
-	docker compose -f deploy/docker-compose.yml up -d postgres keycloak redis rabbitmq minio minio-init
+	docker compose -f deploy/docker-compose.yml up -d postgres keycloak minio minio-init
 
 .PHONY: validate-deploy
-# 校验 Compose 与所有可部署 Kubernetes 组合能被正确解析
+# 校验 Compose 文件能被正确解析
 validate-deploy:
 	docker compose -f deploy/docker-compose.yml config --quiet
-	@for manifest in \
-		deploy/kubernetes/base \
-		deploy/kubernetes/migrations \
-		deploy/kubernetes/gateway \
-		deploy/kubernetes/overlays/staging \
-		deploy/kubernetes/overlays/production \
-		deploy/kubernetes/overlays/production-k3s \
-		deploy/kubernetes/overlays/production-mtls \
-		deploy/kubernetes/observability \
-		deploy/kubernetes/backup; do \
-		kubectl kustomize $$manifest >/dev/null || exit 1; \
-	done
-
-.PHONY: render-prod-k3s
-# 渲染三节点 K3s 生产应用清单，不连接集群、不执行发布
-render-prod-k3s:
-	kubectl kustomize deploy/kubernetes/overlays/production-k3s
 
 .PHONY: down
 down:

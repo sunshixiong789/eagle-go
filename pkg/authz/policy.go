@@ -113,8 +113,7 @@ func ValidateRegisteredPolicies(catalogCodes []string) error {
 				policy := lookupPolicy(op)
 				switch policy.Access {
 				case annotationsv1.AccessLevel_ACCESS_LEVEL_PUBLIC,
-					annotationsv1.AccessLevel_ACCESS_LEVEL_AUTHENTICATED,
-					annotationsv1.AccessLevel_ACCESS_LEVEL_INTERNAL:
+					annotationsv1.AccessLevel_ACCESS_LEVEL_AUTHENTICATED:
 					if policy.Perm != "" {
 						violations = append(violations, op+": 非权限访问级别不能同时声明 perm")
 					}

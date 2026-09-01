@@ -8,36 +8,23 @@ package eagle.platform.config;
 // 但 YAML 里只认「数字 + s」这一种写法，如 3600s、0.5s。
 // Go 风格的 1h / 30m / 500ms 会在启动阶段解析失败，且报错信息只说
 // invalid google.protobuf.Duration value，不指向具体是哪个字段——
-// 这个坑真实踩过，见 app/<service>/configs/config.yaml 开头的说明
+// 这个坑真实踩过，见 configs/config.yaml 开头的说明
 // 和 config_test.go 里挡住它的回归测试。
 import "google/protobuf/duration.proto";
 
 option go_package = "github.com/eagle-go/eagle/pkg/platform/config;config";
 
-// Bootstrap 是配置文件的根消息，对应各服务 configs/config.yaml 的顶层结构。
+// Bootstrap 是配置文件的根消息，对应 configs/config.yaml 的顶层结构。
 message Bootstrap {
   Server server = 1;
   Data data = 2;
   Auth auth = 3;
   Observability observability = 4;
   File file = 5;
-  Upstream upstream = 6;
-  Cache cache = 7;
-  Messaging messaging = 8;
-  ServiceAuth service_auth = 9;
-}
 
-// Upstream contains static development endpoints for synchronous service
-// calls. Kubernetes service DNS or a service mesh supplies these addresses in
-// production; the application does not embed a registry SDK.
-message Upstream {
-  string authorization_endpoint = 1;
-  string product_endpoint = 2;
-  google.protobuf.Duration timeout = 3;
-  int32 max_attempts = 4;
-  google.protobuf.Duration retry_backoff = 5;
-  // Resource services periodically replace their local authorization snapshot.
-  google.protobuf.Duration authorization_refresh_interval = 6;
+  // 6~9 曾是 upstream / cache / messaging / service_auth，
+  // 拆分为单体后一并移除，编号不再复用。
+  reserved 6, 7, 8, 9;
 }
 
 // File configures the development/local blob adapter. The module keeps a
@@ -58,39 +45,7 @@ message File {
   S3 s3 = 4;
 }
 
-message Cache {
-  message Redis {
-    bool enabled = 1;
-    string address = 2;
-    string username = 3;
-    string password = 4;
-    int32 database = 5;
-    google.protobuf.Duration ttl = 6;
-  }
-  Redis redis = 1;
-}
-
-message Messaging {
-  message RabbitMQ {
-    bool enabled = 1;
-    string url = 2;
-    string exchange = 3;
-    string order_created_queue = 4;
-    google.protobuf.Duration reconnect_backoff = 5;
-    int32 consumer_max_attempts = 6;
-    google.protobuf.Duration consumer_retry_backoff = 7;
-  }
-  RabbitMQ rabbitmq = 1;
-}
-
-// ServiceAuth 是调用方通过 Keycloak client_credentials 获取短期服务令牌的配置。
-message ServiceAuth {
-  string token_url = 1;
-  string client_id = 2;
-  string client_secret = 3;
-}
-
-// Server 是 HTTP/gRPC 监听参数。
+// Server 是 HTTP 监听参数。
 message Server {
   message HTTP {
     // 网络类型，如 tcp。留空即可——不设置时用 Kratos 的默认值，
@@ -101,16 +56,9 @@ message Server {
     // 单次请求的处理超时，本项目默认 5s
     google.protobuf.Duration timeout = 3;
   }
-  message GRPC {
-    // 网络类型，如 tcp。留空即可，同 HTTP.network
-    string network = 1;
-    // 监听地址，如 0.0.0.0:9000
-    string addr = 2;
-    // 单次请求的处理超时，本项目默认 5s
-    google.protobuf.Duration timeout = 3;
-  }
   HTTP http = 1;
-  GRPC grpc = 2;
+  // 2 曾是 grpc；单体只对外暴露 HTTP。
+  reserved 2;
 }
 
 message Data {
@@ -131,15 +79,18 @@ message Data {
   reserved 2;
 }
 
-// system 作为 OAuth2 资源服务器（面向 Keycloak）的配置
+// 本进程作为 OAuth2 / OIDC 资源服务器的配置。
+//
+// 只验签、不建用户表：用户与角色由外部 IdP 管理。默认值贴合 Keycloak，
+// 但 jwks_path 与两个 claim 路径都可覆盖，因此换成 Logto / Auth0 / Authing
+// 只需要改配置，不必改代码。
 message Auth {
-  // Keycloak realm 的 issuer，形如
-  // https://keycloak.example.com/realms/eagle
+  // IdP 的 issuer，形如 https://idp.example.com/realms/eagle。
   // 必须与 token 里的 iss 完全一致，含协议、端口和是否带尾斜杠
   string issuer = 1;
 
-  // 本服务在 Keycloak 中的 client id。
-  // 用于从 token 的 resource_access 里取出本服务的 client 角色
+  // 本服务在 IdP 中的 client id。
+  // 用于从 token 的 client 角色 claim 里取出本服务的角色
   string client_id = 2;
 
   // 期望的 aud。Keycloak 默认把 aud 设成 "account"，
@@ -148,12 +99,11 @@ message Auth {
 
   reserved 4;
 
-  // 在 resource_access.<client_id>.roles 中拥有该 client 角色的主体
+  // 在 <client_roles_claim>.<client_id>.roles 中拥有该角色的主体
   // 跳过 Casbin 判定；同名 realm 角色不会触发短路。
   string super_admin_role = 5;
 
-  // 拉取 JWKS 的地址，留空则按 Keycloak 约定推导为
-  // <issuer>/protocol/openid-connect/certs
+  // 拉取 JWKS 的地址，留空则拼接为 <issuer><jwks_path>。
   //
   // 之所以能与 issuer 分开配：容器与 K8s 里，token 里的公开 issuer
   // （https://sso.example.com/realms/eagle）几乎从不等于本服务该走的
@@ -162,9 +112,22 @@ message Auth {
   // 要么放弃 iss 校验。
   string jwks_url = 6;
 
-  // 允许调用 INTERNAL RPC 的 Keycloak azp。必须同时是 client_credentials
-  // 服务令牌，普通用户 token 即使 azp 同名也不会被放行。
-  repeated string internal_client_ids = 7;
+  // 7 曾是 internal_client_ids（服务身份白名单），随 INTERNAL 访问级别一起移除。
+  reserved 7;
+
+  // JWKS 相对 issuer 的路径，留空取 Keycloak 约定
+  // /protocol/openid-connect/certs。Auth0/Logto 一般是
+  // /.well-known/jwks.json。jwks_url 非空时本字段被忽略。
+  string jwks_path = 8;
+
+  // realm（全局）角色所在的 claim 路径，点号分隔，留空取 Keycloak 约定
+  // realm_access.roles。指向一个字符串数组。
+  string realm_roles_claim = 9;
+
+  // client（按 client 分组）角色所在的 claim 路径，点号分隔，留空取
+  // Keycloak 约定 resource_access。指向一个
+  // {"<client-id>": {"roles": [...]}} 结构。
+  string client_roles_claim = 10;
 }
 
 message Observability {

@@ -4,7 +4,7 @@
 // 从方法描述符读出并交给 Casbin 判定，业务 handler 里不出现任何鉴权代码。
 //
 // 职责边界：
-//   - Keycloak 负责「你是谁、你有哪些角色」，角色随 token 下发
+//   - IdP 负责「你是谁、你有哪些角色」，角色随 token 下发
 //   - Casbin 负责「这个角色能不能调这个接口」，策略存在本库
 //
 // 判定顺序：
@@ -17,7 +17,6 @@ package authz
 
 import (
 	"context"
-	"slices"
 
 	"github.com/go-kratos/kratos/v3/errors"
 	"github.com/go-kratos/kratos/v3/middleware"
@@ -34,14 +33,12 @@ const (
 )
 
 type options struct {
-	authorizer        Authorizer
-	superAdminRole    string
-	internalClientIDs []string
+	authorizer     Authorizer
+	superAdminRole string
 }
 
-// Authorizer is the narrow policy decision port used by the middleware. The
-// admin service supplies its database-backed Casbin enforcer; resource services
-// supply a local enforcer refreshed from versioned access-service snapshots.
+// Authorizer 是中间件依赖的策略判定端口，由组合根注入
+// 数据库支撑的 Casbin enforcer。
 type Authorizer interface {
 	AllowContext(context.Context, []string, string) (bool, error)
 }
@@ -55,7 +52,7 @@ func WithEnforcer(e *Enforcer) Option {
 	return WithAuthorizer(e)
 }
 
-// WithAuthorizer injects either a local or remote policy decision point.
+// WithAuthorizer 注入策略判定点。
 func WithAuthorizer(a Authorizer) Option {
 	return func(o *options) { o.authorizer = a }
 }
@@ -65,14 +62,9 @@ func WithSuperAdminRole(role string) Option {
 	return func(o *options) { o.superAdminRole = role }
 }
 
-// WithInternalClientIDs sets the Keycloak clients allowed to invoke INTERNAL RPCs.
-func WithInternalClientIDs(clientIDs ...string) Option {
-	return func(o *options) { o.internalClientIDs = slices.Clone(clientIDs) }
-}
-
 // Server 返回鉴权中间件。
 //
-// 必须挂在认证中间件之后——后者负责验签 Keycloak token 并把
+// 必须挂在认证中间件之后——后者负责验签 token 并把
 // identity.Principal 放进 context，这里只做授权判定。
 func Server(opts ...Option) middleware.Middleware {
 	o := &options{superAdminRole: "admin"}
@@ -105,12 +97,6 @@ func Server(opts ...Option) middleware.Middleware {
 			if policy.Access == annotationsv1.AccessLevel_ACCESS_LEVEL_AUTHENTICATED {
 				return handler(ctx, req)
 			}
-			if policy.Access == annotationsv1.AccessLevel_ACCESS_LEVEL_INTERNAL {
-				if !p.IsService || !slices.Contains(o.internalClientIDs, p.ClientID) {
-					return nil, errors.Forbidden(ReasonForbidden, "仅允许受信任的服务账号调用")
-				}
-				return handler(ctx, req)
-			}
 			if policy.Access != annotationsv1.AccessLevel_ACCESS_LEVEL_PERMISSION_REQUIRED || policy.Perm == "" {
 				return nil, errors.Forbidden(ReasonForbidden, "RPC 访问策略配置错误")
 			}
@@ -135,9 +121,7 @@ func (o *options) check(ctx context.Context, p *identity.Principal, perm string)
 		return errors.Forbidden(ReasonForbidden, "鉴权未正确装配：缺少判定器")
 	}
 
-	// 服务账号与终端用户走同一套判定：两者的角色都由 Keycloak 下发，
-	// 在 Casbin 眼里没有区别。为服务账号单开一条 scope 判定分支
-	// 会形成第二套授权语义，日后必然出现两边配置不一致。
+	// 判定基于 IdP 下发的角色，不区分令牌来源。
 	allowed, err := o.authorizer.AllowContext(ctx, p.Roles, perm)
 	if err != nil {
 		// 判定失败时拒绝。放行会让策略存储抖动直接变成越权。

@@ -10,13 +10,13 @@ plugins:
     out: api
     opt: paths=source_relative
 
-  - local: ["go", "-C", "tools", "tool", "protoc-gen-go-grpc"]
-    out: api
-    opt: paths=source_relative
-
   - local: ["go", "-C", "tools", "tool", "protoc-gen-go-http"]
     out: api
     opt: paths=source_relative
+
+  # 刻意不生成 gRPC 桩：本项目是单进程单体，只对外暴露 HTTP。
+  # proto 仍是契约源（权限注解、字段校验、OpenAPI 都从这里来），
+  # 但没有跨进程调用方，生成 *_grpc.pb.go 只会多出一份无人 import 的代码。
 
   # 刻意不启用 protoc-gen-go-errors：它要求 proto 里 import kratos 的
   # errors/errors.proto 并给枚举挂 (errors.code) 注解，多引一层依赖。
