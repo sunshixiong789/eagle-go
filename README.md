@@ -1,10 +1,10 @@
 # eagle-go
 
 基于 Kratos 的 Go 单体后端脚手架：一个进程、一个数据库、一个镜像，内置 OIDC 认证、
-集中式 RBAC、对象存储和完整可观测性。适合作为新项目的起点，而不是一套需要先拆分才能用的微服务底座。
+集中式 RBAC 和结构化日志 / 指标 / trace 埋点。适合作为新项目的起点，而不是一套需要先拆分才能用的微服务底座。
 
 技术栈：Go 1.27、Kratos v3、Google Wire、Protobuf、buf、Ent、PostgreSQL 17、Casbin、
-OIDC（默认 Keycloak，可替换）、S3、OpenTelemetry、Prometheus、Loki、Tempo、Grafana、Docker Compose。
+OIDC（默认 Keycloak，可替换）、OpenTelemetry、Docker Compose。
 
 ## 项目现状
 
@@ -15,12 +15,10 @@ OIDC（默认 Keycloak，可替换）、S3、OpenTelemetry、Prometheus、Loki�
 |---|---|---|
 | `access` | 权限码目录、导航节点、角色权限绑定（Casbin） | `service → application → domain ← infrastructure` |
 | `dictionary` | 字典 CRUD，作为简单业务的样板 | `service → domain ← infrastructure` |
-| `file` | 上传编排、对象存储端口、过期清理 worker | `service → application → domain ← infrastructure` |
 
 ```mermaid
 flowchart TB
     client["Web / App / API Client"]
-    gateway["入口层<br/>开发：nginx｜生产：LB / 网关"]
 
     subgraph eagle ["eagle（单进程）"]
         direction TB
@@ -29,28 +27,20 @@ flowchart TB
             direction LR
             access["access<br/>权限 · 角色绑定"]
             dictionary["dictionary<br/>字典"]
-            file["file<br/>文件"]
         end
-        worker["清理 worker<br/>回收过期文件"]
     end
 
     idp["OIDC IdP<br/>Keycloak / Logto / Auth0 ..."]
     db[(PostgreSQL)]
-    object_store[(S3 / MinIO)]
 
-    client -->|HTTP| gateway
-    gateway -->|HTTP| middleware
+    client -->|HTTP| middleware
     middleware --> modules
     idp -.->|JWKS 验签| middleware
     modules --> db
-    file --> object_store
-    worker --> db
-    worker --> object_store
 ```
 
 进程只做本地 JWT 验签，不保存用户；用户、角色和登录方式都归 IdP。模块边界、数据所有权和
-分层规则见[架构说明](docs/architecture.md)；启动与调试见[开发环境部署](docs/development-deployment.md)；
-镜像、迁移顺序和上线检查见[生产环境部署](docs/deployment.md)。
+分层规则见[架构说明](docs/architecture.md)；启动与调试见[开发环境部署](docs/development-deployment.md)。
 
 ## 目录结构
 
@@ -62,14 +52,13 @@ eagle-go/
 ├── internal/
 │   ├── access/             # 权限与角色绑定
 │   ├── dictionary/         # 字典
-│   ├── file/               # 文件
 │   └── platform/database/  # Ent Client 与 schema
 ├── migrations/             # goose SQL，生产不使用 Ent 自动迁移
 ├── pkg/                    # 无业务语义的技术能力，不得 import internal/
 ├── tests/                  # 架构测试、端到端测试和测试工具
 ├── tools/                  # 独立 go.mod，锁定生成工具链与迁移/健康检查程序
-├── deploy/                 # Compose、网关、Keycloak、可观测性
-├── docs/                   # 架构与部署专题文档
+├── deploy/                 # 本地 Compose 与 Keycloak realm
+├── docs/                   # 架构与开发环境文档
 ├── Dockerfile              # 单一构建目标
 └── Makefile                # 统一开发入口
 ```
@@ -91,7 +80,7 @@ service -> application -> domain <- infrastructure
 | `service` | 实现生成的 Protobuf Service，转换协议对象并传递当前主体 |
 | `application` | 可选；编排用例，只依赖本模块 `domain` |
 | `domain` | 模型、不变量、领域错误和仓储/存储端口，不依赖框架 |
-| `infrastructure` | 实现数据库和对象存储端口 |
+| `infrastructure` | 实现数据库和外部服务端口 |
 
 只有真实不变量才需要聚合根。权限树适合领域模型；字典这类直接 CRUD 保持简单即可。
 列表 API 统一使用 0-based `page`（`page=0` 为第一页），默认每页 20 条；领域查询的 offset
@@ -133,16 +122,14 @@ make up
 docker compose -f deploy/docker-compose.yml ps --all
 ```
 
-Compose 会构建镜像、执行一次性数据库迁移，再启动应用和 nginx 开发网关。
+Compose 会构建镜像、执行一次性数据库迁移，再启动应用。
 `eagle-migrate` 显示 `Exited (0)` 是一次性任务成功，不是重复服务或异常退出。主要入口：
 
 | 入口 | 地址 | 本地凭据 |
 |---|---|---|
-| nginx 开发网关 | `http://127.0.0.1:8000` | - |
-| 应用 HTTP（绕过网关） | `http://127.0.0.1:8001` | - |
+| 应用 HTTP | `http://127.0.0.1:8000` | - |
 | 应用 metrics / health | `http://127.0.0.1:9101` | - |
 | Keycloak | `http://127.0.0.1:8080` | 管理员 `admin/admin` |
-| MinIO Console | `http://127.0.0.1:9005` | `eagle/eagle-local-secret` |
 
 确认服务就绪：
 
@@ -199,7 +186,7 @@ docker compose -f deploy/docker-compose.yml exec -T keycloak /opt/keycloak/bin/k
 docker compose -f deploy/docker-compose.yml exec -T keycloak /opt/keycloak/bin/kcadm.sh add-roles -r eagle --uusername alice --cclientid eagle-api --rolename admin
 ```
 
-取得 token 并通过网关调用受保护接口。这里保留为一个原子命令，确保从 IDEA 运行代码块时
+取得 token 并调用受保护接口。这里保留为一个原子命令，确保从 IDEA 运行代码块时
 shell 变量不会在两个进程之间丢失：
 
 ```bash
@@ -346,7 +333,7 @@ rpc CreatePermission(CreatePermissionRequest) returns (CreatePermissionResponse)
 curl -X PUT \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"permission_codes":["system:dict:query","system:dict:list"]}' \
+  -d '{"permission_codes":["system:dict:list"]}' \
   http://127.0.0.1:8000/v1/system/role-bindings/realm:user
 ```
 
@@ -373,7 +360,7 @@ subject := identity.Subject(ctx)
 3. 在 `migrations/` 添加 goose SQL；生产不使用 Ent 自动迁移。
 4. 在 `api/` 定义 RPC、校验规则、HTTP 映射和访问级别，然后执行 `make api`。
 5. 在 `internal/<module>/domain` 放模型、规则和仓储/存储接口。
-6. 仅在存在多端口、聚合变更、事务、幂等、补偿或多入口复用时在 `application` 编排用例；纯 CRUD 由 `service` 依赖 domain 端口。`infrastructure` 实现数据库或对象存储端口，`service` 只转换协议对象。
+6. 仅在存在多端口、聚合变更、事务、幂等、补偿或多入口复用时在 `application` 编排用例；纯 CRUD 由 `service` 依赖 domain 端口。`infrastructure` 实现数据库或外部服务端口，`service` 只转换协议对象。
 7. 在 `cmd/eagle` 的 `providerSet` 装配新模块，然后执行 `make wire`。禁止手改 `wire_gen.go`。
 8. 先测领域不变量，再测真实基础设施与 HTTP 链路。
 
@@ -414,8 +401,6 @@ IdP 可以替换。JWKS 路径和两个角色 claim 路径都是配置项，换�
 | `EAGLE_AUTH_JWKS_URL` | issuer 外网地址与服务访问地址不同时指定 JWKS 内网地址 |
 | `EAGLE_AUTH_JWKS_PATH` | JWKS 相对路径，留空取 Keycloak 约定 |
 | `EAGLE_AUTH_REALM_ROLES_CLAIM` / `EAGLE_AUTH_CLIENT_ROLES_CLAIM` | 角色 claim 路径，换 IdP 时覆盖 |
-| `EAGLE_FILE_PROVIDER` | `local` 或 `s3` |
-| `EAGLE_FILE_S3_ENDPOINT` / `BUCKET` / `ACCESS_KEY` / `SECRET_KEY` | S3/OSS/MinIO 连接配置 |
 | `EAGLE_OBSERVABILITY_OTLP_ENDPOINT` | trace 上报地址，留空则不上报 |
 
 所有 `google.protobuf.Duration` 只接受秒格式，例如 `3600s`、`0.5s`。`1h`、`30m`、`500ms` 会导致配置解析失败。
@@ -440,26 +425,21 @@ make image VERSION=v1.2.0 REGISTRY=registry.example.com/eagle
 make push-image VERSION=v1.2.0 REGISTRY=registry.example.com/eagle
 ```
 
-仓库只提供 Docker Compose 作为部署资产。生产按「迁移任务 → 服务滚动 → 指标观察」推进，
+仓库只提供本地 Docker Compose 作为部署资产。生产按「迁移任务 → 服务滚动 → 观察」推进，
 应用容器启动时不自动迁移；编排方式（Kubernetes、Nomad 或其它）由环境仓库自行维护。
-发布契约、平台前置条件和上线检查见[生产环境部署](docs/deployment.md)。
+
+多副本部署时有两点要知道：权限策略每 5 秒按版本号对账，改完角色绑定最坏要等一个周期才在
+所有副本生效；进程启动时校验 proto 声明的权限码与数据库 catalog 一致，不一致直接 fail
+closed，所以**必须先跑迁移再发服务**。
 
 ## 可观测性
 
-应用输出结构化日志，trace 通过 OTLP 上报，指标和健康检查使用独立端口。启动 Prometheus、
-Alertmanager、Tempo、Loki、Alloy 和 Grafana：
-
-```bash
-docker compose -f deploy/docker-compose.yml --profile obs up -d
-```
-
-Grafana 位于 `http://127.0.0.1:3000`，Prometheus 位于 `http://127.0.0.1:9090`，Alertmanager
-位于 `http://127.0.0.1:9093`。Alloy 收集 Compose 容器 stdout 到 Loki；Grafana 已配置
-Prometheus、Loki 和 Tempo 数据源及日志到 trace 的关联。
-
-默认 SLO 是 30 天 99.9% 可用性，规则提供抓取目标不可达、错误预算快慢两档消耗和 p99 超过
-2 秒四条告警。示例 Alertmanager 不发送外部通知，生产必须接入实际值班渠道。生产还应按容量将
-`trace_sample_ratio` 从开发期的 `1.0` 调低。
+应用输出结构化 JSON 日志到 stdout；宿主机的指标和健康检查默认在独立的 `9101`
+端口上（容器内为 `9100`），不经过鉴权：
+`/metrics` 供 Prometheus 抓取，`/livez` 只看进程存活，`/readyz` 聚合初始化状态、数据库和
+策略加载检查。trace 通过 OTLP gRPC 上报，默认关闭；设置
+`EAGLE_OBSERVABILITY_OTLP_ENDPOINT=host:4317` 即可接入任意 collector，collector 不可达只会在
+后台重试，不影响启动。生产应按容量把 `trace_sample_ratio` 从开发期的 `1.0` 调低。
 
 ## 常见问题
 
@@ -496,9 +476,7 @@ race detector 需要 C 编译器。可在 WSL/Linux 中运行，或安装可用�
 
 - [架构说明](docs/architecture.md)：模块边界、分层、数据所有权和共享代码边界
 - [开发环境部署](docs/development-deployment.md)：Compose、宿主机调试、IDEA 入口和本地联调
-- [生产环境部署](docs/deployment.md)：不可变镜像、平台前置条件、迁移顺序和上线检查
-- [生产运行手册](docs/operations.md)：告警、备份恢复、回滚和故障处置
-- [部署文件索引](deploy/README.md)：Compose、网关、Keycloak 和可观测性配置的位置
+- [部署文件索引](deploy/README.md)：Compose 与 Keycloak 配置的位置
 - [Keycloak 配置说明](deploy/keycloak/README.md)：realm、安全设置、客户端设计和换 IdP 对照
 - [AI 编码约束](AGENTS.md)：常驻硬约束；细则在 [`.agents/rules/`](.agents/rules/)
 

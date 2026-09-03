@@ -3,16 +3,12 @@ package db_test
 import (
 	"database/sql"
 	"flag"
-	"fmt"
-	"io"
-	"net"
-	"os"
-	"path/filepath"
 	"testing"
 
-	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 	_ "github.com/lib/pq"
 	"github.com/pressly/goose/v3"
+
+	"github.com/eagle-go/eagle/tests/testkit"
 )
 
 // 迁移的 up 能跑通不代表 down 也能。回滚脚本平时没人执行，
@@ -23,34 +19,13 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	}
 	flag.Parse()
 
-	home, err := os.UserHomeDir()
+	pg, err := testkit.StartPostgres("migrations", "eagle_migrate_test")
 	if err != nil {
-		t.Fatalf("定位用户目录: %v", err)
-	}
-	// 独立运行目录，避免与其他测试包并行时争抢解压目录
-	runtimeDir := filepath.Join(home, ".embedded-postgres-go", "eagle-migrations")
-	port := availablePort(t)
-
-	pg := embeddedpostgres.NewDatabase(
-		embeddedpostgres.DefaultConfig().
-			Username("eagle").
-			Password("eagle").
-			Database("eagle_migrate_test").
-			Port(port).
-			RuntimePath(runtimeDir).
-			DataPath(t.TempDir()).
-			Logger(io.Discard),
-	)
-	if err := pg.Start(); err != nil {
 		t.Fatalf("启动 embedded postgres: %v", err)
 	}
-	t.Cleanup(func() { _ = pg.Stop() })
+	t.Cleanup(func() { _ = pg.Close() })
 
-	dsn := fmt.Sprintf(
-		"postgres://eagle:eagle@127.0.0.1:%d/eagle_migrate_test?sslmode=disable",
-		port)
-
-	sqlDB, err := sql.Open("postgres", dsn)
+	sqlDB, err := sql.Open("postgres", pg.DSN)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -61,27 +36,8 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	}
 	goose.SetLogger(goose.NopLogger())
 
-	dir, err := filepath.Abs(filepath.Join("..", "..", "app", "admin", "migrations"))
-	if err != nil {
-		t.Fatalf("resolve dir: %v", err)
-	}
-
-	if err := goose.Up(sqlDB, dir); err != nil {
-		t.Fatalf("首次 up: %v", err)
-	}
+	dir := testkit.MigrationsDir()
 	assertSeedData(t, sqlDB)
-
-	// 单独往返角色命名空间迁移，模拟已有数据库从裸角色升级。
-	if err := goose.DownTo(sqlDB, dir, 8); err != nil {
-		t.Fatalf("回退角色命名空间迁移: %v", err)
-	}
-	assertPolicyRole(t, sqlDB, "admin", true)
-	assertPolicyRole(t, sqlDB, "realm:admin", false)
-	if err := goose.Up(sqlDB, dir); err != nil {
-		t.Fatalf("重新应用角色命名空间迁移: %v", err)
-	}
-	assertPolicyRole(t, sqlDB, "admin", false)
-	assertPolicyRole(t, sqlDB, "realm:admin", true)
 
 	if err := goose.DownTo(sqlDB, dir, 0); err != nil {
 		t.Fatalf("down-to 0: %v", err)
@@ -95,53 +51,8 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	}
 	assertSeedData(t, sqlDB)
 	if err := goose.DownTo(sqlDB, dir, 0); err != nil {
-		t.Fatalf("清理 admin 迁移: %v", err)
+		t.Fatalf("最终 down-to 0: %v", err)
 	}
-
-	for _, service := range []string{"product", "order"} {
-		serviceDir, err := filepath.Abs(filepath.Join("..", "..", "app", service, "migrations"))
-		if err != nil {
-			t.Fatalf("resolve %s dir: %v", service, err)
-		}
-		if err := goose.Up(sqlDB, serviceDir); err != nil {
-			t.Fatalf("%s up: %v", service, err)
-		}
-		if err := goose.DownTo(sqlDB, serviceDir, 0); err != nil {
-			t.Fatalf("%s down: %v", service, err)
-		}
-		if err := goose.Up(sqlDB, serviceDir); err != nil {
-			t.Fatalf("%s second up: %v", service, err)
-		}
-		if err := goose.DownTo(sqlDB, serviceDir, 0); err != nil {
-			t.Fatalf("%s final down: %v", service, err)
-		}
-	}
-}
-
-func assertPolicyRole(t *testing.T, db *sql.DB, role string, want bool) {
-	t.Helper()
-	var exists bool
-	if err := db.QueryRow(
-		`SELECT EXISTS(SELECT 1 FROM casbin_rule WHERE ptype = 'p' AND v0 = $1)`, role,
-	).Scan(&exists); err != nil {
-		t.Fatalf("查询角色策略 %s: %v", role, err)
-	}
-	if exists != want {
-		t.Fatalf("角色策略 %q exists=%v, want %v", role, exists, want)
-	}
-}
-
-func availablePort(t *testing.T) uint32 {
-	t.Helper()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("分配 PostgreSQL 测试端口: %v", err)
-	}
-	port := listener.Addr().(*net.TCPAddr).Port
-	if err := listener.Close(); err != nil {
-		t.Fatalf("释放 PostgreSQL 测试端口: %v", err)
-	}
-	return uint32(port)
 }
 
 // 种子数据是权限体系的基线，缺了会导致鉴权全线失效。
@@ -168,8 +79,7 @@ func assertSeedData(t *testing.T, db *sql.DB) {
 	// 权限码是 proto 注解里引用的值，对不上就是全线 403
 	for _, code := range []string{
 		"system:permission:add", "system:permission:edit",
-		"system:role:assign", "system:dict:query",
-		"product:product:add", "product:product:edit", "product:product:remove",
+		"system:role:assign", "system:dict:list",
 	} {
 		var exists bool
 		err := db.QueryRow(`SELECT EXISTS(SELECT 1 FROM permission_definition WHERE code = $1)`, code).Scan(&exists)
@@ -219,24 +129,6 @@ func assertSeedData(t *testing.T, db *sql.DB) {
 		t.Error("user 角色没有任何权限策略")
 	}
 
-	var outboxExists bool
-	err = db.QueryRow(`SELECT to_regclass('authz_policy_outbox') IS NOT NULL`).Scan(&outboxExists)
-	if err != nil {
-		t.Fatalf("检查 outbox 表: %v", err)
-	}
-	if outboxExists {
-		t.Error("authz_policy_outbox 应为遗留表并已被后续迁移删除")
-	}
-
-	var profileExists bool
-	err = db.QueryRow(`SELECT to_regclass('sys_user_profile') IS NOT NULL`).Scan(&profileExists)
-	if err != nil {
-		t.Fatalf("检查 user_profile 表: %v", err)
-	}
-	if profileExists {
-		t.Error("sys_user_profile 没有调用方，应为后续迁移删除")
-	}
-
 	// 字典项必须挂在已存在的字典类型下（外键之外再确认一次数据自洽）
 	var orphanDictData int
 	err = db.QueryRow(`
@@ -268,8 +160,9 @@ func assertTablesDropped(t *testing.T, db *sql.DB) {
 	t.Helper()
 
 	for _, table := range []string{
-		"sys_user_profile", "navigation_node", "permission_definition",
+		"navigation_node", "permission_definition", "permission_tree_state",
 		"sys_dict_type", "sys_dict_data", "casbin_rule",
+		"authz_policy_state", "authz_policy_audit",
 	} {
 		var exists bool
 		err := db.QueryRow(`SELECT to_regclass($1) IS NOT NULL`, table).Scan(&exists)

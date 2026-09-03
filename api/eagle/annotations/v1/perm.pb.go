@@ -105,7 +105,7 @@ var file_eagle_annotations_v1_perm_proto_extTypes = []protoimpl.ExtensionInfo{
 
 // Extension fields to descriptorpb.MethodOptions.
 var (
-	// 调用该方法所需的权限码，例如 "system:user:add"。
+	// 调用该方法所需的权限码，例如 "system:dict:add"。
 	// 留空表示只校验登录态、不校验具体权限。
 	//
 	// optional string perm = 50001;

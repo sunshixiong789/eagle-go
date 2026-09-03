@@ -8,7 +8,6 @@ import (
 	"github.com/eagle-go/eagle/internal/platform/database/ent/casbinrule"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/dictdata"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/dicttype"
-	"github.com/eagle-go/eagle/internal/platform/database/ent/file"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/permission"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/permissiondefinition"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/permissiontreestate"
@@ -179,54 +178,6 @@ func init() {
 	dicttype.DefaultUpdatedAt = dicttypeDescUpdatedAt.Default.(func() time.Time)
 	// dicttype.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	dicttype.UpdateDefaultUpdatedAt = dicttypeDescUpdatedAt.UpdateDefault.(func() time.Time)
-	fileFields := schema.File{}.Fields()
-	_ = fileFields
-	// fileDescOwnerSubject is the schema descriptor for owner_subject field.
-	fileDescOwnerSubject := fileFields[1].Descriptor()
-	// file.OwnerSubjectValidator is a validator for the "owner_subject" field. It is called by the builders before save.
-	file.OwnerSubjectValidator = fileDescOwnerSubject.Validators[0].(func(string) error)
-	// fileDescName is the schema descriptor for name field.
-	fileDescName := fileFields[2].Descriptor()
-	// file.NameValidator is a validator for the "name" field. It is called by the builders before save.
-	file.NameValidator = fileDescName.Validators[0].(func(string) error)
-	// fileDescStorageKey is the schema descriptor for storage_key field.
-	fileDescStorageKey := fileFields[3].Descriptor()
-	// file.StorageKeyValidator is a validator for the "storage_key" field. It is called by the builders before save.
-	file.StorageKeyValidator = fileDescStorageKey.Validators[0].(func(string) error)
-	// fileDescContentType is the schema descriptor for content_type field.
-	fileDescContentType := fileFields[4].Descriptor()
-	// file.DefaultContentType holds the default value on creation for the content_type field.
-	file.DefaultContentType = fileDescContentType.Default.(string)
-	// file.ContentTypeValidator is a validator for the "content_type" field. It is called by the builders before save.
-	file.ContentTypeValidator = fileDescContentType.Validators[0].(func(string) error)
-	// fileDescSize is the schema descriptor for size field.
-	fileDescSize := fileFields[5].Descriptor()
-	// file.SizeValidator is a validator for the "size" field. It is called by the builders before save.
-	file.SizeValidator = fileDescSize.Validators[0].(func(int64) error)
-	// fileDescSha256 is the schema descriptor for sha256 field.
-	fileDescSha256 := fileFields[6].Descriptor()
-	// file.Sha256Validator is a validator for the "sha256" field. It is called by the builders before save.
-	file.Sha256Validator = fileDescSha256.Validators[0].(func(string) error)
-	// fileDescState is the schema descriptor for state field.
-	fileDescState := fileFields[7].Descriptor()
-	// file.DefaultState holds the default value on creation for the state field.
-	file.DefaultState = fileDescState.Default.(string)
-	// file.StateValidator is a validator for the "state" field. It is called by the builders before save.
-	file.StateValidator = fileDescState.Validators[0].(func(string) error)
-	// fileDescCreatedAt is the schema descriptor for created_at field.
-	fileDescCreatedAt := fileFields[8].Descriptor()
-	// file.DefaultCreatedAt holds the default value on creation for the created_at field.
-	file.DefaultCreatedAt = fileDescCreatedAt.Default.(func() time.Time)
-	// fileDescUpdatedAt is the schema descriptor for updated_at field.
-	fileDescUpdatedAt := fileFields[9].Descriptor()
-	// file.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	file.DefaultUpdatedAt = fileDescUpdatedAt.Default.(func() time.Time)
-	// file.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	file.UpdateDefaultUpdatedAt = fileDescUpdatedAt.UpdateDefault.(func() time.Time)
-	// fileDescID is the schema descriptor for id field.
-	fileDescID := fileFields[0].Descriptor()
-	// file.IDValidator is a validator for the "id" field. It is called by the builders before save.
-	file.IDValidator = fileDescID.Validators[0].(func(string) error)
 	permissionFields := schema.Permission{}.Fields()
 	_ = permissionFields
 	// permissionDescName is the schema descriptor for name field.

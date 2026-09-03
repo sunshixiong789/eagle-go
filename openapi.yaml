@@ -211,105 +211,6 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/eagle.dictionary.v1.DeleteDictTypeResponse'
-    /v1/system/files:
-        get:
-            tags:
-                - FileService
-            operationId: FileService_ListMyFiles
-            parameters:
-                - name: page
-                  in: query
-                  schema:
-                    type: integer
-                    format: int32
-                - name: pageSize
-                  in: query
-                  schema:
-                    type: integer
-                    format: int32
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/eagle.file.v1.ListMyFilesResponse'
-    /v1/system/files/{id}:
-        get:
-            tags:
-                - FileService
-            operationId: FileService_GetFile
-            parameters:
-                - name: id
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/eagle.file.v1.GetFileResponse'
-        delete:
-            tags:
-                - FileService
-            operationId: FileService_DeleteFile
-            parameters:
-                - name: id
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/eagle.file.v1.DeleteFileResponse'
-    /v1/system/files/{id}/content:
-        get:
-            tags:
-                - FileService
-            operationId: FileService_DownloadFile
-            parameters:
-                - name: id
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/eagle.file.v1.DownloadFileResponse'
-    /v1/system/files:upload:
-        post:
-            tags:
-                - FileService
-            operationId: FileService_UploadFile
-            parameters:
-                - name: filename
-                  in: query
-                  schema:
-                    type: string
-            requestBody:
-                content:
-                    application/json:
-                        schema:
-                            type: string
-                required: true
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/eagle.file.v1.UploadFileResponse'
     /v1/system/permissions:
         get:
             tags:
@@ -683,7 +584,7 @@ components:
                     type: string
                 code:
                     type: string
-                    description: 权限码，如 system:user:add。目录/菜单可为空，按钮必填
+                    description: 权限码，如 system:dict:add。目录/菜单可为空，按钮必填
                 type:
                     type: integer
                     description: 1=目录 2=菜单 3=按钮
@@ -949,58 +850,11 @@ components:
             properties:
                 dictType:
                     $ref: '#/components/schemas/eagle.dictionary.v1.DictType'
-        eagle.file.v1.DeleteFileResponse:
-            type: object
-            properties: {}
-        eagle.file.v1.DownloadFileResponse:
-            type: object
-            properties:
-                content:
-                    type: string
-        eagle.file.v1.File:
-            type: object
-            properties:
-                id:
-                    type: string
-                name:
-                    type: string
-                contentType:
-                    type: string
-                size:
-                    type: string
-                sha256:
-                    type: string
-                createdAt:
-                    type: string
-                    format: date-time
-        eagle.file.v1.GetFileResponse:
-            type: object
-            properties:
-                file:
-                    $ref: '#/components/schemas/eagle.file.v1.File'
-        eagle.file.v1.ListMyFilesResponse:
-            type: object
-            properties:
-                files:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/eagle.file.v1.File'
-                total:
-                    type: string
-        eagle.file.v1.UploadFileResponse:
-            type: object
-            properties:
-                file:
-                    $ref: '#/components/schemas/eagle.file.v1.File'
 tags:
     - name: DictService
       description: |-
         DictService 管理数据字典。字典类型（sys_common_status）下挂若干字典项，
          前端下拉框、状态标签统一从这里取，避免枚举值散落在各处代码里。
-    - name: FileService
-      description: |-
-        FileService provides the small-file workflow used by the foundation. HTTP
-         uploads and downloads use raw bodies rather than JSON/base64 encoding.
     - name: PermissionService
     - name: RoleBindingService
       description: |-

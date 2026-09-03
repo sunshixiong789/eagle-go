@@ -5,10 +5,8 @@ import (
 
 	accessv1 "github.com/eagle-go/eagle/api/eagle/access/v1"
 	dictionaryv1 "github.com/eagle-go/eagle/api/eagle/dictionary/v1"
-	filev1 "github.com/eagle-go/eagle/api/eagle/file/v1"
 	accessdomain "github.com/eagle-go/eagle/internal/access/domain"
 	dictionarydomain "github.com/eagle-go/eagle/internal/dictionary/domain"
-	filedomain "github.com/eagle-go/eagle/internal/file/domain"
 	"github.com/eagle-go/eagle/pkg/platform/config"
 	platformruntime "github.com/eagle-go/eagle/pkg/platform/runtime"
 	"github.com/eagle-go/eagle/pkg/platform/server"
@@ -45,9 +43,5 @@ func errorMappings() []server.ErrorMappingRule {
 		server.Conflict(dictionarydomain.ErrDictTypeDuplicated, dictionaryv1.ErrorReason_ERROR_REASON_DICT_TYPE_DUPLICATED),
 		server.NotFound(dictionarydomain.ErrDictDataNotFound, dictionaryv1.ErrorReason_ERROR_REASON_DICT_DATA_NOT_FOUND),
 		server.Conflict(dictionarydomain.ErrDictDataDuplicated, dictionaryv1.ErrorReason_ERROR_REASON_DICT_DATA_DUPLICATED),
-		server.NotFound(filedomain.ErrFileNotFound, filev1.ErrorReason_ERROR_REASON_FILE_NOT_FOUND),
-		server.BadRequest(filedomain.ErrFileTooLarge, filev1.ErrorReason_ERROR_REASON_FILE_TOO_LARGE),
-		server.BadRequest(filedomain.ErrInvalidFileName, filev1.ErrorReason_ERROR_REASON_INVALID_FILE_NAME),
-		server.BadRequest(filedomain.ErrInvalidContentType, filev1.ErrorReason_ERROR_REASON_INVALID_FILE_CONTENT_TYPE),
 	}
 }

@@ -25,7 +25,6 @@ import (
 
 	accessv1 "github.com/eagle-go/eagle/api/eagle/access/v1"
 	dictionaryv1 "github.com/eagle-go/eagle/api/eagle/dictionary/v1"
-	filev1 "github.com/eagle-go/eagle/api/eagle/file/v1"
 	accessapp "github.com/eagle-go/eagle/internal/access/application"
 	accessdomain "github.com/eagle-go/eagle/internal/access/domain"
 	accessinfra "github.com/eagle-go/eagle/internal/access/infrastructure"
@@ -33,10 +32,6 @@ import (
 	dictionarydomain "github.com/eagle-go/eagle/internal/dictionary/domain"
 	dictionaryinfra "github.com/eagle-go/eagle/internal/dictionary/infrastructure"
 	dictionaryservice "github.com/eagle-go/eagle/internal/dictionary/service"
-	fileapp "github.com/eagle-go/eagle/internal/file/application"
-	filedomain "github.com/eagle-go/eagle/internal/file/domain"
-	fileinfra "github.com/eagle-go/eagle/internal/file/infrastructure"
-	fileservice "github.com/eagle-go/eagle/internal/file/service"
 	platformdb "github.com/eagle-go/eagle/internal/platform/database"
 	"github.com/eagle-go/eagle/pkg/authz"
 	"github.com/eagle-go/eagle/pkg/identity"
@@ -123,25 +118,18 @@ func newTestEnv(t *testing.T) *testEnv {
 	permRepo := accessinfra.NewPermissionRepo(adminDB)
 	policyRepo := accessinfra.NewPolicyRepo(enforcer, store)
 	dictRepo := dictionaryinfra.NewDictRepo(adminDB)
-	fileRepo := fileinfra.NewRepository(adminDB)
-	blobs, err := fileinfra.NewLocalBlobStore(t.TempDir())
-	if err != nil {
-		t.Fatalf("构造本地文件存储: %v", err)
-	}
 
 	permSvc := accessservice.NewPermissionService(accessapp.NewPermissionUsecase(permRepo, policyRepo))
 	dictSvc := dictionaryservice.NewDictService(dictRepo)
 	bindingSvc := accessservice.NewRoleBindingService(accessapp.NewRoleBindingUsecase(policyRepo, permRepo))
-	fileSvc := fileservice.NewFileService(fileapp.NewUsecase(fileRepo, blobs, 10<<20))
 
 	// addr 留空：不监听真实端口，只把 Server 当 http.Handler 用
 	srv := server.NewHTTPServer(&config.Server{
 		Http: &config.Server_HTTP{Timeout: durationpb.New(10 * time.Second)},
-	}, middlewares, []kratoshttp.FilterFunc{server.FileUploadLimitFilter(10 << 20)}, func(s *kratoshttp.Server) {
+	}, middlewares, func(s *kratoshttp.Server) {
 		accessv1.RegisterPermissionServiceHTTPServer(s, permSvc)
 		accessv1.RegisterRoleBindingServiceHTTPServer(s, bindingSvc)
 		dictionaryv1.RegisterDictServiceHTTPServer(s, dictSvc)
-		filev1.RegisterFileServiceHTTPServer(s, fileSvc)
 	})
 
 	ts := httptest.NewServer(srv)
@@ -170,10 +158,6 @@ func e2eErrorMappings() []server.ErrorMappingRule {
 		server.Conflict(dictionarydomain.ErrDictTypeDuplicated, dictionaryv1.ErrorReason_ERROR_REASON_DICT_TYPE_DUPLICATED),
 		server.NotFound(dictionarydomain.ErrDictDataNotFound, dictionaryv1.ErrorReason_ERROR_REASON_DICT_DATA_NOT_FOUND),
 		server.Conflict(dictionarydomain.ErrDictDataDuplicated, dictionaryv1.ErrorReason_ERROR_REASON_DICT_DATA_DUPLICATED),
-		server.NotFound(filedomain.ErrFileNotFound, filev1.ErrorReason_ERROR_REASON_FILE_NOT_FOUND),
-		server.BadRequest(filedomain.ErrFileTooLarge, filev1.ErrorReason_ERROR_REASON_FILE_TOO_LARGE),
-		server.BadRequest(filedomain.ErrInvalidFileName, filev1.ErrorReason_ERROR_REASON_INVALID_FILE_NAME),
-		server.BadRequest(filedomain.ErrInvalidContentType, filev1.ErrorReason_ERROR_REASON_INVALID_FILE_CONTENT_TYPE),
 	}
 }
 

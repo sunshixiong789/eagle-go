@@ -10,16 +10,11 @@ import (
 
 	accessv1 "github.com/eagle-go/eagle/api/eagle/access/v1"
 	dictionaryv1 "github.com/eagle-go/eagle/api/eagle/dictionary/v1"
-	filev1 "github.com/eagle-go/eagle/api/eagle/file/v1"
 	accessapp "github.com/eagle-go/eagle/internal/access/application"
 	accessinfra "github.com/eagle-go/eagle/internal/access/infrastructure"
 	accessservice "github.com/eagle-go/eagle/internal/access/service"
 	dictionaryinfra "github.com/eagle-go/eagle/internal/dictionary/infrastructure"
 	dictionaryservice "github.com/eagle-go/eagle/internal/dictionary/service"
-	fileapp "github.com/eagle-go/eagle/internal/file/application"
-	filedomain "github.com/eagle-go/eagle/internal/file/domain"
-	fileinfra "github.com/eagle-go/eagle/internal/file/infrastructure"
-	fileservice "github.com/eagle-go/eagle/internal/file/service"
 	platformdb "github.com/eagle-go/eagle/internal/platform/database"
 	"github.com/eagle-go/eagle/pkg/authn"
 	"github.com/eagle-go/eagle/pkg/authz"
@@ -30,13 +25,11 @@ import (
 
 type policyHealth struct{}
 type policyReconciler struct{}
-type fileCleanupWorker struct{}
 
 var providerSet = wire.NewSet(
 	provideData,
 	provideAuth,
 	provideServer,
-	provideFile,
 	platformdb.Open,
 	accessinfra.NewPolicyStore,
 	accessinfra.NewEnforcer,
@@ -51,11 +44,6 @@ var providerSet = wire.NewSet(
 	accessservice.NewRoleBindingService,
 	dictionaryinfra.NewDictRepo,
 	dictionaryservice.NewDictService,
-	fileinfra.NewBlobStore,
-	fileinfra.NewRepository,
-	provideFileUsecase,
-	fileservice.NewFileService,
-	provideFileCleanupWorker,
 	server.NewVerifier,
 	provideMiddlewares,
 	provideHTTPServer,
@@ -68,7 +56,6 @@ var _ = providerSet
 func provideData(bc *config.Bootstrap) *config.Data     { return bc.GetData() }
 func provideAuth(bc *config.Bootstrap) *config.Auth     { return bc.GetAuth() }
 func provideServer(bc *config.Bootstrap) *config.Server { return bc.GetServer() }
-func provideFile(bc *config.Bootstrap) *config.File     { return bc.GetFile() }
 
 func provideAuthorizer(enforcer *authz.Enforcer) authz.Authorizer {
 	return enforcer
@@ -80,14 +67,6 @@ func providePolicyHealth(store *accessinfra.PolicyStore, enforcer *authz.Enforce
 
 func providePolicyReconciler(store *accessinfra.PolicyStore, enforcer *authz.Enforcer, logger *slog.Logger) (policyReconciler, func(), error) {
 	return policyReconciler{}, accessinfra.NewPolicyReconciler(store, enforcer, logger), nil
-}
-
-func provideFileUsecase(repo filedomain.Repository, blobs filedomain.BlobStore, c *config.File) *fileapp.Usecase {
-	return fileapp.NewUsecase(repo, blobs, c.GetMaxSizeBytes())
-}
-
-func provideFileCleanupWorker(uc *fileapp.Usecase, logger *slog.Logger) (fileCleanupWorker, func(), error) {
-	return fileCleanupWorker{}, fileservice.NewCleanupWorker(uc, logger), nil
 }
 
 func provideMiddlewares(
@@ -102,19 +81,14 @@ func provideMiddlewares(
 func provideHTTPServer(
 	c *config.Server,
 	ms []middleware.Middleware,
-	fileConf *config.File,
 	permission *accessservice.PermissionService,
 	role *accessservice.RoleBindingService,
 	dict *dictionaryservice.DictService,
-	file *fileservice.FileService,
 ) *http.Server {
-	return server.NewHTTPServer(c, ms, []http.FilterFunc{
-		server.FileUploadLimitFilter(fileConf.GetMaxSizeBytes()),
-	}, func(s *http.Server) {
+	return server.NewHTTPServer(c, ms, func(s *http.Server) {
 		accessv1.RegisterPermissionServiceHTTPServer(s, permission)
 		accessv1.RegisterRoleBindingServiceHTTPServer(s, role)
 		dictionaryv1.RegisterDictServiceHTTPServer(s, dict)
-		filev1.RegisterFileServiceHTTPServer(s, file)
 	})
 }
 
@@ -122,7 +96,6 @@ func newComponents(
 	hs *http.Server,
 	_ policyHealth,
 	_ policyReconciler,
-	_ fileCleanupWorker,
 ) platformruntime.Components {
 	return platformruntime.Components{Servers: []transport.Server{hs}}
 }

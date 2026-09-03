@@ -10,6 +10,6 @@ var Version string
 func main() {
 	platformruntime.Run(platformruntime.Spec{
 		Name: "eagle", Version: Version, Build: buildApp,
-		Requirements: config.Requirements{Database: true, Auth: true, HTTP: true, File: true},
+		Requirements: config.Requirements{Database: true, Auth: true, HTTP: true},
 	})
 }

@@ -10,7 +10,6 @@
 |---|---|---|---|
 | `access` | 权限码目录、导航树、角色绑定、Casbin 策略 | `permission_definition`、`casbin_rule`、策略版本 | 无 |
 | `dictionary` | 字典的简单 CRUD，作为新模块的样板 | `dict_type`、`dict_data` | 无 |
-| `file` | 上传编排、元数据、生命周期清理 | `file` 元数据表 | 对象存储（本地目录或 S3） |
 
 IdP（默认 Keycloak）是独立的认证中心，负责用户、口令、角色和 token。**本仓库不建用户表**。
 
@@ -24,7 +23,7 @@ IdP（默认 Keycloak）是独立的认证中心，负责用户、口令、角�
     pkg                                 无业务语义的共享技术模块
     tools                               生成器与迁移程序（独立 go.mod）
     tests                               架构测试、e2e 与测试工具
-    deploy                              本地与生产部署资源
+    deploy                              本地 Compose、Keycloak realm 与说明
 
 `internal/` 是 Go 的编译器可见性边界，仓库外无法 import。仓库内的模块边界由 `tests/architecture` 检查：模块之间不得 import 对方的 `service` 或 `infrastructure`。
 
@@ -42,10 +41,10 @@ IdP（默认 Keycloak）是独立的认证中心，负责用户、口令、角�
 
 - domain：模型、不变量、领域错误和端口，只依赖标准库。
 - application：可选；编排用例，只依赖本模块 domain。
-- infrastructure：实现数据库、对象存储等端口，把技术错误翻译成领域错误。
+- infrastructure：实现数据库或外部服务端口，把技术错误翻译成领域错误。
 - service：入站适配，包括 protobuf Service 和后台任务入口；完成协议转换并传递当前主体。
 
-三个模块正好覆盖三种形态：`dictionary` 没有 application（纯 CRUD，加一层只会得到 `return repo.Xxx(...)`）；`file` 有 application（上传需要「写元数据 → 落对象存储 → 失败回滚」的编排，且上传接口与后台清理任务复用同一个 `Usecase`）；`access` 有 application 且 domain 承载真实不变量（权限码的三段格式、导航树的父子完整性，以及策略变更的版本乐观并发）。
+两个模块覆盖两种典型形态：`dictionary` 没有 application，展示纯 CRUD；`access` 有 application 且 domain 承载权限码、导航树和策略版本等真实不变量，也展示事务与用例编排。
 
 不要为了目录对称引入工厂、领域事件或通用 DTO 体系。
 
@@ -80,16 +79,13 @@ IdP（默认 Keycloak）是独立的认证中心，负责用户、口令、角�
 
 本地：
 
-    Browser → nginx 网关:8000 → eagle:8000
-                                   │
-                        PostgreSQL ─┼─ MinIO
-                                    └─ Keycloak
+    Browser / curl → eagle:8000
+                        ├── PostgreSQL
+                        └── Keycloak
 
-`make up` 会先跑一次性迁移任务，成功后再启动应用和网关。OTel、Prometheus、Alertmanager、Tempo、Loki、Grafana 通过 `--profile obs` 按需启动。
+`make up` 会先跑一次性迁移任务，成功后再启动应用。生产入口需要的 TLS 终止、请求限制和真实客户端 IP 由环境侧的 LB 或网关提供，仓库不绑定具体网关。
 
-网关只有一个上游，看起来是多余的。保留它是因为生产入口该有的东西（TLS 终止、请求体上限、真实客户端 IP）都在这一层，本地就带上可以避免「本地能传 50MB、生产被网关拦掉」这类只在上线时才暴露的差异。
-
-生产是同一个镜像的两个 entrypoint：`/app/migrate` 跑迁移，`/app/eagle` 跑服务。schema 与代码同版本发布，不会出现「服务已升级、迁移还没跑」的窗口。具体发布顺序见[生产环境部署](deployment.md)。
+生产是同一个镜像的两个 entrypoint：`/app/migrate` 跑迁移，`/app/eagle` 跑服务。schema 与代码同版本发布，不会出现「服务已升级、迁移还没跑」的窗口。服务进程启动时**不会**自动迁移；发布顺序固定为「迁移任务 → 服务滚动 → 观察」，编排方式（Compose、Kubernetes 或其它）由环境仓库自行维护。
 
 ## 共享代码边界
 

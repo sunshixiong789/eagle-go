@@ -7,5 +7,5 @@
 - 迁移必须支持 CI 的 `up -> down-to 0 -> up`；除非确实不可逆且已在 SQL 注释说明，`down` 不能是空操作。
 - 必须依赖锁、唯一约束或数据库当前状态的不变量，在 infrastructure 的一个事务内检查并写入，避免 application 预检造成 TOCTOU。
 - infrastructure 将 Ent/SQL 的 not found、唯一冲突和并发冲突翻译成稳定的领域错误，不把 Ent 类型泄漏到上层。
-- 缓存、Outbox/Inbox 和对象存储都是 infrastructure 适配；只有任务确有一致性或可靠投递需求时才引入，不作为默认 CRUD 模板。当前仓库只有对象存储一项，其余不要预埋。
+- 缓存、消息投递和对象存储都是 infrastructure 适配；只有任务确有需求时才引入，不作为默认 CRUD 模板。
 - 可以修改 schema 和迁移，禁止手改 `internal/platform/database/ent/` 下的生成文件。

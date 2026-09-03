@@ -86,42 +86,6 @@ var (
 		Columns:    SysDictTypeColumns,
 		PrimaryKey: []*schema.Column{SysDictTypeColumns[0]},
 	}
-	// StoredFileColumns holds the columns for the "stored_file" table.
-	StoredFileColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeString, Size: 36},
-		{Name: "owner_subject", Type: field.TypeString, Size: 128},
-		{Name: "name", Type: field.TypeString, Size: 255},
-		{Name: "storage_key", Type: field.TypeString, Unique: true, Size: 255},
-		{Name: "content_type", Type: field.TypeString, Size: 128, Default: "application/octet-stream"},
-		{Name: "size", Type: field.TypeInt64},
-		{Name: "sha256", Type: field.TypeString, Size: 64},
-		{Name: "state", Type: field.TypeString, Size: 16, Default: "pending"},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
-	}
-	// StoredFileTable holds the schema information for the "stored_file" table.
-	StoredFileTable = &schema.Table{
-		Name:       "stored_file",
-		Columns:    StoredFileColumns,
-		PrimaryKey: []*schema.Column{StoredFileColumns[0]},
-		Indexes: []*schema.Index{
-			{
-				Name:    "idx_stored_file_owner_created",
-				Unique:  false,
-				Columns: []*schema.Column{StoredFileColumns[1], StoredFileColumns[8]},
-				Annotation: &entsql.IndexAnnotation{
-					DescColumns: map[string]bool{
-						StoredFileColumns[8].Name: true,
-					},
-				},
-			},
-			{
-				Name:    "idx_stored_file_state_updated",
-				Unique:  false,
-				Columns: []*schema.Column{StoredFileColumns[7], StoredFileColumns[9]},
-			},
-		},
-	}
 	// NavigationNodeColumns holds the columns for the "navigation_node" table.
 	NavigationNodeColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -247,7 +211,6 @@ var (
 		CasbinRuleTable,
 		SysDictDataTable,
 		SysDictTypeTable,
-		StoredFileTable,
 		NavigationNodeTable,
 		PermissionDefinitionTable,
 		PermissionTreeStateTable,
@@ -265,9 +228,6 @@ func init() {
 	}
 	SysDictTypeTable.Annotation = &entsql.Annotation{
 		Table: "sys_dict_type",
-	}
-	StoredFileTable.Annotation = &entsql.Annotation{
-		Table: "stored_file",
 	}
 	NavigationNodeTable.Annotation = &entsql.Annotation{
 		Table: "navigation_node",

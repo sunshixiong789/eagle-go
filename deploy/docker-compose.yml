@@ -1,5 +1,12 @@
 name: eagle
 
+x-eagle-build: &eagle-build
+  context: ..
+  args:
+    VERSION: dev
+    BUILDER_IMAGE: "${EAGLE_BUILDER_IMAGE:-mirror.gcr.io/library/golang:1.27-alpine}"
+    RUNTIME_IMAGE: "${EAGLE_RUNTIME_IMAGE:-gcr.io/distroless/static-debian12:nonroot}"
+
 services:
   postgres:
     image: postgres:17-alpine
@@ -36,42 +43,21 @@ services:
     ports: ["8080:8080"]
     volumes:
       - ./keycloak/realm-eagle.json:/opt/keycloak/data/import/realm-eagle.json:ro
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9000; printf '%s\\r\\n' 'GET /health/ready HTTP/1.1' 'Host: localhost' 'Connection: close' '' >&3; grep -q '200 OK' <&3"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 120s
     depends_on:
       postgres:
         condition: service_healthy
-
-  minio:
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
-    command: ["server", "/data", "--console-address", ":9001"]
-    environment:
-      MINIO_ROOT_USER: eagle
-      MINIO_ROOT_PASSWORD: eagle-local-secret
-      MINIO_PROMETHEUS_AUTH_TYPE: public
-    ports: ["9004:9000", "9005:9001"]
-    volumes: [miniodata:/data]
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 5s
-      timeout: 3s
-      retries: 12
-
-  minio-init:
-    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - >-
-        mc alias set local http://minio:9000 eagle eagle-local-secret &&
-        mc mb --ignore-existing local/eagle-files
-    depends_on:
-      minio: {condition: service_healthy}
 
   # 迁移与服务是同一个镜像的两个 entrypoint：schema 与代码同版本发布，
   # 不会出现「服务已升级、迁移还没跑」的窗口。
   eagle-migrate:
     image: eagle/eagle:dev
-    build:
-      context: ..
-      args: {VERSION: dev}
+    build: *eagle-build
     entrypoint: ["/app/migrate"]
     command: ["-dir", "/app/migrations"]
     environment:
@@ -82,10 +68,8 @@ services:
 
   eagle:
     image: eagle/eagle:dev
+    build: *eagle-build
     environment:
-      EAGLE_SERVER_HTTP_ADDR: 0.0.0.0:8000
-      EAGLE_OBSERVABILITY_METRICS_ADDR: 0.0.0.0:9100
-      EAGLE_OBSERVABILITY_OTLP_ENDPOINT: otel-collector:4317
       EAGLE_DATABASE_DSN: postgres://eagle:eagle@postgres:5432/eagle?sslmode=disable
       # issuer 必须与 token 里的 iss 逐字相同，所以用宿主机可见的地址；
       # JWKS 是服务端自己去拉，走容器网络。
@@ -93,101 +77,12 @@ services:
       EAGLE_AUTH_JWKS_URL: http://keycloak:8080/realms/eagle/protocol/openid-connect/certs
       EAGLE_AUTH_CLIENT_ID: eagle-api
       EAGLE_AUTH_AUDIENCE: eagle-api
-      EAGLE_FILE_LOCAL_DIR: /data/uploads
-      EAGLE_FILE_PROVIDER: s3
-      EAGLE_FILE_S3_ENDPOINT: minio:9000
-      EAGLE_FILE_S3_BUCKET: eagle-files
-      EAGLE_FILE_S3_ACCESS_KEY: eagle
-      EAGLE_FILE_S3_SECRET_KEY: eagle-local-secret
-    ports: ["8001:8000", "9101:9100"]
+    ports:
+      - "${EAGLE_HTTP_PORT:-8000}:8000"
+      - "${EAGLE_METRICS_PORT:-9101}:9100"
     depends_on:
       eagle-migrate: {condition: service_completed_successfully}
-      keycloak: {condition: service_started}
-      minio-init: {condition: service_completed_successfully}
-
-  # 单体只有一个上游，网关看起来是多余的。保留它是因为生产入口该有的东西
-  # （TLS 终止、请求体上限、真实客户端 IP）都在这一层，本地就带上可以避免
-  # 「本地能传 50MB、生产被网关拦掉」这类只在上线时才暴露的差异。
-  gateway:
-    image: nginx:1.27-alpine
-    ports: ["8000:8000"]
-    volumes:
-      - ./gateway/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./gateway/proxy.conf:/etc/nginx/proxy.conf:ro
-    depends_on:
-      eagle: {condition: service_healthy}
-
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.121.0
-    profiles: ["obs"]
-    command: ["--config=/etc/otel/config.yaml"]
-    volumes:
-      - ./observability/otel-collector.yaml:/etc/otel/config.yaml:ro
-    ports: ["4317:4317", "4318:4318"]
-    depends_on: [tempo]
-
-  tempo:
-    image: grafana/tempo:2.7.2
-    profiles: ["obs"]
-    command: ["-config.file=/etc/tempo/tempo.yaml"]
-    volumes:
-      - ./observability/tempo.yaml:/etc/tempo/tempo.yaml:ro
-    ports: ["3200:3200"]
-
-  prometheus:
-    image: prom/prometheus:v3.2.1
-    profiles: ["obs"]
-    volumes:
-      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./observability/rules:/etc/prometheus/rules:ro
-      - prometheusdata:/prometheus
-    ports: ["9090:9090"]
-    depends_on: [alertmanager]
-
-  alertmanager:
-    image: prom/alertmanager:v0.28.1
-    profiles: ["obs"]
-    command: ["--config.file=/etc/alertmanager/alertmanager.yml"]
-    volumes:
-      - ./observability/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-    ports: ["9093:9093"]
-
-  loki:
-    image: grafana/loki:3.5.0
-    profiles: ["obs"]
-    command: ["-config.file=/etc/loki/loki.yaml"]
-    volumes:
-      - ./observability/loki.yaml:/etc/loki/loki.yaml:ro
-      - lokidata:/var/loki
-    ports: ["3100:3100"]
-
-  alloy:
-    image: grafana/alloy:v1.9.2
-    profiles: ["obs"]
-    command: ["run", "/etc/alloy/config.alloy", "--storage.path=/var/lib/alloy/data"]
-    volumes:
-      - ./observability/alloy.alloy:/etc/alloy/config.alloy:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - alloydata:/var/lib/alloy/data
-    depends_on: [loki]
-
-  grafana:
-    image: grafana/grafana:11.6.0
-    profiles: ["obs"]
-    environment:
-      GF_AUTH_ANONYMOUS_ENABLED: "true"
-      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
-    volumes:
-      - ./observability/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/ds.yaml:ro
-      - ./observability/grafana-dashboards.yaml:/etc/grafana/provisioning/dashboards/eagle.yaml:ro
-      - ./observability/dashboards:/var/lib/grafana/dashboards:ro
-    ports: ["3000:3000"]
-    depends_on: [prometheus, tempo, loki]
+      keycloak: {condition: service_healthy}
 
 volumes:
   pgdata:
-  miniodata:
-  prometheusdata:
-  lokidata:
-  alloydata:

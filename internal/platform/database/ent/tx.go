@@ -20,8 +20,6 @@ type Tx struct {
 	DictData *DictDataClient
 	// DictType is the client for interacting with the DictType builders.
 	DictType *DictTypeClient
-	// File is the client for interacting with the File builders.
-	File *FileClient
 	// Permission is the client for interacting with the Permission builders.
 	Permission *PermissionClient
 	// PermissionDefinition is the client for interacting with the PermissionDefinition builders.
@@ -166,7 +164,6 @@ func (tx *Tx) init() {
 	tx.CasbinRule = NewCasbinRuleClient(tx.config)
 	tx.DictData = NewDictDataClient(tx.config)
 	tx.DictType = NewDictTypeClient(tx.config)
-	tx.File = NewFileClient(tx.config)
 	tx.Permission = NewPermissionClient(tx.config)
 	tx.PermissionDefinition = NewPermissionDefinitionClient(tx.config)
 	tx.PermissionTreeState = NewPermissionTreeStateClient(tx.config)

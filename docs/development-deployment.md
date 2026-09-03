@@ -1,7 +1,6 @@
 # 开发环境部署
 
-本文只说明本地开发、调试和 IDEA 运行入口。生产镜像、发布顺序和回滚见
-[生产环境部署](deployment.md)，线上故障处置见[生产运行手册](operations.md)。
+本文只说明本地开发、调试和 IDEA 运行入口。模块边界见[架构说明](architecture.md)。
 
 ## 两种开发方式
 
@@ -13,17 +12,12 @@
 Compose 里的 `eagle-migrate` 是一次性数据库迁移任务，`eagle` 才是常驻服务。
 迁移容器显示 `Exited (0)` 表示成功，不是异常或重复部署。
 
-`gateway`（nginx）只有一个上游，本地看起来多余。保留它是因为生产入口该有的东西
-（TLS 终止、请求体上限、真实客户端 IP）都在这一层，本地带上可以避免「本地能传 50MB、
-生产被网关拦掉」这类只在上线时才暴露的差异。
-
 ## IDEA 从 Markdown 直接运行
 
 README 和本文中的可执行命令都使用 `bash` 代码块，并遵循「一块一个动作」。IDEA/GoLand 启用
 Markdown 和 Shell Script 插件后，代码块左侧会显示运行按钮，可以直接点击执行。
 
-命令默认以仓库根目录为工作目录。需要共享 shell 变量的步骤会合并为一个原子命令；需要持续
-交互或手工修改参数的生产命令不伪装成本地一键操作。
+命令默认以仓库根目录为工作目录。需要共享 shell 变量的步骤会合并为一个原子命令。
 
 ## 完整 Compose 环境
 
@@ -47,9 +41,8 @@ docker compose -f deploy/docker-compose.yml ps --all
 
 预期结果：
 
-- `eagle-migrate` 和 `minio-init` 为 `Exited (0)`；
-- `eagle`、`postgres`、`keycloak`、`minio` 为运行状态；
-- `gateway` 在 `eagle` 健康后启动。
+- `eagle-migrate` 为 `Exited (0)`；
+- `eagle`、`postgres`、`keycloak` 为运行状态。
 
 检查 readiness：
 
@@ -63,34 +56,29 @@ curl --fail http://127.0.0.1:9101/readyz
 docker compose -f deploy/docker-compose.yml logs --follow eagle
 ```
 
-停止环境但保留数据库和对象数据：
+停止环境但保留数据库数据：
 
 ```bash
 make down
 ```
 
-`docker compose down -v` 会删除本地数据库和对象数据，不作为入门文档的一键命令。
+`docker compose down -v` 会删除本地数据库数据，不作为入门文档的一键命令。
 确实需要重置环境时，应先确认没有要保留的数据。
 
 ## 本地入口
 
 | 组件 | 地址 | 本地凭据 |
 |---|---|---|
-| nginx 开发网关 | `http://127.0.0.1:8000` | - |
-| 应用 HTTP（绕过网关） | `http://127.0.0.1:8001` | - |
+| 应用 HTTP | `http://127.0.0.1:8000` | - |
 | 应用 metrics / health | `http://127.0.0.1:9101` | - |
 | Keycloak | `http://127.0.0.1:8080` | 管理员 `admin/admin` |
-| MinIO API | `http://127.0.0.1:9004` | `eagle/eagle-local-secret` |
-| MinIO Console | `http://127.0.0.1:9005` | `eagle/eagle-local-secret` |
-| Grafana（obs profile） | `http://127.0.0.1:3000` | 匿名 Admin |
-| Prometheus（obs profile） | `http://127.0.0.1:9090` | - |
 
-容器之间使用 Compose DNS（`eagle:8000`、`postgres:5432`、`minio:9000`）；
+容器之间使用 Compose DNS（`postgres:5432`、`keycloak:8080`）；
 宿主机进程使用上表中的 `127.0.0.1` 端口。
 
 ## 宿主机断点调试
 
-只启动 PostgreSQL、Keycloak 和 MinIO：
+只启动 PostgreSQL 和 Keycloak：
 
 ```bash
 make up-deps
@@ -111,24 +99,19 @@ make run
 本地配置在 `configs/config.yaml`。宿主机运行使用其中的 `127.0.0.1` 默认值；容器运行由
 Compose 的 `EAGLE_*` 环境变量覆盖为容器 DNS。
 
-不要同时运行 `eagle` 容器和宿主机进程，否则 HTTP 与 metrics 端口会冲突。需要断点调试时
+宿为机进程与 `eagle` 容器使用同一组宿主机端口（8000 / 9101），不能同时运行。需要断点调试时
 先停掉容器：
 
 ```bash
 docker compose -f deploy/docker-compose.yml stop eagle
 ```
 
-## 可观测性联调
+## 可观测性
 
-在完整环境基础上启动可观测性 profile：
-
-```bash
-docker compose -f deploy/docker-compose.yml --profile obs up -d
-```
-
-该 profile 启动 Prometheus、Alertmanager、Tempo、Loki、Alloy、Grafana 和 OTel Collector。
-Alloy 从 Docker stdout 收集结构化日志；应用把 trace 发到 OTel Collector。没有启动 profile 时，
-OTLP exporter 在后台重试，不会阻止应用启动。
+应用输出结构化 JSON 日志到 stdout，宿主机的指标与健康检查默认在 `9101` 端口
+（`/metrics`、`/livez`、`/readyz`）。容器内仍使用 `9100`。trace 默认不上报；有 OTLP collector 时通过
+`EAGLE_OBSERVABILITY_OTLP_ENDPOINT=host:4317` 打开，collector 不可达只会在后台重试，
+不会阻止应用启动。
 
 ## 首个本地用户
 
@@ -170,6 +153,21 @@ TOKEN=$(curl --silent --fail -d client_id=eagle-web -d username=alice -d 'passwo
 不带 `Authorization` 应返回 401；带无权限的 token 应返回 403。
 
 ## 常见问题
+
+### 本机端口已被占用
+
+Compose 的业务端口和可观测端口都可以覆盖：
+
+```bash
+EAGLE_HTTP_PORT=18000 EAGLE_METRICS_PORT=19101 make up
+```
+
+Go builder 默认从 Google 的 Docker Hub 公共缓存拉取，避免部分网络下 Docker Hub
+代理返回 403。需要改回 Docker Hub 官方地址或使用内部镜像时可显式覆盖：
+
+```bash
+EAGLE_BUILDER_IMAGE=golang:1.27-alpine make up
+```
 
 ### `eagle-migrate` 一直运行或退出码非 0
 

@@ -1,5 +1,8 @@
 # 单体：一个进程、一个镜像。
-FROM golang:1.27-alpine AS builder
+ARG BUILDER_IMAGE=mirror.gcr.io/library/golang:1.27-alpine
+ARG RUNTIME_IMAGE=gcr.io/distroless/static-debian12:nonroot
+
+FROM ${BUILDER_IMAGE} AS builder
 
 ARG GOPROXY=https://goproxy.cn,direct
 ARG VERSION=dev
@@ -24,7 +27,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     cp -R migrations /out/migrations && \
     cp -R configs /out/configs
 
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM ${RUNTIME_IMAGE}
 
 ARG VERSION
 LABEL org.opencontainers.image.title="eagle" \

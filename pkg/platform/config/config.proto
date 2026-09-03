@@ -20,29 +20,10 @@ message Bootstrap {
   Data data = 2;
   Auth auth = 3;
   Observability observability = 4;
-  File file = 5;
 
-  // 6~9 曾是 upstream / cache / messaging / service_auth，
-  // 拆分为单体后一并移除，编号不再复用。
-  reserved 6, 7, 8, 9;
-}
 
-// File configures the development/local blob adapter. The module keeps a
-// storage port so production deployments can replace it with S3 or OSS.
-message File {
-  // local 只用于开发；s3 可连接 AWS S3、OSS、MinIO 等兼容服务。
-  string provider = 3;
-  string local_dir = 1;
-  int64 max_size_bytes = 2;
-  message S3 {
-    string endpoint = 1;
-    string region = 2;
-    string bucket = 3;
-    string access_key = 4;
-    string secret_key = 5;
-    bool use_ssl = 6;
-  }
-  S3 s3 = 4;
+  // 5~9 是已删除能力的历史编号，不再复用。
+  reserved 5, 6, 7, 8, 9;
 }
 
 // Server 是 HTTP 监听参数。

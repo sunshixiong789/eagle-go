@@ -12,8 +12,6 @@ import (
 	"github.com/eagle-go/eagle/internal/access/service"
 	infrastructure2 "github.com/eagle-go/eagle/internal/dictionary/infrastructure"
 	service2 "github.com/eagle-go/eagle/internal/dictionary/service"
-	infrastructure3 "github.com/eagle-go/eagle/internal/file/infrastructure"
-	service3 "github.com/eagle-go/eagle/internal/file/service"
 	"github.com/eagle-go/eagle/internal/platform/database"
 	"github.com/eagle-go/eagle/pkg/platform/config"
 	"github.com/eagle-go/eagle/pkg/platform/runtime"
@@ -44,7 +42,6 @@ func wireApp(bc *config.Bootstrap, logger *slog.Logger) (runtime.Components, fun
 		cleanup()
 		return runtime.Components{}, nil, err
 	}
-	file := provideFile(bc)
 	permissionRepo := infrastructure.NewPermissionRepo(databaseDatabase)
 	policyRepo := infrastructure.NewPolicyRepo(enforcer, policyStore)
 	permissionUsecase := application.NewPermissionUsecase(permissionRepo, policyRepo)
@@ -53,15 +50,7 @@ func wireApp(bc *config.Bootstrap, logger *slog.Logger) (runtime.Components, fun
 	roleBindingService := service.NewRoleBindingService(roleBindingUsecase)
 	dictRepo := infrastructure2.NewDictRepo(databaseDatabase)
 	dictService := service2.NewDictService(dictRepo)
-	repository := infrastructure3.NewRepository(databaseDatabase)
-	blobStore, err := infrastructure3.NewBlobStore(file)
-	if err != nil {
-		cleanup()
-		return runtime.Components{}, nil, err
-	}
-	usecase := provideFileUsecase(repository, blobStore, file)
-	fileService := service3.NewFileService(usecase)
-	httpServer := provideHTTPServer(configServer, v, file, permissionService, roleBindingService, dictService, fileService)
+	httpServer := provideHTTPServer(configServer, v, permissionService, roleBindingService, dictService)
 	mainPolicyHealth, cleanup2, err := providePolicyHealth(policyStore, enforcer)
 	if err != nil {
 		cleanup()
@@ -73,16 +62,8 @@ func wireApp(bc *config.Bootstrap, logger *slog.Logger) (runtime.Components, fun
 		cleanup()
 		return runtime.Components{}, nil, err
 	}
-	mainFileCleanupWorker, cleanup4, err := provideFileCleanupWorker(usecase, logger)
-	if err != nil {
-		cleanup3()
-		cleanup2()
-		cleanup()
-		return runtime.Components{}, nil, err
-	}
-	components := newComponents(httpServer, mainPolicyHealth, mainPolicyReconciler, mainFileCleanupWorker)
+	components := newComponents(httpServer, mainPolicyHealth, mainPolicyReconciler)
 	return components, func() {
-		cleanup4()
 		cleanup3()
 		cleanup2()
 		cleanup()

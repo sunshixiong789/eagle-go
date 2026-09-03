@@ -59,7 +59,7 @@ message Permission {
   int64 id = 1;
   int64 parent_id = 2;
   string name = 3;
-  // 权限码，如 system:user:add。目录/菜单可为空，按钮必填
+  // 权限码，如 system:dict:add。目录/菜单可为空，按钮必填
   string code = 4;
   // 1=目录 2=菜单 3=按钮
   int32 type = 5;

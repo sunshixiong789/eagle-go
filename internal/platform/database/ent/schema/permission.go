@@ -14,7 +14,7 @@ import (
 // 持久化表已经与后端 permission_definition 分离。
 //
 // 权限码（code）是三方契约的交汇点：proto 注解上写
-// (eagle.annotations.v1.perm) = "system:user:add"，Casbin 策略里是同一个
+// (eagle.annotations.v1.perm) = "system:dict:add"，Casbin 策略里是同一个
 // 字符串，本表存它的元数据。三处对不上就是全线 403。
 //
 // 刻意不为 parent_id 声明 ent edge：根节点用 parent_id=0 表示「无父级」，
@@ -53,7 +53,7 @@ func (Permission) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			StorageKey("permission_code").
-			Comment("权限码，如 system:user:add。目录/菜单可为空，按钮必填"),
+			Comment("权限码，如 system:dict:add。目录/菜单可为空，按钮必填"),
 
 		field.Int32("type").
 			Comment("1=目录 2=菜单 3=按钮"),

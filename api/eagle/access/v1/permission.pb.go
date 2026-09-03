@@ -30,7 +30,7 @@ type Permission struct {
 	Id       int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	ParentId int64                  `protobuf:"varint,2,opt,name=parent_id,json=parentId,proto3" json:"parent_id,omitempty"`
 	Name     string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	// 权限码，如 system:user:add。目录/菜单可为空，按钮必填
+	// 权限码，如 system:dict:add。目录/菜单可为空，按钮必填
 	Code string `protobuf:"bytes,4,opt,name=code,proto3" json:"code,omitempty"`
 	// 1=目录 2=菜单 3=按钮
 	Type      int32                  `protobuf:"varint,5,opt,name=type,proto3" json:"type,omitempty"`

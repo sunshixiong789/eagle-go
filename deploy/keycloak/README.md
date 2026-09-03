@@ -94,7 +94,7 @@ docker exec eagle-keycloak-1 /opt/keycloak/bin/kcadm.sh set-password -r eagle --
 docker exec eagle-keycloak-1 /opt/keycloak/bin/kcadm.sh add-roles -r eagle --uusername alice --rolename admin
 ```
 
-最后一条给的是 realm role `admin`，对应迁移 `00003_seed.sql` 里种下的
+最后一条给的是 realm role `admin`，对应基线迁移 `00001_baseline.sql` 里种下的
 `realm:admin` 策略。想让 alice 走超管短路，改为授予 client role：
 
 ```bash

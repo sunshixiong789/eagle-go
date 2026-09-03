@@ -5,7 +5,7 @@
 ## 开始修改前
 
 - 先确认改动属于哪个业务模块，并阅读相邻实现；只修改完成任务必需的文件。
-- 优先沿用仓库已有模式：简单 CRUD 参考 `dictionary`，需要用例编排的参考 `file`，有业务不变量的参考 `access`。
+- 优先沿用仓库已有模式：简单 CRUD 参考 `dictionary`，有业务不变量或用例编排的参考 `access`。
 - 不从 Java / Spring 搬运 controller-service-repository、starter、统一 DTO/DO、通用 mapper 等体系，也不为未来需求预埋接口、表或抽象。
 - 工作区可能已有用户改动；不要覆盖、回滚或顺手整理无关文件。
 
@@ -19,7 +19,7 @@ internal/<module>/
 ├── service                     # 入站适配：Protobuf handler 和任务入口
 ├── application                 # 可选；只在存在用例编排时创建
 ├── domain                      # 领域模型、规则、错误和端口
-└── infrastructure              # 出站适配：数据库、对象存储和外部服务调用
+└── infrastructure              # 出站适配：数据库和外部服务调用
 internal/platform/database      # 全进程共用的数据库与 Ent Client
 migrations                      # goose SQL 迁移
 ```
@@ -36,13 +36,13 @@ service -> application -> domain <- infrastructure
 
 - `domain` 只依赖标准库，负责业务概念、纯业务不变量、领域错误，以及被用例实际需要的仓储或外部能力端口。
 - `application` 是可选的，只依赖本模块 `domain`，负责一个用例的流程编排；不依赖 Proto、Kratos、Ent、Casbin 或具体客户端。
-- `infrastructure` 实现 domain 端口，负责 Ent/SQL、事务、文件存储和外部服务调用，并把技术错误翻译为领域错误。
+- `infrastructure` 实现 domain 端口，负责 Ent/SQL、事务和外部服务调用，并把技术错误翻译为领域错误。
 - `service` 承载入站适配，只做协议对象转换、主体传递和错误边界适配；不写业务规则、事务、补偿或持久化逻辑，也不 import `infrastructure`。
 
 DDD 用来保护边界和不变量，不用来增加代码量：
 
 - 只有存在生命周期、状态转换或必须始终成立的业务规则时，才使用聚合根、值对象或领域方法。字典、查询等简单 CRUD 保持简单。
-- 仅包含 `return repo.Xxx(...)` 的 application 应删除，由 service 依赖 domain 定义的最小端口。一旦用例需要多端口协作、聚合加载-变更-保存、事务、Outbox/Inbox、幂等、补偿、审计或多入口复用，必须增加 application。
+- 仅包含 `return repo.Xxx(...)` 的 application 应删除，由 service 依赖 domain 定义的最小端口。一旦用例需要多端口协作、聚合加载-变更-保存、事务、幂等、补偿、审计或多入口复用，必须增加 application。
 - 不依赖 I/O 的规则放在 domain 构造器或方法中；跨端口的用例流程放在 application；必须依赖数据库锁、唯一约束或当前持久化状态的检查，放在 infrastructure 的同一事务内，不在 application 重复预检。
 - 一个聚合的原子持久化可由聚合仓储内部完成；涉及多个本地写入时使用语义化的原子端口，禁止向 application 暴露 Ent Tx 或通过 context 隐式传递事务。
 - 更新端口优先接收只含允许修改字段的明确参数，不用完整公开实体依赖调用方约定保护不可变字段。

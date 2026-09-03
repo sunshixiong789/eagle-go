@@ -21,7 +21,7 @@ type Permission struct {
 	ParentID *int64 `json:"parent_id,omitempty"`
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
-	// 权限码，如 system:user:add。目录/菜单可为空，按钮必填
+	// 权限码，如 system:dict:add。目录/菜单可为空，按钮必填
 	Code *string `json:"code,omitempty"`
 	// 1=目录 2=菜单 3=按钮
 	Type int32 `json:"type,omitempty"`

@@ -55,7 +55,7 @@ type Principal struct {
 	Roles []string
 
 	// ClientRoles 只包含本资源服务器命名空间下的 client 角色。
-	// 高影响的管理员短路必须基于它，防止 realm 级同名角色跨服务扩权。
+	// 高影响的管理员短路必须基于它，防止 realm 级同名角色顺带拿到本服务的全部权限。
 	ClientRoles []string
 }
 

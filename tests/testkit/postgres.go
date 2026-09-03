@@ -1,16 +1,15 @@
-// Package testsupport provides reusable real-PostgreSQL fixtures for module
-// integration tests. It is never imported by production composition.
+// Package testkit 为模块集成测试提供真实 PostgreSQL 夹具，
+// 生产组合根不会 import 它。
 package testkit
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os"
 	"path/filepath"
-	"regexp"
+	"runtime"
 
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 	_ "github.com/lib/pq"
@@ -21,44 +20,49 @@ type Postgres struct {
 	DSN     string
 	server  *embeddedpostgres.EmbeddedPostgres
 	dataDir string
-	port    uint32
 }
 
-func StartPostgres(instance, database string, migrationService ...string) (*Postgres, error) {
+const postgresStartAttempts = 3
+
+// StartPostgres 拉起一个独立的 embedded PostgreSQL 并执行全部 goose 迁移。
+// instance 只用来隔离各测试包的运行目录，避免并行解压时互相争抢。
+func StartPostgres(instance, database string) (*Postgres, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("locate user directory: %w", err)
 	}
 	runtimeDir := filepath.Join(home, ".embedded-postgres-go", "eagle-"+instance)
-	dataDir, err := os.MkdirTemp("", "eagle-"+instance+"-postgres-")
-	if err != nil {
-		return nil, fmt.Errorf("create PostgreSQL data directory: %w", err)
+	var startErr error
+	for attempt := 1; attempt <= postgresStartAttempts; attempt++ {
+		dataDir, err := os.MkdirTemp("", "eagle-"+instance+"-postgres-")
+		if err != nil {
+			return nil, fmt.Errorf("create PostgreSQL data directory: %w", err)
+		}
+		port, err := availablePort()
+		if err != nil {
+			_ = os.RemoveAll(dataDir)
+			return nil, err
+		}
+		server := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().
+			Username("eagle").Password("eagle").Database(database).
+			Port(port).RuntimePath(runtimeDir).DataPath(dataDir).Logger(io.Discard))
+		if err := server.Start(); err != nil {
+			_ = os.RemoveAll(dataDir)
+			startErr = err
+			continue
+		}
+		p := &Postgres{
+			DSN:     fmt.Sprintf("postgres://eagle:eagle@127.0.0.1:%d/%s?sslmode=disable", port, database),
+			server:  server,
+			dataDir: dataDir,
+		}
+		if err := RunMigrations(p.DSN); err != nil {
+			_ = p.Close()
+			return nil, err
+		}
+		return p, nil
 	}
-	port, err := availablePort()
-	if err != nil {
-		_ = os.RemoveAll(dataDir)
-		return nil, err
-	}
-	server := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().
-		Username("eagle").Password("eagle").Database(database).
-		Port(port).RuntimePath(runtimeDir).DataPath(dataDir).Logger(io.Discard))
-	if err := server.Start(); err != nil {
-		_ = os.RemoveAll(dataDir)
-		return nil, fmt.Errorf("start embedded postgres: %w", err)
-	}
-	p := &Postgres{
-		DSN:    fmt.Sprintf("postgres://eagle:eagle@127.0.0.1:%d/%s?sslmode=disable", port, database),
-		server: server, dataDir: dataDir, port: port,
-	}
-	service := "admin"
-	if len(migrationService) > 0 {
-		service = migrationService[0]
-	}
-	if err := RunMigrations(p.DSN, service); err != nil {
-		_ = p.Close()
-		return nil, err
-	}
-	return p, nil
+	return nil, fmt.Errorf("start embedded postgres after %d attempts: %w", postgresStartAttempts, startErr)
 }
 
 func (p *Postgres) Close() error {
@@ -73,29 +77,8 @@ func (p *Postgres) Close() error {
 	return removeErr
 }
 
-var databaseNamePattern = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
-
-func (p *Postgres) CreateDatabase(database, migrationService string) (string, error) {
-	if !databaseNamePattern.MatchString(database) {
-		return "", fmt.Errorf("invalid test database name %q", database)
-	}
-	db, err := sql.Open("postgres", p.DSN)
-	if err != nil {
-		return "", err
-	}
-	if _, err := db.Exec(`CREATE DATABASE ` + database); err != nil {
-		_ = db.Close()
-		return "", fmt.Errorf("create database %s: %w", database, err)
-	}
-	_ = db.Close()
-	dsn := fmt.Sprintf("postgres://eagle:eagle@127.0.0.1:%d/%s?sslmode=disable", p.port, database)
-	if err := RunMigrations(dsn, migrationService); err != nil {
-		return "", err
-	}
-	return dsn, nil
-}
-
-func RunMigrations(dsn, service string) error {
+// RunMigrations 对 dsn 执行仓库根目录 migrations/ 下的全部 goose 迁移。
+func RunMigrations(dsn string) error {
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return fmt.Errorf("open migration database: %w", err)
@@ -105,31 +88,18 @@ func RunMigrations(dsn, service string) error {
 		return fmt.Errorf("set migration dialect: %w", err)
 	}
 	goose.SetLogger(goose.NopLogger())
-	root, err := RepoRoot()
-	if err != nil {
-		return err
-	}
-	if err := goose.Up(db, filepath.Join(root, "app", service, "migrations")); err != nil {
+	if err := goose.Up(db, MigrationsDir()); err != nil {
 		return fmt.Errorf("run migrations: %w", err)
 	}
 	return nil
 }
 
-func RepoRoot() (string, error) {
-	dir, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.work")); err == nil {
-			return dir, nil
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", errors.New("go.work not found")
-		}
-		dir = parent
-	}
+// MigrationsDir 返回仓库根目录下的 migrations/ 绝对路径。
+// 以本文件位置推算而不是 os.Getwd：go test 的工作目录是被测包目录，
+// 不同包深度不同。
+func MigrationsDir() string {
+	_, file, _, _ := runtime.Caller(0)
+	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "migrations"))
 }
 
 func availablePort() (uint32, error) {

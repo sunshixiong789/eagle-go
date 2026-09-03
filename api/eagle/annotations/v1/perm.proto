@@ -25,12 +25,12 @@ enum AccessLevel {
 // 从方法描述符读出这些扩展，业务代码不出现鉴权分支。
 //
 //   rpc CreateUser (CreateUserRequest) returns (CreateUserResponse) {
-//     option (eagle.annotations.v1.perm) = "system:user:add";
+//     option (eagle.annotations.v1.perm) = "system:dict:add";
 //   }
 //
 // 字段号取 50000-99999 区间，该区间由 protobuf 保留给组织内部扩展使用。
 extend google.protobuf.MethodOptions {
-  // 调用该方法所需的权限码，例如 "system:user:add"。
+  // 调用该方法所需的权限码，例如 "system:dict:add"。
   // 留空表示只校验登录态、不校验具体权限。
   string perm = 50001;
 

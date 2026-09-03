@@ -85,31 +85,17 @@ func TestEnvironmentOverridesSensitiveDefaults(t *testing.T) {
 
 func TestConfigParses(t *testing.T) {
 	bc := loadConfig(t)
-	if err := appconfig.Validate(bc, appconfig.Requirements{Database: true, Auth: true, HTTP: true, File: true}); err != nil {
+	if err := appconfig.Validate(bc, appconfig.Requirements{Database: true, Auth: true, HTTP: true}); err != nil {
 		t.Fatalf("配置校验失败: %v", err)
 	}
-	if got := bc.GetServer().GetHttp().GetAddr(); got != "0.0.0.0:8001" {
-		t.Errorf("server.http.addr = %q, want %q", got, "0.0.0.0:8001")
+	if got := bc.GetServer().GetHttp().GetAddr(); got != "0.0.0.0:8000" {
+		t.Errorf("server.http.addr = %q, want %q", got, "0.0.0.0:8000")
 	}
 	if got := bc.GetObservability().GetMetricsAddr(); got != "0.0.0.0:9101" {
 		t.Errorf("observability.metrics_addr = %q, want %q", got, "0.0.0.0:9101")
 	}
 	if got := bc.GetData().GetDatabase().GetDsn(); !strings.Contains(got, "/eagle?") {
 		t.Errorf("data.database.dsn = %q, want database %q", got, "eagle")
-	}
-	if bc.GetFile().GetLocalDir() == "" || bc.GetFile().GetMaxSizeBytes() <= 0 {
-		t.Error("file 配置未解析出来")
-	}
-}
-
-func TestRequirementsDoNotCoupleUnrelatedConfig(t *testing.T) {
-	bc := loadConfig(t)
-	bc.File = nil
-	if err := appconfig.Validate(bc, appconfig.Requirements{}); err != nil {
-		t.Fatalf("未声明 File 时不应要求文件配置: %v", err)
-	}
-	if err := appconfig.Validate(bc, appconfig.Requirements{File: true}); err == nil {
-		t.Fatal("声明 File 时必须拒绝缺失的文件配置")
 	}
 }
 

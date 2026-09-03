@@ -7,6 +7,8 @@ LDFLAGS := -X main.Version=$(VERSION)
 MODULES := . tools
 REGISTRY ?= eagle
 IMAGE ?= $(REGISTRY)/eagle
+EAGLE_BUILDER_IMAGE ?= mirror.gcr.io/library/golang:1.27-alpine
+EAGLE_RUNTIME_IMAGE ?= gcr.io/distroless/static-debian12:nonroot
 
 # 工具从 tools module 编译成二进制后在仓库根目录执行。
 # 不用 `go -C tools tool xxx`：那会把工作目录切到 tools/，
@@ -99,7 +101,11 @@ build:
 .PHONY: image
 # 构建服务镜像，例如 make image VERSION=v1.2.0 REGISTRY=registry.example.com/eagle
 image:
-	docker build --build-arg VERSION=$(VERSION) -t $(IMAGE):$(VERSION) .
+	docker build \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg BUILDER_IMAGE=$(EAGLE_BUILDER_IMAGE) \
+		--build-arg RUNTIME_IMAGE=$(EAGLE_RUNTIME_IMAGE) \
+		-t $(IMAGE):$(VERSION) .
 
 .PHONY: push-image
 # 推送服务镜像；生产发布时显式执行，不绑定到 build
@@ -123,12 +129,14 @@ test:
 .PHONY: up
 # 构建并启动完整本地环境
 up:
-	docker compose -f deploy/docker-compose.yml up -d --build
+	EAGLE_BUILDER_IMAGE="$(EAGLE_BUILDER_IMAGE)" \
+	EAGLE_RUNTIME_IMAGE="$(EAGLE_RUNTIME_IMAGE)" \
+		docker compose -f deploy/docker-compose.yml up -d --build
 
 .PHONY: up-deps
 # 只启动本地基础依赖，服务由 make run 单独启动
 up-deps:
-	docker compose -f deploy/docker-compose.yml up -d postgres keycloak minio minio-init
+	docker compose -f deploy/docker-compose.yml up -d postgres keycloak
 
 .PHONY: validate-deploy
 # 校验 Compose 文件能被正确解析

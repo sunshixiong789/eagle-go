@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -48,27 +47,6 @@ func (e *testEnv) do(t *testing.T, method, path, token, body string) (int, strin
 	return resp.StatusCode, string(b)
 }
 
-func (e *testEnv) doRaw(t *testing.T, method, path, token, contentType string, body []byte) (int, http.Header, []byte) {
-	t.Helper()
-	req, err := http.NewRequest(method, e.http.URL+path, bytes.NewReader(body))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
-	if contentType != "" {
-		req.Header.Set("Content-Type", contentType)
-	}
-	resp, err := e.http.Client().Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	data, _ := io.ReadAll(resp.Body)
-	return resp.StatusCode, resp.Header.Clone(), data
-}
-
 // 服务能不能起来、路由通不通——这是此前从未验证过的部分。
 // 上一轮的 Duration 配置缺陷正是因为从没跑过完整启动路径才漏掉的。
 func TestServiceBootsAndRoutes(t *testing.T) {
@@ -99,7 +77,7 @@ func TestUnauthenticatedIsRejected(t *testing.T) {
 			realmRole: []string{adminRole}, expiresIn: -time.Hour,
 		})},
 		{"aud 不匹配", env.kc.mint(t, tokenOpts{
-			subject: "s3", username: "alice",
+			subject: "subject-3", username: "alice",
 			realmRole: []string{adminRole}, audience: []string{"another-service"},
 		})},
 		{"尚未生效", env.kc.mint(t, tokenOpts{
@@ -209,7 +187,7 @@ func TestClientRolesFromResourceAccess(t *testing.T) {
 	}
 }
 
-// 别的客户端的角色不该被本服务采纳，否则等于跨服务越权。
+// 别的客户端的角色不该被本服务采纳，否则同一 IdP 下任何 client 的同名角色都能越权。
 func TestOtherClientRolesAreIgnored(t *testing.T) {
 	env := newTestEnv(t)
 	env.grantRole(t, "foreign-role", "system:permission:list")

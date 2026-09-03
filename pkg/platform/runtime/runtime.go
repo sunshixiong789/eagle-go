@@ -1,4 +1,5 @@
-// Package runtime owns the common process lifecycle for every Eagle service.
+// Package runtime 承载进程生命周期：配置加载与校验、可观测性初始化、
+// 组件装配和优雅退出。
 package runtime
 
 import (

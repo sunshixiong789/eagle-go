@@ -10,7 +10,6 @@ import (
 	"github.com/go-kratos/kratos/contrib/otel/v3/metrics"
 	"github.com/go-kratos/kratos/contrib/otel/v3/tracing"
 	"github.com/go-kratos/kratos/v3/middleware"
-	"github.com/go-kratos/kratos/v3/middleware/logging"
 	"github.com/go-kratos/kratos/v3/middleware/metadata"
 	"github.com/go-kratos/kratos/v3/middleware/ratelimit"
 	"github.com/go-kratos/kratos/v3/middleware/recovery"
@@ -80,7 +79,7 @@ func NewMiddlewares(
 		// 都落在同一个 span 里，排查 403 时能看到完整调用链
 		tracing.Server(),
 		metricsMW,
-		logging.Server(logger),
+		RequestLogging(logger),
 		metadata.Server(metadata.WithPropagatedPrefix("x-md-global-")),
 		ratelimit.Server(),
 		authn.Server(verifier),

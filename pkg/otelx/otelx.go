@@ -2,7 +2,7 @@
 // 与 Prometheus 指标端点。
 //
 // 只依赖朴素的 Config 结构体而不是进程内部的 config proto，
-// 使多个服务能共用同一份实现，pkg 不反向依赖 app。
+// pkg 不反向依赖组合根。
 package otelx
 
 import (

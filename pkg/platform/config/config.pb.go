@@ -29,7 +29,6 @@ type Bootstrap struct {
 	Data          *Data                  `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
 	Auth          *Auth                  `protobuf:"bytes,3,opt,name=auth,proto3" json:"auth,omitempty"`
 	Observability *Observability         `protobuf:"bytes,4,opt,name=observability,proto3" json:"observability,omitempty"`
-	File          *File                  `protobuf:"bytes,5,opt,name=file,proto3" json:"file,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -92,84 +91,6 @@ func (x *Bootstrap) GetObservability() *Observability {
 	return nil
 }
 
-func (x *Bootstrap) GetFile() *File {
-	if x != nil {
-		return x.File
-	}
-	return nil
-}
-
-// File configures the development/local blob adapter. The module keeps a
-// storage port so production deployments can replace it with S3 or OSS.
-type File struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// local 只用于开发；s3 可连接 AWS S3、OSS、MinIO 等兼容服务。
-	Provider      string   `protobuf:"bytes,3,opt,name=provider,proto3" json:"provider,omitempty"`
-	LocalDir      string   `protobuf:"bytes,1,opt,name=local_dir,json=localDir,proto3" json:"local_dir,omitempty"`
-	MaxSizeBytes  int64    `protobuf:"varint,2,opt,name=max_size_bytes,json=maxSizeBytes,proto3" json:"max_size_bytes,omitempty"`
-	S3            *File_S3 `protobuf:"bytes,4,opt,name=s3,proto3" json:"s3,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *File) Reset() {
-	*x = File{}
-	mi := &file_config_proto_msgTypes[1]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *File) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*File) ProtoMessage() {}
-
-func (x *File) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[1]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use File.ProtoReflect.Descriptor instead.
-func (*File) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *File) GetProvider() string {
-	if x != nil {
-		return x.Provider
-	}
-	return ""
-}
-
-func (x *File) GetLocalDir() string {
-	if x != nil {
-		return x.LocalDir
-	}
-	return ""
-}
-
-func (x *File) GetMaxSizeBytes() int64 {
-	if x != nil {
-		return x.MaxSizeBytes
-	}
-	return 0
-}
-
-func (x *File) GetS3() *File_S3 {
-	if x != nil {
-		return x.S3
-	}
-	return nil
-}
-
 // Server 是 HTTP 监听参数。
 type Server struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -180,7 +101,7 @@ type Server struct {
 
 func (x *Server) Reset() {
 	*x = Server{}
-	mi := &file_config_proto_msgTypes[2]
+	mi := &file_config_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -192,7 +113,7 @@ func (x *Server) String() string {
 func (*Server) ProtoMessage() {}
 
 func (x *Server) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[2]
+	mi := &file_config_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -205,7 +126,7 @@ func (x *Server) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Server.ProtoReflect.Descriptor instead.
 func (*Server) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{2}
+	return file_config_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *Server) GetHttp() *Server_HTTP {
@@ -224,7 +145,7 @@ type Data struct {
 
 func (x *Data) Reset() {
 	*x = Data{}
-	mi := &file_config_proto_msgTypes[3]
+	mi := &file_config_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -236,7 +157,7 @@ func (x *Data) String() string {
 func (*Data) ProtoMessage() {}
 
 func (x *Data) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[3]
+	mi := &file_config_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -249,7 +170,7 @@ func (x *Data) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Data.ProtoReflect.Descriptor instead.
 func (*Data) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{3}
+	return file_config_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *Data) GetDatabase() *Data_Database {
@@ -303,7 +224,7 @@ type Auth struct {
 
 func (x *Auth) Reset() {
 	*x = Auth{}
-	mi := &file_config_proto_msgTypes[4]
+	mi := &file_config_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -315,7 +236,7 @@ func (x *Auth) String() string {
 func (*Auth) ProtoMessage() {}
 
 func (x *Auth) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[4]
+	mi := &file_config_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -328,7 +249,7 @@ func (x *Auth) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Auth.ProtoReflect.Descriptor instead.
 func (*Auth) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{4}
+	return file_config_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *Auth) GetIssuer() string {
@@ -405,7 +326,7 @@ type Observability struct {
 
 func (x *Observability) Reset() {
 	*x = Observability{}
-	mi := &file_config_proto_msgTypes[5]
+	mi := &file_config_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -417,7 +338,7 @@ func (x *Observability) String() string {
 func (*Observability) ProtoMessage() {}
 
 func (x *Observability) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[5]
+	mi := &file_config_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -430,7 +351,7 @@ func (x *Observability) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Observability.ProtoReflect.Descriptor instead.
 func (*Observability) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{5}
+	return file_config_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Observability) GetOtlpEndpoint() string {
@@ -468,90 +389,6 @@ func (x *Observability) GetOtlpInsecure() bool {
 	return false
 }
 
-type File_S3 struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Endpoint      string                 `protobuf:"bytes,1,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
-	Region        string                 `protobuf:"bytes,2,opt,name=region,proto3" json:"region,omitempty"`
-	Bucket        string                 `protobuf:"bytes,3,opt,name=bucket,proto3" json:"bucket,omitempty"`
-	AccessKey     string                 `protobuf:"bytes,4,opt,name=access_key,json=accessKey,proto3" json:"access_key,omitempty"`
-	SecretKey     string                 `protobuf:"bytes,5,opt,name=secret_key,json=secretKey,proto3" json:"secret_key,omitempty"`
-	UseSsl        bool                   `protobuf:"varint,6,opt,name=use_ssl,json=useSsl,proto3" json:"use_ssl,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *File_S3) Reset() {
-	*x = File_S3{}
-	mi := &file_config_proto_msgTypes[6]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *File_S3) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*File_S3) ProtoMessage() {}
-
-func (x *File_S3) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[6]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use File_S3.ProtoReflect.Descriptor instead.
-func (*File_S3) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{1, 0}
-}
-
-func (x *File_S3) GetEndpoint() string {
-	if x != nil {
-		return x.Endpoint
-	}
-	return ""
-}
-
-func (x *File_S3) GetRegion() string {
-	if x != nil {
-		return x.Region
-	}
-	return ""
-}
-
-func (x *File_S3) GetBucket() string {
-	if x != nil {
-		return x.Bucket
-	}
-	return ""
-}
-
-func (x *File_S3) GetAccessKey() string {
-	if x != nil {
-		return x.AccessKey
-	}
-	return ""
-}
-
-func (x *File_S3) GetSecretKey() string {
-	if x != nil {
-		return x.SecretKey
-	}
-	return ""
-}
-
-func (x *File_S3) GetUseSsl() bool {
-	if x != nil {
-		return x.UseSsl
-	}
-	return false
-}
-
 type Server_HTTP struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 网络类型，如 tcp。留空即可——不设置时用 Kratos 的默认值，
@@ -567,7 +404,7 @@ type Server_HTTP struct {
 
 func (x *Server_HTTP) Reset() {
 	*x = Server_HTTP{}
-	mi := &file_config_proto_msgTypes[7]
+	mi := &file_config_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -579,7 +416,7 @@ func (x *Server_HTTP) String() string {
 func (*Server_HTTP) ProtoMessage() {}
 
 func (x *Server_HTTP) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[7]
+	mi := &file_config_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -592,7 +429,7 @@ func (x *Server_HTTP) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Server_HTTP.ProtoReflect.Descriptor instead.
 func (*Server_HTTP) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{2, 0}
+	return file_config_proto_rawDescGZIP(), []int{1, 0}
 }
 
 func (x *Server_HTTP) GetNetwork() string {
@@ -635,7 +472,7 @@ type Data_Database struct {
 
 func (x *Data_Database) Reset() {
 	*x = Data_Database{}
-	mi := &file_config_proto_msgTypes[8]
+	mi := &file_config_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -647,7 +484,7 @@ func (x *Data_Database) String() string {
 func (*Data_Database) ProtoMessage() {}
 
 func (x *Data_Database) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[8]
+	mi := &file_config_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -660,7 +497,7 @@ func (x *Data_Database) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Data_Database.ProtoReflect.Descriptor instead.
 func (*Data_Database) Descriptor() ([]byte, []int) {
-	return file_config_proto_rawDescGZIP(), []int{3, 0}
+	return file_config_proto_rawDescGZIP(), []int{2, 0}
 }
 
 func (x *Data_Database) GetDsn() string {
@@ -702,28 +539,13 @@ var File_config_proto protoreflect.FileDescriptor
 
 const file_config_proto_rawDesc = "" +
 	"\n" +
-	"\fconfig.proto\x12\x15eagle.platform.config\x1a\x1egoogle/protobuf/duration.proto\"\xb9\x02\n" +
+	"\fconfig.proto\x12\x15eagle.platform.config\x1a\x1egoogle/protobuf/duration.proto\"\x8e\x02\n" +
 	"\tBootstrap\x125\n" +
 	"\x06server\x18\x01 \x01(\v2\x1d.eagle.platform.config.ServerR\x06server\x12/\n" +
 	"\x04data\x18\x02 \x01(\v2\x1b.eagle.platform.config.DataR\x04data\x12/\n" +
 	"\x04auth\x18\x03 \x01(\v2\x1b.eagle.platform.config.AuthR\x04auth\x12J\n" +
-	"\robservability\x18\x04 \x01(\v2$.eagle.platform.config.ObservabilityR\robservability\x12/\n" +
-	"\x04file\x18\x05 \x01(\v2\x1b.eagle.platform.config.FileR\x04fileJ\x04\b\x06\x10\aJ\x04\b\a\x10\bJ\x04\b\b\x10\tJ\x04\b\t\x10\n" +
-	"\"\xbf\x02\n" +
-	"\x04File\x12\x1a\n" +
-	"\bprovider\x18\x03 \x01(\tR\bprovider\x12\x1b\n" +
-	"\tlocal_dir\x18\x01 \x01(\tR\blocalDir\x12$\n" +
-	"\x0emax_size_bytes\x18\x02 \x01(\x03R\fmaxSizeBytes\x12.\n" +
-	"\x02s3\x18\x04 \x01(\v2\x1e.eagle.platform.config.File.S3R\x02s3\x1a\xa7\x01\n" +
-	"\x02S3\x12\x1a\n" +
-	"\bendpoint\x18\x01 \x01(\tR\bendpoint\x12\x16\n" +
-	"\x06region\x18\x02 \x01(\tR\x06region\x12\x16\n" +
-	"\x06bucket\x18\x03 \x01(\tR\x06bucket\x12\x1d\n" +
-	"\n" +
-	"access_key\x18\x04 \x01(\tR\taccessKey\x12\x1d\n" +
-	"\n" +
-	"secret_key\x18\x05 \x01(\tR\tsecretKey\x12\x17\n" +
-	"\ause_ssl\x18\x06 \x01(\bR\x06useSsl\"\xb1\x01\n" +
+	"\robservability\x18\x04 \x01(\v2$.eagle.platform.config.ObservabilityR\robservabilityJ\x04\b\x05\x10\x06J\x04\b\x06\x10\aJ\x04\b\a\x10\bJ\x04\b\b\x10\tJ\x04\b\t\x10\n" +
+	"\"\xb1\x01\n" +
 	"\x06Server\x126\n" +
 	"\x04http\x18\x01 \x01(\v2\".eagle.platform.config.Server.HTTPR\x04http\x1ai\n" +
 	"\x04HTTP\x12\x18\n" +
@@ -767,36 +589,32 @@ func file_config_proto_rawDescGZIP() []byte {
 	return file_config_proto_rawDescData
 }
 
-var file_config_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_config_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_config_proto_goTypes = []any{
 	(*Bootstrap)(nil),           // 0: eagle.platform.config.Bootstrap
-	(*File)(nil),                // 1: eagle.platform.config.File
-	(*Server)(nil),              // 2: eagle.platform.config.Server
-	(*Data)(nil),                // 3: eagle.platform.config.Data
-	(*Auth)(nil),                // 4: eagle.platform.config.Auth
-	(*Observability)(nil),       // 5: eagle.platform.config.Observability
-	(*File_S3)(nil),             // 6: eagle.platform.config.File.S3
-	(*Server_HTTP)(nil),         // 7: eagle.platform.config.Server.HTTP
-	(*Data_Database)(nil),       // 8: eagle.platform.config.Data.Database
-	(*durationpb.Duration)(nil), // 9: google.protobuf.Duration
+	(*Server)(nil),              // 1: eagle.platform.config.Server
+	(*Data)(nil),                // 2: eagle.platform.config.Data
+	(*Auth)(nil),                // 3: eagle.platform.config.Auth
+	(*Observability)(nil),       // 4: eagle.platform.config.Observability
+	(*Server_HTTP)(nil),         // 5: eagle.platform.config.Server.HTTP
+	(*Data_Database)(nil),       // 6: eagle.platform.config.Data.Database
+	(*durationpb.Duration)(nil), // 7: google.protobuf.Duration
 }
 var file_config_proto_depIdxs = []int32{
-	2,  // 0: eagle.platform.config.Bootstrap.server:type_name -> eagle.platform.config.Server
-	3,  // 1: eagle.platform.config.Bootstrap.data:type_name -> eagle.platform.config.Data
-	4,  // 2: eagle.platform.config.Bootstrap.auth:type_name -> eagle.platform.config.Auth
-	5,  // 3: eagle.platform.config.Bootstrap.observability:type_name -> eagle.platform.config.Observability
-	1,  // 4: eagle.platform.config.Bootstrap.file:type_name -> eagle.platform.config.File
-	6,  // 5: eagle.platform.config.File.s3:type_name -> eagle.platform.config.File.S3
-	7,  // 6: eagle.platform.config.Server.http:type_name -> eagle.platform.config.Server.HTTP
-	8,  // 7: eagle.platform.config.Data.database:type_name -> eagle.platform.config.Data.Database
-	9,  // 8: eagle.platform.config.Server.HTTP.timeout:type_name -> google.protobuf.Duration
-	9,  // 9: eagle.platform.config.Data.Database.max_conn_lifetime:type_name -> google.protobuf.Duration
-	9,  // 10: eagle.platform.config.Data.Database.max_conn_idle_time:type_name -> google.protobuf.Duration
-	11, // [11:11] is the sub-list for method output_type
-	11, // [11:11] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	1, // 0: eagle.platform.config.Bootstrap.server:type_name -> eagle.platform.config.Server
+	2, // 1: eagle.platform.config.Bootstrap.data:type_name -> eagle.platform.config.Data
+	3, // 2: eagle.platform.config.Bootstrap.auth:type_name -> eagle.platform.config.Auth
+	4, // 3: eagle.platform.config.Bootstrap.observability:type_name -> eagle.platform.config.Observability
+	5, // 4: eagle.platform.config.Server.http:type_name -> eagle.platform.config.Server.HTTP
+	6, // 5: eagle.platform.config.Data.database:type_name -> eagle.platform.config.Data.Database
+	7, // 6: eagle.platform.config.Server.HTTP.timeout:type_name -> google.protobuf.Duration
+	7, // 7: eagle.platform.config.Data.Database.max_conn_lifetime:type_name -> google.protobuf.Duration
+	7, // 8: eagle.platform.config.Data.Database.max_conn_idle_time:type_name -> google.protobuf.Duration
+	9, // [9:9] is the sub-list for method output_type
+	9, // [9:9] is the sub-list for method input_type
+	9, // [9:9] is the sub-list for extension type_name
+	9, // [9:9] is the sub-list for extension extendee
+	0, // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_config_proto_init() }
@@ -810,7 +628,7 @@ func file_config_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_config_proto_rawDesc), len(file_config_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

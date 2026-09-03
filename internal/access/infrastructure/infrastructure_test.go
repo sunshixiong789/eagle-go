@@ -312,8 +312,8 @@ func TestPolicyStoreLoadsSeededPolicies(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveCodes: %v", err)
 	}
-	if !codesCover(codes, "system:dict:query") {
-		t.Error("user 角色应拥有 system:dict:query")
+	if !codesCover(codes, "system:dict:list") {
+		t.Error("user 角色应拥有 system:dict:list")
 	}
 	if codesCover(codes, "system:permission:remove") {
 		t.Error("user 角色不应拥有 system:permission:remove")
@@ -353,8 +353,8 @@ func TestPolicyStoreRoleInheritanceFromSeed(t *testing.T) {
 		t.Fatalf("ResolveCodes: %v", err)
 	}
 	// admin 继承 user，因此应包含 user 的只读权限
-	if !slices.Contains(domain.PermissionCodeStrings(codes), "system:dict:query") {
-		t.Errorf("admin 应继承 user 的 system:dict:query, got %v", codes)
+	if !slices.Contains(domain.PermissionCodeStrings(codes), "system:dict:list") {
+		t.Errorf("admin 应继承 user 的 system:dict:list, got %v", codes)
 	}
 }
 

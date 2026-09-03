@@ -10,7 +10,6 @@ type Requirements struct {
 	Database bool
 	Auth     bool
 	HTTP     bool
-	File     bool
 }
 
 // Validate 校验部署时最终合并出的配置。requirements 为空时校验示例配置
@@ -24,11 +23,8 @@ func Validate(b *Bootstrap, requirements ...Requirements) error {
 	auth := b.GetAuth()
 	server := b.GetServer()
 	obs := b.GetObservability()
-	file := b.GetFile()
 	required := Requirements{Database: true, Auth: true, HTTP: true}
-	if len(requirements) == 0 {
-		required.File = true
-	} else {
+	if len(requirements) > 0 {
 		required = requirements[0]
 	}
 
@@ -64,25 +60,6 @@ func Validate(b *Bootstrap, requirements ...Requirements) error {
 	}
 	if obs.GetMetricsAddr() != "" && obs.GetMetricsAddr() == server.GetHttp().GetAddr() {
 		errs = append(errs, errors.New("observability.metrics_addr must differ from server.http.addr"))
-	}
-	if required.File && file.GetMaxSizeBytes() <= 0 {
-		errs = append(errs, errors.New("file.max_size_bytes must be positive"))
-	}
-	if required.File {
-		switch file.GetProvider() {
-		case "local":
-			if strings.TrimSpace(file.GetLocalDir()) == "" {
-				errs = append(errs, errors.New("file.local_dir is required for local provider"))
-			}
-		case "s3":
-			s3 := file.GetS3()
-			if strings.TrimSpace(s3.GetEndpoint()) == "" || strings.TrimSpace(s3.GetBucket()) == "" ||
-				strings.TrimSpace(s3.GetAccessKey()) == "" || strings.TrimSpace(s3.GetSecretKey()) == "" {
-				errs = append(errs, errors.New("file.s3 endpoint, bucket, access_key and secret_key are required"))
-			}
-		default:
-			errs = append(errs, errors.New("file.provider must be local or s3"))
-		}
 	}
 	return errors.Join(errs...)
 }
