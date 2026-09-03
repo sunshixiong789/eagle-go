@@ -142,6 +142,10 @@ up-deps:
 # 校验 Compose 文件能被正确解析
 validate-deploy:
 	docker compose -f deploy/docker-compose.yml config --quiet
+	EAGLE_IMAGE=eagle/eagle:validation \
+	EAGLE_ENV_FILE=$(CURDIR)/deploy/environments/development.env.example \
+		docker compose -f deploy/compose.app.yml config --quiet
+	sh -n deploy/scripts/deploy.sh
 
 .PHONY: down
 down:

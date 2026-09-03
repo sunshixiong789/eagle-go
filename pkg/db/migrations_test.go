@@ -5,7 +5,6 @@ import (
 	"flag"
 	"testing"
 
-	_ "github.com/lib/pq"
 	"github.com/pressly/goose/v3"
 
 	"github.com/eagle-go/eagle/tests/testkit"
@@ -25,7 +24,7 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = pg.Close() })
 
-	sqlDB, err := sql.Open("postgres", pg.DSN)
+	sqlDB, err := sql.Open("pgx", pg.DSN)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

@@ -12,7 +12,7 @@ import (
 	"runtime"
 
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
-	_ "github.com/lib/pq"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 )
 
@@ -79,7 +79,7 @@ func (p *Postgres) Close() error {
 
 // RunMigrations 对 dsn 执行仓库根目录 migrations/ 下的全部 goose 迁移。
 func RunMigrations(dsn string) error {
-	db, err := sql.Open("postgres", dsn)
+	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		return fmt.Errorf("open migration database: %w", err)
 	}

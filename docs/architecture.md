@@ -23,7 +23,7 @@
     pkg                                 无业务语义的共享技术模块
     tools                               生成器与迁移程序（独立 go.mod）
     tests                               架构测试、e2e 与测试工具
-    deploy                              本地 PostgreSQL、迁移与应用 Compose
+    deploy                              本地 Compose 与云效/ECS 应用部署资产
 
 `internal/` 是 Go 的编译器可见性边界，仓库外无法 import。仓库内的模块边界由 `tests/architecture` 检查：模块之间不得 import 对方的 `service` 或 `infrastructure`。
 
@@ -83,7 +83,9 @@
            ↓
       外部 OIDC IdP
 
-`make up` 会先跑一次性迁移任务，成功后再启动应用。生产入口需要的 TLS 终止、请求限制和真实客户端 IP 由环境侧的 LB 或网关提供，仓库不绑定具体网关。
+`make up` 会先跑一次性迁移任务，成功后再启动应用。远端部署不启动数据库，只连接环境侧独立
+管理的 PostgreSQL；生产入口需要的 TLS 终止、请求限制和真实客户端 IP 由环境侧的 LB 或网关提供，
+仓库不绑定具体网关。
 
 生产是同一个镜像的两个 entrypoint：`/app/migrate` 跑迁移，`/app/eagle` 跑服务。schema 与代码同版本发布，不会出现「服务已升级、迁移还没跑」的窗口。服务进程启动时**不会**自动迁移；发布顺序固定为「迁移任务 → 服务滚动 → 观察」，编排方式（Compose、Kubernetes 或其它）由环境仓库自行维护。
 

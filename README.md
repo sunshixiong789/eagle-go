@@ -57,7 +57,7 @@ eagle-go/
 ├── pkg/                    # 无业务语义的技术能力，不得 import internal/
 ├── tests/                  # 架构测试、端到端测试和测试工具
 ├── tools/                  # 独立 go.mod，锁定生成工具链与迁移/健康检查程序
-├── deploy/                 # 本地 PostgreSQL、迁移与应用 Compose
+├── deploy/                 # 本地 Compose 与云效/ECS 应用部署资产
 ├── docs/                   # 架构与开发环境文档
 ├── Dockerfile              # 单一构建目标
 └── Makefile                # 统一开发入口
@@ -400,8 +400,10 @@ make image VERSION=v1.2.0 REGISTRY=registry.example.com/eagle
 make push-image VERSION=v1.2.0 REGISTRY=registry.example.com/eagle
 ```
 
-仓库只提供本地 Docker Compose 作为部署资产。生产按「迁移任务 → 服务滚动 → 观察」推进，
-应用容器启动时不自动迁移；编排方式（Kubernetes、Nomad 或其它）由环境仓库自行维护。
+仓库提供本地 Docker Compose，以及不包含数据库的 ECS 应用部署清单。远端按
+「独立数据库 → 一次性迁移任务 → 服务更新 → readiness 观察」推进，应用容器启动时不自动迁移。
+使用云效 Flow 部署开发、测试环境时，参见
+[云效 Flow 开发与测试环境部署](docs/aliyun-flow-deployment.md)。
 
 多副本部署时有两点要知道：权限策略每 5 秒按版本号对账，改完角色绑定最坏要等一个周期才在
 所有副本生效；进程启动时校验 proto 声明的权限码与数据库 catalog 一致，不一致直接 fail
