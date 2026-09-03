@@ -11,7 +11,7 @@
 | `access` | 权限码目录、导航树、角色绑定、Casbin 策略 | `permission_definition`、`casbin_rule`、策略版本 | 无 |
 | `dictionary` | 字典的简单 CRUD，作为新模块的样板 | `dict_type`、`dict_data` | 无 |
 
-IdP（默认 Keycloak）是独立的认证中心，负责用户、口令、角色和 token。**本仓库不建用户表**。
+外部 IdP 负责用户、凭证、角色和 token。**本仓库不部署 IdP，也不建用户表**。
 
 ## 目录表达什么
 
@@ -23,7 +23,7 @@ IdP（默认 Keycloak）是独立的认证中心，负责用户、口令、角�
     pkg                                 无业务语义的共享技术模块
     tools                               生成器与迁移程序（独立 go.mod）
     tests                               架构测试、e2e 与测试工具
-    deploy                              本地 Compose、Keycloak realm 与说明
+    deploy                              本地 PostgreSQL、迁移与应用 Compose
 
 `internal/` 是 Go 的编译器可见性边界，仓库外无法 import。仓库内的模块边界由 `tests/architecture` 检查：模块之间不得 import 对方的 `service` 或 `infrastructure`。
 
@@ -69,7 +69,7 @@ IdP（默认 Keycloak）是独立的认证中心，负责用户、口令、角�
 - 本服务是纯粹的 **OIDC 资源服务器**：只用 JWKS 验签 + 读 claim，不建用户表，不做 OIDC discovery，不依赖任何 IdP 专有接口。
 - 权限要求声明在 proto 的 `access` / `perm` 上，handler 不写鉴权分支。可选级别只有 `PUBLIC` / `AUTHENTICATED` / `PERMISSION_REQUIRED`。
 - 角色分两级命名空间：realm 角色 `admin` → `realm:admin`，本 client 的角色 `admin` → `client:eagle-api:admin`。`auth.super_admin_role` 的短路**只认 client 角色**，否则任何 realm 级的 `admin` 都会顺带拿到本服务全部权限。
-- 换 IdP（Logto / Auth0 / Authing）**不改代码**：JWKS 路径和 role claim 路径都在 `auth` 配置里，对照表见 [`deploy/keycloak/README.md`](../deploy/keycloak/README.md)。苹果、Google 等第三方登录在 IdP 侧配置，应用只管拿到的那张 token。
+- 换 IdP **不改代码**：issuer、JWKS 和角色 claim 路径都在 `auth` 配置里。短信、手机号一键登录和第三方登录在 IdP 侧配置，应用只管拿到的 access token。
 
 ### 为什么单体还保留策略版本对账
 
@@ -79,9 +79,9 @@ IdP（默认 Keycloak）是独立的认证中心，负责用户、口令、角�
 
 本地：
 
-    Browser / curl → eagle:8000
-                        ├── PostgreSQL
-                        └── Keycloak
+    Browser / curl → eagle:8000 → PostgreSQL
+           ↓
+      外部 OIDC IdP
 
 `make up` 会先跑一次性迁移任务，成功后再启动应用。生产入口需要的 TLS 终止、请求限制和真实客户端 IP 由环境侧的 LB 或网关提供，仓库不绑定具体网关。
 

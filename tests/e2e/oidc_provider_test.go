@@ -13,23 +13,23 @@ import (
 	"github.com/go-jose/go-jose/v4/jwt"
 )
 
-// fakeKeycloak 是一个最小的 OIDC 提供方替身：暴露 JWKS 端点，
-// 并按 Keycloak 的 claim 结构签发真实的 RS256 token。
+// fakeOIDCProvider 是一个最小的 OIDC 提供方替身：暴露 JWKS 端点，
+// 并按测试配置的 claim 结构签发真实的 RS256 token。
 //
 // 用它而不是直接构造 Principal，是因为需要验证的恰恰是「真实 token
 // 经过验签、解析、映射之后能不能得到正确的 Principal」这条链路。
 // 跳过签名和 JSON 解析去直接塞 Principal，等于把最容易出错的一段
 // 排除在测试之外——claim 名写错、角色嵌套层级搞错都不会被发现。
 //
-// 它替代不了真实 Keycloak 的地方只有一处：token 的签发流程本身
+// 它替代不了真实 IdP 的地方只有一处：token 的签发流程本身
 // （登录、授权码交换、refresh）。token 的形状与验证路径是等价的。
-type fakeKeycloak struct {
+type fakeOIDCProvider struct {
 	server *httptest.Server
 	key    *rsa.PrivateKey
 	keyID  string
 }
 
-func newFakeKeycloak(t *testing.T) *fakeKeycloak {
+func newFakeOIDCProvider(t *testing.T) *fakeOIDCProvider {
 	t.Helper()
 
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -37,16 +37,14 @@ func newFakeKeycloak(t *testing.T) *fakeKeycloak {
 		t.Fatalf("生成 RSA 密钥: %v", err)
 	}
 
-	fk := &fakeKeycloak{key: key, keyID: "test-key-1"}
+	provider := &fakeOIDCProvider{key: key, keyID: "test-key-1"}
 
 	mux := http.NewServeMux()
-	// Keycloak 的 JWKS 路径不是 OIDC 常见的 /.well-known/jwks.json，
-	// 这里刻意用真实路径，以验证 authn 的默认推导逻辑正确
-	mux.HandleFunc("/protocol/openid-connect/certs", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/.well-known/jwks.json", func(w http.ResponseWriter, _ *http.Request) {
 		jwks := jose.JSONWebKeySet{
 			Keys: []jose.JSONWebKey{{
 				Key:       key.Public(),
-				KeyID:     fk.keyID,
+				KeyID:     provider.keyID,
 				Algorithm: string(jose.RS256),
 				Use:       "sig",
 			}},
@@ -55,14 +53,13 @@ func newFakeKeycloak(t *testing.T) *fakeKeycloak {
 		_ = json.NewEncoder(w).Encode(jwks)
 	})
 
-	fk.server = httptest.NewServer(mux)
-	t.Cleanup(fk.server.Close)
-	return fk
+	provider.server = httptest.NewServer(mux)
+	t.Cleanup(provider.server.Close)
+	return provider
 }
 
-// issuer 返回 realm 的 issuer。真实 Keycloak 形如
-// https://host/realms/eagle，这里用 httptest 的地址充当。
-func (fk *fakeKeycloak) issuer() string { return fk.server.URL }
+func (p *fakeOIDCProvider) issuer() string  { return p.server.URL }
+func (p *fakeOIDCProvider) jwksURL() string { return p.server.URL + "/.well-known/jwks.json" }
 
 // tokenOpts 描述要签发的 token。
 type tokenOpts struct {
@@ -79,8 +76,8 @@ type tokenOpts struct {
 	wrongKey bool
 }
 
-// mint 按 Keycloak 的 access token 结构签发 token。
-func (fk *fakeKeycloak) mint(t *testing.T, o tokenOpts) string {
+// mint 按测试配置的 access token 结构签发 token。
+func (p *fakeOIDCProvider) mint(t *testing.T, o tokenOpts) string {
 	t.Helper()
 
 	if o.expiresIn == 0 {
@@ -93,7 +90,7 @@ func (fk *fakeKeycloak) mint(t *testing.T, o tokenOpts) string {
 		o.algorithm = jose.RS256
 	}
 
-	signingKey := fk.key
+	signingKey := p.key
 	if o.wrongKey {
 		other, err := rsa.GenerateKey(rand.Reader, 2048)
 		if err != nil {
@@ -105,7 +102,7 @@ func (fk *fakeKeycloak) mint(t *testing.T, o tokenOpts) string {
 	signer, err := jose.NewSigner(
 		jose.SigningKey{Algorithm: o.algorithm, Key: signingKey},
 		// kid 必须带上：RemoteKeySet 按 kid 选公钥
-		(&jose.SignerOptions{}).WithType("JWT").WithHeader("kid", fk.keyID),
+		(&jose.SignerOptions{}).WithType("JWT").WithHeader("kid", p.keyID),
 	)
 	if err != nil {
 		t.Fatalf("构造签名器: %v", err)
@@ -113,10 +110,9 @@ func (fk *fakeKeycloak) mint(t *testing.T, o tokenOpts) string {
 
 	now := time.Now()
 
-	// 这里的 JSON tag 必须与 Keycloak 实际下发的字段名逐字一致——
-	// 整个测试的价值就在于验证 pkg/authn 能正确解析这个结构
+	// JSON tag 必须与测试配置的 claim 路径逐字一致，才能验证完整映射链路。
 	claims := map[string]any{
-		"iss":                fk.issuer(),
+		"iss":                p.issuer(),
 		"sub":                o.subject,
 		"aud":                o.audience,
 		"exp":                now.Add(o.expiresIn).Unix(),
@@ -149,9 +145,9 @@ func (fk *fakeKeycloak) mint(t *testing.T, o tokenOpts) string {
 }
 
 // userToken 签发一个普通用户 token。
-func (fk *fakeKeycloak) userToken(t *testing.T, username string, roles ...string) string {
+func (p *fakeOIDCProvider) userToken(t *testing.T, username string, roles ...string) string {
 	t.Helper()
-	return fk.mint(t, tokenOpts{
+	return p.mint(t, tokenOpts{
 		subject:   "sub-" + username,
 		username:  username,
 		realmRole: roles,

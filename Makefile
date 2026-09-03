@@ -113,7 +113,7 @@ push-image:
 	docker push $(IMAGE):$(VERSION)
 
 .PHONY: run
-# 本地直接启动服务（依赖 make up-deps 起好的基础组件）
+# 本地直接启动服务（依赖 make up-deps 起好的 PostgreSQL）
 run:
 	EAGLE_DATABASE_DSN="$(EAGLE_DSN)" go run -ldflags "$(LDFLAGS)" ./cmd/eagle -conf configs
 
@@ -136,7 +136,7 @@ up:
 .PHONY: up-deps
 # 只启动本地基础依赖，服务由 make run 单独启动
 up-deps:
-	docker compose -f deploy/docker-compose.yml up -d postgres keycloak
+	docker compose -f deploy/docker-compose.yml up -d postgres
 
 .PHONY: validate-deploy
 # 校验 Compose 文件能被正确解析

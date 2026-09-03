@@ -48,6 +48,9 @@ func Validate(b *Bootstrap, requirements ...Requirements) error {
 		if auth.GetClientId() == "" || auth.GetAudience() == "" {
 			errs = append(errs, errors.New("auth.client_id and auth.audience are required"))
 		}
+		if auth.GetClientRolesClaim() == "" {
+			errs = append(errs, errors.New("auth.client_roles_claim is required"))
+		}
 		if auth.GetSuperAdminRole() == "" {
 			errs = append(errs, errors.New("auth.super_admin_role is required"))
 		}
@@ -66,9 +69,7 @@ func Validate(b *Bootstrap, requirements ...Requirements) error {
 
 // validateIssuer 只要求 issuer 是一个不带尾斜杠的绝对 URL。
 //
-// 这里刻意不校验路径形态：Keycloak 是 /realms/<realm>，Auth0 是裸域名，
-// Logto 是 /oidc，Authing 又是另一套。把 Keycloak 的路径约定写死在校验里，
-// 换 IdP 时进程会直接启动失败，而这与「IdP 可替换」的设计目标冲突。
+// 这里刻意不校验路径形态：不同 IdP 的 issuer 可能是裸域名或任意路径。
 func validateIssuer(raw string) error {
 	if raw == "" {
 		return errors.New("auth.issuer is required")
@@ -92,7 +93,10 @@ func validateJWKS(jwksURL, jwksPath string) error {
 		}
 		return nil
 	}
-	if jwksPath != "" && !strings.HasPrefix(jwksPath, "/") {
+	if jwksPath == "" {
+		return errors.New("auth.jwks_url or auth.jwks_path is required")
+	}
+	if !strings.HasPrefix(jwksPath, "/") {
 		return errors.New("auth.jwks_path must start with /")
 	}
 	return nil

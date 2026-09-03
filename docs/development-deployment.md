@@ -42,7 +42,7 @@ docker compose -f deploy/docker-compose.yml ps --all
 预期结果：
 
 - `eagle-migrate` 为 `Exited (0)`；
-- `eagle`、`postgres`、`keycloak` 为运行状态。
+- `eagle`、`postgres` 为运行状态。
 
 检查 readiness：
 
@@ -67,18 +67,17 @@ make down
 
 ## 本地入口
 
-| 组件 | 地址 | 本地凭据 |
-|---|---|---|
-| 应用 HTTP | `http://127.0.0.1:8000` | - |
-| 应用 metrics / health | `http://127.0.0.1:9101` | - |
-| Keycloak | `http://127.0.0.1:8080` | 管理员 `admin/admin` |
+| 组件 | 地址 |
+|---|---|
+| 应用 HTTP | `http://127.0.0.1:8000` |
+| 应用 metrics / health | `http://127.0.0.1:9101` |
 
-容器之间使用 Compose DNS（`postgres:5432`、`keycloak:8080`）；
-宿主机进程使用上表中的 `127.0.0.1` 端口。
+容器内通过 Compose DNS `postgres:5432` 访问数据库；宿主机进程使用 `127.0.0.1:5432`。
+OIDC IdP 是仓库外部依赖，容器和宿主机都通过 `EAGLE_AUTH_*` 配置访问。
 
 ## 宿主机断点调试
 
-只启动 PostgreSQL 和 Keycloak：
+只启动 PostgreSQL：
 
 ```bash
 make up-deps
@@ -113,41 +112,14 @@ docker compose -f deploy/docker-compose.yml stop eagle
 `EAGLE_OBSERVABILITY_OTLP_ENDPOINT=host:4317` 打开，collector 不可达只会在后台重试，
 不会阻止应用启动。
 
-## 首个本地用户
+## 接入外部 IdP
 
-`deploy/keycloak/realm-eagle.json` 刻意不预置任何用户——预置用户就等于把一份可用凭据提交
-进仓库。本地用户手工创建。
-
-登录 Keycloak 管理 CLI：
-
-```bash
-docker compose -f deploy/docker-compose.yml exec -T keycloak /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user admin --password admin
-```
-
-创建用户：
+本仓库不启动或管理用户目录。联调受保护接口前，在外部 OIDC IdP 创建 API/client，配置
+`EAGLE_AUTH_ISSUER`、`EAGLE_AUTH_AUDIENCE`、JWKS 地址以及角色 claim 路径。取得 access token
+后调用接口：
 
 ```bash
-docker compose -f deploy/docker-compose.yml exec -T keycloak /opt/keycloak/bin/kcadm.sh create users -r eagle -s username=alice -s enabled=true -s firstName=Alice -s lastName=Test -s email=alice@example.com
-```
-
-设置密码：
-
-```bash
-docker compose -f deploy/docker-compose.yml exec -T keycloak /opt/keycloak/bin/kcadm.sh set-password -r eagle --username alice --new-password 'Passw0rd!'
-```
-
-授予开发管理员角色。这里加的是 `eagle-api` 这个 client 上的角色，不是 realm 角色——
-超管短路只认 client 角色：
-
-```bash
-docker compose -f deploy/docker-compose.yml exec -T keycloak /opt/keycloak/bin/kcadm.sh add-roles -r eagle --uusername alice --cclientid eagle-api --rolename admin
-```
-
-获取 token 并调用权限接口。这个代码块是一个原子动作，避免 IDEA 分别运行代码块时丢失
-shell 变量：
-
-```bash
-TOKEN=$(curl --silent --fail -d client_id=eagle-web -d username=alice -d 'password=Passw0rd!' -d grant_type=password http://127.0.0.1:8080/realms/eagle/protocol/openid-connect/token | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p') && curl --fail -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8000/v1/system/permissions
+curl --fail -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8000/v1/system/permissions
 ```
 
 不带 `Authorization` 应返回 401；带无权限的 token 应返回 403。
@@ -196,9 +168,8 @@ docker compose -f deploy/docker-compose.yml down -v
 
 ### 接口返回 401
 
-`EAGLE_AUTH_ISSUER` 必须与 token 里的 `iss` 逐字一致。Compose 里 issuer 用的是宿主机可见的
-`http://127.0.0.1:8080/...`，而 JWKS 走容器网络 `http://keycloak:8080/...`——两者地址不同是
-故意的，改成一致反而会 401。
+`EAGLE_AUTH_ISSUER` 必须与 token 里的 `iss` 逐字一致。若公开 issuer 与服务读取 JWKS 的地址
+不同，用 `EAGLE_AUTH_JWKS_URL` 配置后者；不要为迁就网络地址修改 issuer。
 
 ### 接口返回 403
 

@@ -24,8 +24,12 @@ func TestClaimsSeparatesClientRolesFromRealmRoles(t *testing.T) {
 			"other": {"roles": ["foreign-admin"]}
 		}
 	}`)
+	paths := ClaimPaths{
+		RealmRoles:  "realm_access.roles",
+		ClientRoles: "resource_access",
+	}
 
-	if got := claims.ClientRoles(ClaimPaths{}, "eagle-system"); !slices.Equal(got, []string{"system-admin", "editor"}) {
+	if got := claims.ClientRoles(paths, "eagle-system"); !slices.Equal(got, []string{"system-admin", "editor"}) {
 		t.Fatalf("ClientRoles = %v", got)
 	}
 	wantAll := []string{
@@ -34,12 +38,12 @@ func TestClaimsSeparatesClientRolesFromRealmRoles(t *testing.T) {
 		"client:eagle-system:system-admin",
 		"client:eagle-system:editor",
 	}
-	if got := claims.Roles(ClaimPaths{}, "eagle-system"); !slices.Equal(got, wantAll) {
+	if got := claims.Roles(paths, "eagle-system"); !slices.Equal(got, wantAll) {
 		t.Fatalf("Roles = %v, want %v", got, wantAll)
 	}
 }
 
-// 换 IdP 只改配置：同一份代码要能读出非 Keycloak 布局的角色。
+// 换 IdP 只改配置：同一份代码要能读出不同布局的角色。
 func TestClaimsHonoursConfiguredClaimPaths(t *testing.T) {
 	claims := mustClaims(t, `{
 		"sub": "u-1",
@@ -69,6 +73,18 @@ func TestClaimsMissingRoleClaimsYieldNoRoles(t *testing.T) {
 	}
 	if got := claims.ClientRoles(ClaimPaths{}, "eagle-system"); len(got) != 0 {
 		t.Fatalf("ClientRoles = %v, want empty", got)
+	}
+}
+
+func TestClaimsDoesNotAssumeProviderSpecificRolePaths(t *testing.T) {
+	claims := mustClaims(t, `{
+		"sub": "u-1",
+		"realm_access": {"roles": ["admin"]},
+		"resource_access": {"eagle-system": {"roles": ["admin"]}}
+	}`)
+
+	if got := claims.Roles(ClaimPaths{}, "eagle-system"); len(got) != 0 {
+		t.Fatalf("Roles = %v, want empty without configured claim paths", got)
 	}
 }
 

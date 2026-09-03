@@ -99,11 +99,30 @@ func TestConfigParses(t *testing.T) {
 	}
 }
 
+func TestAuthConfigRequiresProviderSpecificLocations(t *testing.T) {
+	bc := &appconfig.Bootstrap{Auth: &appconfig.Auth{
+		Issuer:         "https://idp.example.com",
+		ClientId:       "eagle-api",
+		Audience:       "eagle-api",
+		SuperAdminRole: "admin",
+	}}
+
+	err := appconfig.Validate(bc, appconfig.Requirements{Auth: true})
+	if err == nil {
+		t.Fatal("未配置 JWKS 和角色 claim 时应拒绝启动")
+	}
+	message := err.Error()
+	for _, want := range []string{"auth.jwks_url or auth.jwks_path is required", "auth.client_roles_claim is required"} {
+		if !strings.Contains(message, want) {
+			t.Errorf("Validate error = %q, want %q", message, want)
+		}
+	}
+}
+
 // issuer 必须与 IdP 签发的 iss 完全一致，否则所有 token 都会因 iss
 // 不匹配被拒——而报错信息不会指向这里，很难定位。
 //
-// 这里刻意不断言 issuer 形如 /realms/<realm>：那是 Keycloak 的路径约定，
-// 把它写进测试等于把 IdP 焊死（见 validate.go 的 validateIssuer）。
+// 这里刻意不断言 issuer 的路径形态，避免把 IdP 供应商焊死。
 func TestAuthConfigIsUsable(t *testing.T) {
 	auth := loadConfig(t).GetAuth()
 
@@ -122,10 +141,15 @@ func TestAuthConfigIsUsable(t *testing.T) {
 	if auth.GetSuperAdminRole() == "" {
 		t.Error("auth.super_admin_role 未配置")
 	}
-	// jwks_path 留空是合法的（取 Keycloak 约定），但写了就必须是绝对路径，
-	// 否则会和 issuer 拼出 https://idp.example.com/realmsprotocol/... 这种地址。
+	if auth.GetJwksUrl() == "" && auth.GetJwksPath() == "" {
+		t.Error("auth.jwks_url 与 auth.jwks_path 至少配置一个")
+	}
+	// 相对 JWKS 路径必须以 / 开头，否则会与 issuer 拼出错误地址。
 	if jwksPath := auth.GetJwksPath(); jwksPath != "" && !strings.HasPrefix(jwksPath, "/") {
 		t.Errorf("auth.jwks_path = %q，必须以 / 开头", jwksPath)
+	}
+	if auth.GetClientRolesClaim() == "" {
+		t.Error("auth.client_roles_claim 未配置")
 	}
 }
 

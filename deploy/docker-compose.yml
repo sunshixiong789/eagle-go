@@ -18,40 +18,11 @@ services:
     ports: ["5432:5432"]
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./postgres/init-databases.sh:/docker-entrypoint-initdb.d/10-databases.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U eagle -d eagle"]
       interval: 5s
       timeout: 3s
       retries: 10
-
-  # 默认本地 IdP。换成 Logto / Auth0 / Authing 时不需要改应用代码，
-  # 只要把 eagle 的 EAGLE_AUTH_ISSUER / JWKS_PATH / *_ROLES_CLAIM 指过去。
-  keycloak:
-    image: quay.io/keycloak/keycloak:26.0
-    command: ["start-dev", "--import-realm"]
-    environment:
-      KC_BOOTSTRAP_ADMIN_USERNAME: admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
-      KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
-      KC_DB_USERNAME: eagle
-      KC_DB_PASSWORD: eagle
-      KC_HTTP_PORT: 8080
-      KC_HOSTNAME_STRICT: "false"
-      KC_HEALTH_ENABLED: "true"
-    ports: ["8080:8080"]
-    volumes:
-      - ./keycloak/realm-eagle.json:/opt/keycloak/data/import/realm-eagle.json:ro
-    healthcheck:
-      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9000; printf '%s\\r\\n' 'GET /health/ready HTTP/1.1' 'Host: localhost' 'Connection: close' '' >&3; grep -q '200 OK' <&3"]
-      interval: 5s
-      timeout: 3s
-      retries: 30
-      start_period: 120s
-    depends_on:
-      postgres:
-        condition: service_healthy
 
   # 迁移与服务是同一个镜像的两个 entrypoint：schema 与代码同版本发布，
   # 不会出现「服务已升级、迁移还没跑」的窗口。
@@ -71,18 +42,11 @@ services:
     build: *eagle-build
     environment:
       EAGLE_DATABASE_DSN: postgres://eagle:eagle@postgres:5432/eagle?sslmode=disable
-      # issuer 必须与 token 里的 iss 逐字相同，所以用宿主机可见的地址；
-      # JWKS 是服务端自己去拉，走容器网络。
-      EAGLE_AUTH_ISSUER: http://127.0.0.1:8080/realms/eagle
-      EAGLE_AUTH_JWKS_URL: http://keycloak:8080/realms/eagle/protocol/openid-connect/certs
-      EAGLE_AUTH_CLIENT_ID: eagle-api
-      EAGLE_AUTH_AUDIENCE: eagle-api
     ports:
       - "${EAGLE_HTTP_PORT:-8000}:8000"
       - "${EAGLE_METRICS_PORT:-9101}:9100"
     depends_on:
       eagle-migrate: {condition: service_completed_successfully}
-      keycloak: {condition: service_healthy}
 
 volumes:
   pgdata:

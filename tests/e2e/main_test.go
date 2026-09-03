@@ -6,7 +6,7 @@
 // 配置解析、依赖装配、中间件顺序、认证与授权判定、错误码映射。
 //
 // 不依赖 Docker：PostgreSQL 由 embedded-postgres 在进程内拉起，
-// Keycloak 用一个签发真实 RS256 token 的替身。
+// OIDC 提供方用一个签发真实 RS256 token 的替身。
 package e2e
 
 import (
@@ -66,7 +66,7 @@ func TestMain(m *testing.M) {
 // testEnv 是一次测试用的完整服务实例。
 type testEnv struct {
 	http     *httptest.Server
-	kc       *fakeKeycloak
+	idp      *fakeOIDCProvider
 	enforcer *authz.Enforcer
 	policy   accessdomain.PolicyRepo
 }
@@ -82,13 +82,16 @@ func newTestEnv(t *testing.T) *testEnv {
 		t.Skip("需要真实数据库")
 	}
 
-	kc := newFakeKeycloak(t)
+	idp := newFakeOIDCProvider(t)
 
 	authConf := &config.Auth{
-		Issuer:         kc.issuer(),
-		ClientId:       clientID,
-		Audience:       clientID,
-		SuperAdminRole: adminRole,
+		Issuer:           idp.issuer(),
+		ClientId:         clientID,
+		Audience:         clientID,
+		SuperAdminRole:   adminRole,
+		JwksUrl:          idp.jwksURL(),
+		RealmRolesClaim:  "realm_access.roles",
+		ClientRolesClaim: "resource_access",
 	}
 
 	adminDB, cleanup, err := platformdb.Open(&config.Data{Database: &config.Data_Database{
@@ -135,7 +138,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	ts := httptest.NewServer(srv)
 	t.Cleanup(ts.Close)
 
-	return &testEnv{http: ts, kc: kc, enforcer: enforcer, policy: policyRepo}
+	return &testEnv{http: ts, idp: idp, enforcer: enforcer, policy: policyRepo}
 }
 
 func e2eErrorMappings() []server.ErrorMappingRule {

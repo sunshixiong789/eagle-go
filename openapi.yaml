@@ -335,7 +335,7 @@ paths:
                 - RoleBindingService
             description: |-
                 列出本库中已配置过权限的角色。
-                 注意这不是 Keycloak 的角色全集——从未分配过权限的角色不会出现。
+                 注意这不是 IdP 的角色全集——从未分配过权限的角色不会出现。
             operationId: RoleBindingService_ListBoundRoles
             responses:
                 "200":
@@ -532,7 +532,7 @@ components:
                     type: array
                     items:
                         type: string
-                    description: 当前登录者的角色（来自 Keycloak token）
+                    description: 当前登录者的角色（来自 IdP token）
                 permissionCodes:
                     type: array
                     items:
@@ -860,9 +860,9 @@ tags:
       description: |-
         RoleBindingService 管理「角色 → 权限码」的映射，即 Casbin 的 p 策略。
 
-         角色本身不在这里创建或删除——它由 Keycloak 维护，随 token 的
-         realm_access.roles 下发。本服务只回答「这个角色能调哪些接口」。
+         角色本身不在这里创建或删除——它由外部 IdP 维护，随 token 的
+         已配置角色 claim 下发。本服务只回答「这个角色能调哪些接口」。
 
-         这样切分的原因：把用户到角色的归属也放进本库，就等于与 Keycloak
-         双写同一份数据，必然漂移；而把权限映射放进 Keycloak，则每次
-         授权判定都要跨网络调用，且权限配置只能在 Keycloak 后台改。
+         这样切分的原因：把用户到角色的归属也放进本库，就等于与 IdP
+         双写同一份数据，必然漂移；而把权限映射放进 IdP，则每次
+         授权判定都要跨网络调用，且权限配置只能在 IdP 后台改。

@@ -62,11 +62,10 @@ message Data {
 
 // 本进程作为 OAuth2 / OIDC 资源服务器的配置。
 //
-// 只验签、不建用户表：用户与角色由外部 IdP 管理。默认值贴合 Keycloak，
-// 但 jwks_path 与两个 claim 路径都可覆盖，因此换成 Logto / Auth0 / Authing
-// 只需要改配置，不必改代码。
+// 只验签、不建用户表：用户与角色由外部 IdP 管理。JWKS 与角色 claim
+// 显式配置，因此更换兼容的 IdP 不需要修改代码。
 message Auth {
-  // IdP 的 issuer，形如 https://idp.example.com/realms/eagle。
+  // IdP 的 issuer，形如 https://idp.example.com。
   // 必须与 token 里的 iss 完全一致，含协议、端口和是否带尾斜杠
   string issuer = 1;
 
@@ -74,8 +73,7 @@ message Auth {
   // 用于从 token 的 client 角色 claim 里取出本服务的角色
   string client_id = 2;
 
-  // 期望的 aud。Keycloak 默认把 aud 设成 "account"，
-  // 通常要配 audience mapper 才有意义，留空则不校验
+  // 期望的 aud，必须与 IdP 为本 API 签发的 audience 一致。
   string audience = 3;
 
   reserved 4;
@@ -87,8 +85,8 @@ message Auth {
   // 拉取 JWKS 的地址，留空则拼接为 <issuer><jwks_path>。
   //
   // 之所以能与 issuer 分开配：容器与 K8s 里，token 里的公开 issuer
-  // （https://sso.example.com/realms/eagle）几乎从不等于本服务该走的
-  // 集群内地址（http://keycloak.default.svc:8080/realms/eagle）。
+  // （https://sso.example.com）可能不等于本服务该走的
+  // 集群内地址（http://idp.default.svc:8080）。
   // 两者不分开就只能二选一——要么让内网流量绕到公网再回来，
   // 要么放弃 iss 校验。
   string jwks_url = 6;
@@ -96,18 +94,16 @@ message Auth {
   // 7 曾是 internal_client_ids（服务身份白名单），随 INTERNAL 访问级别一起移除。
   reserved 7;
 
-  // JWKS 相对 issuer 的路径，留空取 Keycloak 约定
-  // /protocol/openid-connect/certs。Auth0/Logto 一般是
-  // /.well-known/jwks.json。jwks_url 非空时本字段被忽略。
+  // JWKS 相对 issuer 的路径。jwks_url 为空时必填；
+  // jwks_url 非空时本字段被忽略。
   string jwks_path = 8;
 
-  // realm（全局）角色所在的 claim 路径，点号分隔，留空取 Keycloak 约定
-  // realm_access.roles。指向一个字符串数组。
+  // realm（全局）角色所在的 claim 路径，点号分隔；留空表示不读取。
+  // 指向一个字符串数组。
   string realm_roles_claim = 9;
 
-  // client（按 client 分组）角色所在的 claim 路径，点号分隔，留空取
-  // Keycloak 约定 resource_access。指向一个
-  // {"<client-id>": {"roles": [...]}} 结构。
+  // client 角色所在的 claim 路径，点号分隔，必填。既可以直接指向
+  // 字符串数组，也可以指向 {"<client-id>": {"roles": [...]}} 结构。
   string client_roles_claim = 10;
 }
 

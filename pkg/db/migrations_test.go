@@ -62,7 +62,7 @@ func TestMigrationsRoundTrip(t *testing.T) {
 func assertSeedData(t *testing.T, db *sql.DB) {
 	t.Helper()
 
-	// Casbin 策略里必须有内置角色。角色本身在 Keycloak，
+	// Casbin 策略里必须有内置角色。角色本身在外部 IdP，
 	// 这里存的是「角色 -> 权限码」映射
 	for _, role := range []string{"realm:admin", "realm:user"} {
 		var exists bool

@@ -13,7 +13,7 @@
 2. **移除文件业务源文件**
    - 删除 `api/eagle/file/v1`、`internal/file` 和 file Ent Schema。
    - 从配置 Proto、默认配置、Wire 组合根、错误映射和 HTTP 过滤器中删除文件能力。
-   - 从 Compose、Makefile 和 Keycloak realm 中删除 MinIO、文件变量及文件权限。
+   - 从 Compose 和 Makefile 中删除 MinIO、文件变量及文件权限。
 
 3. **重建数据基线**
    - 用单个 `migrations/00001_baseline.sql` 替换全部历史迁移。

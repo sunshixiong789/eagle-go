@@ -4,7 +4,7 @@
 集中式 RBAC 和结构化日志 / 指标 / trace 埋点。适合作为新项目的起点，而不是一套需要先拆分才能用的微服务底座。
 
 技术栈：Go 1.27、Kratos v3、Google Wire、Protobuf、buf、Ent、PostgreSQL 17、Casbin、
-OIDC（默认 Keycloak，可替换）、OpenTelemetry、Docker Compose。
+OIDC 资源服务器、OpenTelemetry、Docker Compose。
 
 ## 项目现状
 
@@ -30,7 +30,7 @@ flowchart TB
         end
     end
 
-    idp["OIDC IdP<br/>Keycloak / Logto / Auth0 ..."]
+    idp["外部 OIDC IdP"]
     db[(PostgreSQL)]
 
     client -->|HTTP| middleware
@@ -57,7 +57,7 @@ eagle-go/
 ├── pkg/                    # 无业务语义的技术能力，不得 import internal/
 ├── tests/                  # 架构测试、端到端测试和测试工具
 ├── tools/                  # 独立 go.mod，锁定生成工具链与迁移/健康检查程序
-├── deploy/                 # 本地 Compose 与 Keycloak realm
+├── deploy/                 # 本地 PostgreSQL、迁移与应用 Compose
 ├── docs/                   # 架构与开发环境文档
 ├── Dockerfile              # 单一构建目标
 └── Makefile                # 统一开发入口
@@ -125,11 +125,10 @@ docker compose -f deploy/docker-compose.yml ps --all
 Compose 会构建镜像、执行一次性数据库迁移，再启动应用。
 `eagle-migrate` 显示 `Exited (0)` 是一次性任务成功，不是重复服务或异常退出。主要入口：
 
-| 入口 | 地址 | 本地凭据 |
-|---|---|---|
-| 应用 HTTP | `http://127.0.0.1:8000` | - |
-| 应用 metrics / health | `http://127.0.0.1:9101` | - |
-| Keycloak | `http://127.0.0.1:8080` | 管理员 `admin/admin` |
+| 入口 | 地址 |
+|---|---|
+| 应用 HTTP | `http://127.0.0.1:8000` |
+| 应用 metrics / health | `http://127.0.0.1:9101` |
 
 确认服务就绪：
 
@@ -162,39 +161,16 @@ make run
 默认配置位于 `configs/config.yaml`，可用 `EAGLE_*` 环境变量覆盖。宿主机进程与 `eagle`
 容器使用同一组端口，不能同时运行；完整的调试组合见[开发环境部署](docs/development-deployment.md)。
 
-### 5. 创建首个用户并调用接口
+### 5. 接入外部 IdP 并调用接口
 
-`realm-eagle.json` 刻意不预置用户，避免已知口令随配置进入生产。先登录 Keycloak 管理 CLI：
-
-```bash
-docker compose -f deploy/docker-compose.yml exec -T keycloak /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user admin --password admin
-```
-
-创建用户时必须填写姓名，否则 Keycloak 26 的资料校验会阻止登录：
+仓库不附带认证中心。先在 OIDC IdP 中创建 API/client，并通过 `EAGLE_AUTH_*` 配置 issuer、
+audience、JWKS 和角色 claim。取得 access token 后调用受保护接口：
 
 ```bash
-docker compose -f deploy/docker-compose.yml exec -T keycloak /opt/keycloak/bin/kcadm.sh create users -r eagle -s username=alice -s enabled=true -s firstName=Alice -s lastName=Test -s email=alice@example.com
+curl --fail -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8000/v1/system/permissions
 ```
 
-```bash
-docker compose -f deploy/docker-compose.yml exec -T keycloak /opt/keycloak/bin/kcadm.sh set-password -r eagle --username alice --new-password 'Passw0rd!'
-```
-
-授予的是 `eagle-api` 这个 client 上的角色，不是同名 realm 角色——超管短路只认 client 角色：
-
-```bash
-docker compose -f deploy/docker-compose.yml exec -T keycloak /opt/keycloak/bin/kcadm.sh add-roles -r eagle --uusername alice --cclientid eagle-api --rolename admin
-```
-
-取得 token 并调用受保护接口。这里保留为一个原子命令，确保从 IDEA 运行代码块时
-shell 变量不会在两个进程之间丢失：
-
-```bash
-TOKEN=$(curl --silent --fail -d client_id=eagle-web -d username=alice -d 'password=Passw0rd!' -d grant_type=password http://127.0.0.1:8080/realms/eagle/protocol/openid-connect/token | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p') && curl --fail -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8000/v1/system/permissions
-```
-
-不带 `Authorization` 应返回 401。Keycloak realm 的完整设计、生产注意事项和换成其它 IdP 的
-配置对照见 [Keycloak 配置说明](deploy/keycloak/README.md)。
+不带 `Authorization` 应返回 401。具体的登录、账号绑定和 token 获取流程由选用的 IdP 提供。
 
 ## 常用命令
 
@@ -373,9 +349,8 @@ subject := identity.Subject(ctx)
 IdP 负责“你是谁、有哪些角色”，Casbin 负责“角色能不能调用接口”。应用是一个 OIDC 资源服务器：
 只用 JWKS 在本地验签，不做 OIDC discovery、不签发 token、不保存用户。
 
-IdP 可以替换。JWKS 路径和两个角色 claim 路径都是配置项，换成 Logto / Auth0 / Authing
-**只改配置不改代码**；接入苹果、Google 等第三方登录在 IdP 控制台配置 Identity Provider，
-应用侧同样无感。各家的取值对照见 [Keycloak 配置说明](deploy/keycloak/README.md)。
+IdP 可以替换。issuer、JWKS 和两个角色 claim 路径都是配置项，切换兼容供应商时
+**只改配置不改代码**；短信、手机号一键登录和第三方登录都在 IdP 侧配置，应用侧无感。
 
 权限策略存在数据库里，每个实例本地持有一份 Casbin 模型，靠版本号每 5 秒对账一次。
 多副本部署时，改完角色绑定最坏要等一个对账周期才会全部生效。进程启动时会校验 proto 声明的
@@ -397,10 +372,10 @@ IdP 可以替换。JWKS 路径和两个角色 claim 路径都是配置项，换�
 |---|---|
 | `EAGLE_DATABASE_DSN` | 数据库连接，生产必须 `sslmode=require` 或更强 |
 | `EAGLE_AUTH_ISSUER` | 必须与 token 的 `iss` 完全一致 |
-| `EAGLE_AUTH_CLIENT_ID` / `EAGLE_AUTH_AUDIENCE` | 本资源服务的 client 与 audience，audience 留空则不校验 |
+| `EAGLE_AUTH_CLIENT_ID` / `EAGLE_AUTH_AUDIENCE` | 本资源服务的 client 与必填 audience |
 | `EAGLE_AUTH_JWKS_URL` | issuer 外网地址与服务访问地址不同时指定 JWKS 内网地址 |
-| `EAGLE_AUTH_JWKS_PATH` | JWKS 相对路径，留空取 Keycloak 约定 |
-| `EAGLE_AUTH_REALM_ROLES_CLAIM` / `EAGLE_AUTH_CLIENT_ROLES_CLAIM` | 角色 claim 路径，换 IdP 时覆盖 |
+| `EAGLE_AUTH_JWKS_PATH` | JWKS 相对 issuer 的路径；未设置 `JWKS_URL` 时必填 |
+| `EAGLE_AUTH_REALM_ROLES_CLAIM` / `EAGLE_AUTH_CLIENT_ROLES_CLAIM` | 角色 claim 路径；realm 可省略，client 必填 |
 | `EAGLE_OBSERVABILITY_OTLP_ENDPOINT` | trace 上报地址，留空则不上报 |
 
 所有 `google.protobuf.Duration` 只接受秒格式，例如 `3600s`、`0.5s`。`1h`、`30m`、`500ms` 会导致配置解析失败。
@@ -447,15 +422,11 @@ closed，所以**必须先跑迁移再发服务**。
 
 检查所有时长是否使用 `5s`、`0.5s` 这类秒格式，不要写 `1h`、`30m` 或 `500ms`。
 
-### Keycloak 登录提示 `Account is not fully set up`
-
-用户缺少 `firstName` 或 `lastName`。补齐资料后重新登录。
-
 ### 接口始终返回 401
 
 检查 `EAGLE_AUTH_ISSUER` 是否与 token 的 `iss` 完全一致，包括协议、端口和尾部斜杠；再检查
-audience 和 JWKS 地址。注意 Compose 里 issuer 用宿主机地址、JWKS 走容器网络，两者不同是
-故意的，改成一致反而会 401。
+audience 和 JWKS 地址。若 IdP 的公开 issuer 与服务访问 JWKS 的内网地址不同，使用
+`EAGLE_AUTH_JWKS_URL` 单独配置后者，不要修改 issuer 绕过校验。
 
 ### 接口始终返回 403
 
@@ -476,8 +447,7 @@ race detector 需要 C 编译器。可在 WSL/Linux 中运行，或安装可用�
 
 - [架构说明](docs/architecture.md)：模块边界、分层、数据所有权和共享代码边界
 - [开发环境部署](docs/development-deployment.md)：Compose、宿主机调试、IDEA 入口和本地联调
-- [部署文件索引](deploy/README.md)：Compose 与 Keycloak 配置的位置
-- [Keycloak 配置说明](deploy/keycloak/README.md)：realm、安全设置、客户端设计和换 IdP 对照
+- [部署文件索引](deploy/README.md)：本地 Compose 的内容
 - [AI 编码约束](AGENTS.md)：常驻硬约束；细则在 [`.agents/rules/`](.agents/rules/)
 
 规则文件服务于 AI 协作，不替代面向开发者的 README 和专题文档。

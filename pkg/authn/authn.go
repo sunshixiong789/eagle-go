@@ -35,11 +35,6 @@ const (
 	ReasonTokenExpired    = "TOKEN_EXPIRED"
 )
 
-// DefaultJWKSPath 是 Keycloak 的 JWKS 路径。
-// 注意它不是 OIDC 常见的 /.well-known/jwks.json——Auth0、Logto 用后者，
-// 所以这个路径必须可配置。
-const DefaultJWKSPath = "/protocol/openid-connect/certs"
-
 // Config 是资源服务器的验证参数。
 type Config struct {
 	// Issuer 必须与 IdP 签发的 iss 完全一致，
@@ -47,17 +42,15 @@ type Config struct {
 	Issuer string
 	// JWKSURL 为空时拼接为 <issuer><JWKSPath>。
 	JWKSURL string
-	// JWKSPath 是 JWKS 相对 issuer 的路径，留空取 DefaultJWKSPath。
+	// JWKSPath 是 JWKS 相对 issuer 的路径。
 	// JWKSURL 非空时本字段被忽略。
 	JWKSPath string
 	// ClientID 是本服务在 IdP 中的 client id，
 	// 用于从 client 角色 claim 中取出本服务的角色
 	ClientID string
 	// Audience 非空时校验 aud 声明。
-	// Keycloak 默认把 aud 设为 "account"，通常需要配 audience mapper 才有意义，
-	// 因此默认不校验
 	Audience string
-	// Claims 指定角色在 token 载荷里的位置，留空取 Keycloak 约定。
+	// Claims 指定角色在 token 载荷里的位置。
 	Claims ClaimPaths
 }
 
@@ -76,11 +69,7 @@ type Verifier struct {
 func NewVerifier(ctx context.Context, cfg Config) *Verifier {
 	jwksURL := cfg.JWKSURL
 	if jwksURL == "" {
-		path := cfg.JWKSPath
-		if path == "" {
-			path = DefaultJWKSPath
-		}
-		jwksURL = strings.TrimSuffix(cfg.Issuer, "/") + path
+		jwksURL = strings.TrimSuffix(cfg.Issuer, "/") + cfg.JWKSPath
 	}
 	return &Verifier{
 		verifier: oidc.NewVerifier(cfg.Issuer, oidc.NewRemoteKeySet(ctx, jwksURL), &oidc.Config{

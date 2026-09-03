@@ -26,32 +26,27 @@ auth:
   # IdP 的 issuer，必须与 token 里的 iss 完全一致
   # （含协议、端口、是否带尾斜杠）。不一致时所有 token 都会因
   # iss 校验失败被拒，而报错信息不易定位到这里。
-  issuer: "${AUTH_ISSUER:http://127.0.0.1:8080/realms/eagle}"
+  # .example 是不可路由的文档域名；联调前必须覆盖为实际 IdP。
+  issuer: "${AUTH_ISSUER:https://idp.example.com}"
 
   # 本服务在 IdP 中的 client id，
   # 用于从 client 角色 claim 里取出本服务的角色
   client_id: "${AUTH_CLIENT_ID:eagle-api}"
 
-  # 期望的 aud。Keycloak 默认把 aud 设成 "account"，需要在客户端上
-  # 配 audience mapper（见 deploy/keycloak/realm-eagle.json）才有意义。
-  # 留空则不校验 aud。
+  # 期望的 aud；必须与 IdP 为本 API 签发的 audience 一致。
   audience: "${AUTH_AUDIENCE:eagle-api}"
 
   # 内外网地址不同时通过 EAGLE_AUTH_JWKS_URL 覆盖。
   jwks_url: "${AUTH_JWKS_URL:}"
 
-  # 下面三项决定了「换一个 IdP 要不要改代码」。留空取 Keycloak 约定，
-  # 换成别的 IdP 只改这里：
-  #   Auth0   jwks_path=/.well-known/jwks.json
-  #           realm_roles_claim=https://<你的命名空间>/roles
-  #           client_roles_claim 同上（Auth0 只给一维数组，会被当作本 client 的角色）
-  #   Logto   jwks_path=/oidc/jwks，角色在 roles / scope
-  #   Authing jwks_path=/oidc/.well-known/jwks.json
-  jwks_path: "${AUTH_JWKS_PATH:}"
+  # JWKS 与角色 claim 没有跨 IdP 的统一路径，接入时按供应商文档覆盖。
+  # jwks_url 非空时忽略 jwks_path；client_roles_claim 可以指向字符串数组，
+  # 也可以指向按 client_id 分组的对象。
+  jwks_path: "${AUTH_JWKS_PATH:/.well-known/jwks.json}"
   realm_roles_claim: "${AUTH_REALM_ROLES_CLAIM:}"
-  client_roles_claim: "${AUTH_CLIENT_ROLES_CLAIM:}"
+  client_roles_claim: "${AUTH_CLIENT_ROLES_CLAIM:roles}"
 
-  # 仅本服务 client role（resource_access.eagle-api.roles）会触发短路；
+  # 仅本服务 client role 会触发短路；
   # 同名 realm role 不具备超管能力。
   super_admin_role: admin
 

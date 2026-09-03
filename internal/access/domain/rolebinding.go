@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// Role 是带来源命名空间的 Keycloak 角色键。
+// Role 是带来源命名空间的 IdP 角色键。
 type Role string
 
 func NewRole(s string) (Role, error) {
@@ -32,8 +32,8 @@ func (r Role) IsZero() bool   { return r == "" }
 
 // RoleBinding 是「角色 → 权限码集合」的聚合根，对应 Casbin 的 p 策略。
 //
-// 聚合边界刻意不包含用户：用户到角色的归属由 Keycloak 维护，
-// 把它纳进来就等于与 Keycloak 双写同一份数据，必然漂移。
+// 聚合边界刻意不包含用户：用户到角色的归属由 IdP 维护，
+// 把它纳进来就等于与 IdP 双写同一份数据，必然漂移。
 type RoleBinding struct {
 	role     Role
 	codes    []PermissionCode

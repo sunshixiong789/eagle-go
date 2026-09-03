@@ -14,7 +14,7 @@
 - `dictionary` 模块：唯一的简单 CRUD 示例，采用 `service -> domain <- infrastructure`。
 - `pkg/authn`、`pkg/authz`、`pkg/identity`、数据库、配置、HTTP 服务、健康检查及可观测性等通用技术能力。
 - 结构化日志、健康检查、Prometheus 指标和可选 OTLP trace 埋点。
-- Dockerfile，以及用于本地开发的 PostgreSQL、Keycloak、迁移和应用 Compose 服务。
+- Dockerfile，以及用于本地开发的 PostgreSQL、迁移和应用 Compose 服务；认证由外部 OIDC IdP 提供。
 - 架构、单元、集成和端到端测试。
 
 ## 删除范围
@@ -49,9 +49,7 @@ internal/
 └── platform/database/
 
 deploy/
-├── docker-compose.yml
-├── keycloak/
-└── postgres/
+└── docker-compose.yml
 
 migrations/
 └── 00001_baseline.sql
@@ -80,7 +78,7 @@ Ent Schema 必须与基线迁移一致。删除文件 Schema 后重新生成 Ent
 
 配置根仅保留 server、data、auth 和 observability。删除 file 配置及对应环境变量。
 
-Compose 仅保留 PostgreSQL、Keycloak、一次性 migration 和 app。`make up-deps` 启动 PostgreSQL 与 Keycloak；宿主机可继续通过 `make migrate-up` 和 `make run` 调试。Keycloak realm 保留脚手架需要的 client、角色、audience mapper 和权限示例，不保留文件权限。
+Compose 仅保留 PostgreSQL、一次性 migration 和 app。`make up-deps` 只启动 PostgreSQL；宿主机可继续通过 `make migrate-up` 和 `make run` 调试。OIDC issuer、JWKS、audience 和角色 claim 通过配置接入外部 IdP，仓库不附带认证中心。
 
 ## 错误处理
 

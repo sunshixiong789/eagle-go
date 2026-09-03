@@ -68,23 +68,23 @@ func TestUnauthenticatedIsRejected(t *testing.T) {
 		token string
 	}{
 		{"无 token", ""},
-		{"伪造签名", env.kc.mint(t, tokenOpts{
+		{"伪造签名", env.idp.mint(t, tokenOpts{
 			subject: "s1", username: "mallory",
 			realmRole: []string{adminRole}, wrongKey: true,
 		})},
-		{"已过期", env.kc.mint(t, tokenOpts{
+		{"已过期", env.idp.mint(t, tokenOpts{
 			subject: "s2", username: "alice",
 			realmRole: []string{adminRole}, expiresIn: -time.Hour,
 		})},
-		{"aud 不匹配", env.kc.mint(t, tokenOpts{
+		{"aud 不匹配", env.idp.mint(t, tokenOpts{
 			subject: "subject-3", username: "alice",
 			realmRole: []string{adminRole}, audience: []string{"another-service"},
 		})},
-		{"尚未生效", env.kc.mint(t, tokenOpts{
+		{"尚未生效", env.idp.mint(t, tokenOpts{
 			subject: "s4", username: "alice",
 			realmRole: []string{adminRole}, notBefore: 10 * time.Minute,
 		})},
-		{"非白名单签名算法", env.kc.mint(t, tokenOpts{
+		{"非白名单签名算法", env.idp.mint(t, tokenOpts{
 			subject: "s5", username: "alice",
 			realmRole: []string{adminRole}, algorithm: jose.PS256,
 		})},
@@ -110,7 +110,7 @@ func TestAuthorizationByRole(t *testing.T) {
 	env.grantRole(t, "editor", "system:permission:list", "system:permission:add")
 
 	t.Run("有权限则放行", func(t *testing.T) {
-		token := env.kc.userToken(t, "vera", "viewer")
+		token := env.idp.userToken(t, "vera", "viewer")
 		code, body := env.get(t, "/v1/system/permissions", token)
 		if code != http.StatusOK {
 			t.Errorf("viewer 读权限列表 = %d (%s), want 200", code, body)
@@ -118,7 +118,7 @@ func TestAuthorizationByRole(t *testing.T) {
 	})
 
 	t.Run("缺权限则 403", func(t *testing.T) {
-		token := env.kc.userToken(t, "vera", "viewer")
+		token := env.idp.userToken(t, "vera", "viewer")
 		code, body := env.do(t, http.MethodPost, "/v1/system/permissions", token,
 			`{"name":"测试","type":1}`)
 		if code != http.StatusForbidden {
@@ -127,7 +127,7 @@ func TestAuthorizationByRole(t *testing.T) {
 	})
 
 	t.Run("换个有权限的角色就通过", func(t *testing.T) {
-		token := env.kc.userToken(t, "eddie", "editor")
+		token := env.idp.userToken(t, "eddie", "editor")
 		code, body := env.do(t, http.MethodPost, "/v1/system/permissions", token,
 			`{"name":"E2E 测试节点","type":1}`)
 		if code != http.StatusOK {
@@ -136,7 +136,7 @@ func TestAuthorizationByRole(t *testing.T) {
 	})
 
 	t.Run("无任何角色一律 403", func(t *testing.T) {
-		token := env.kc.userToken(t, "nobody")
+		token := env.idp.userToken(t, "nobody")
 		code, body := env.get(t, "/v1/system/permissions", token)
 		if code != http.StatusForbidden {
 			t.Errorf("无角色用户 = %d (%s), want 403", code, body)
@@ -152,7 +152,7 @@ func TestSuperAdminBypassesPolicy(t *testing.T) {
 	// 刻意不给 admin 配任何策略
 	env.grantRole(t, adminRole)
 
-	token := env.kc.mint(t, tokenOpts{
+	token := env.idp.mint(t, tokenOpts{
 		subject:  "sub-root",
 		username: "root",
 		clientRoles: map[string][]string{
@@ -165,14 +165,14 @@ func TestSuperAdminBypassesPolicy(t *testing.T) {
 	}
 }
 
-// Keycloak 把 client 级角色放在 resource_access.<clientId>.roles。
+// 测试 IdP 把 client 级角色放在 resource_access.<clientId>.roles。
 // 只读 realm_access 会让按 client 授权的角色静默失效——
 // 这类错误不会报错，只会表现为「配了权限却还是 403」。
 func TestClientRolesFromResourceAccess(t *testing.T) {
 	env := newTestEnv(t)
 	env.grantRole(t, identity.ClientRoleKey(clientID, "client-viewer"), "system:permission:list")
 
-	token := env.kc.mint(t, tokenOpts{
+	token := env.idp.mint(t, tokenOpts{
 		subject:  "sub-crv",
 		username: "crv",
 		// realm 角色为空，权限只来自 client 角色
@@ -192,7 +192,7 @@ func TestOtherClientRolesAreIgnored(t *testing.T) {
 	env := newTestEnv(t)
 	env.grantRole(t, "foreign-role", "system:permission:list")
 
-	token := env.kc.mint(t, tokenOpts{
+	token := env.idp.mint(t, tokenOpts{
 		subject:  "sub-foreign",
 		username: "foreign",
 		clientRoles: map[string][]string{
@@ -210,12 +210,12 @@ func TestRealmAndClientRoleNamesDoNotCollide(t *testing.T) {
 	env := newTestEnv(t)
 	env.grantRole(t, identity.ClientRoleKey(clientID, "operator"), "system:permission:list")
 
-	realmToken := env.kc.userToken(t, "realm-operator", "operator")
+	realmToken := env.idp.userToken(t, "realm-operator", "operator")
 	if code, body := env.get(t, "/v1/system/permissions", realmToken); code != http.StatusForbidden {
 		t.Fatalf("同名 realm role = %d (%s), want 403", code, body)
 	}
 
-	clientToken := env.kc.mint(t, tokenOpts{
+	clientToken := env.idp.mint(t, tokenOpts{
 		subject: "sub-client-operator", username: "client-operator",
 		clientRoles: map[string][]string{clientID: {"operator"}},
 	})
@@ -229,7 +229,7 @@ func TestPolicyReloadTakesEffect(t *testing.T) {
 	env := newTestEnv(t)
 	env.grantRole(t, "dynamic", "system:permission:list")
 
-	token := env.kc.userToken(t, "dyn", "dynamic")
+	token := env.idp.userToken(t, "dyn", "dynamic")
 	if code, _ := env.get(t, "/v1/system/permissions", token); code != http.StatusOK {
 		t.Fatal("初始应有权限")
 	}
@@ -247,7 +247,7 @@ func TestErrorResponseShape(t *testing.T) {
 	env := newTestEnv(t)
 	env.grantRole(t, "viewer", "system:permission:list")
 
-	token := env.kc.userToken(t, "vera", "viewer")
+	token := env.idp.userToken(t, "vera", "viewer")
 	code, body := env.do(t, http.MethodPost, "/v1/system/permissions", token,
 		`{"name":"x","type":3,"code":"a:b:c"}`)
 	if code != http.StatusForbidden {

@@ -753,7 +753,7 @@ func (*GetMyPermissionsRequest) Descriptor() ([]byte, []int) {
 
 type GetMyPermissionsResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// 当前登录者的角色（来自 Keycloak token）
+	// 当前登录者的角色（来自 IdP token）
 	Roles []string `protobuf:"bytes,1,rep,name=roles,proto3" json:"roles,omitempty"`
 	// 这些角色展开后的全部权限码（含继承）
 	PermissionCodes []string `protobuf:"bytes,2,rep,name=permission_codes,json=permissionCodes,proto3" json:"permission_codes,omitempty"`

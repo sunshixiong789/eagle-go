@@ -33,7 +33,7 @@ type RoleBindingServiceHTTPServer interface {
 	GetMyPermissions(context.Context, *GetMyPermissionsRequest) (*GetMyPermissionsResponse, error)
 	GetRolePermissions(context.Context, *GetRolePermissionsRequest) (*GetRolePermissionsResponse, error)
 	// ListBoundRoles 列出本库中已配置过权限的角色。
-	// 注意这不是 Keycloak 的角色全集——从未分配过权限的角色不会出现。
+	// 注意这不是 IdP 的角色全集——从未分配过权限的角色不会出现。
 	ListBoundRoles(context.Context, *ListBoundRolesRequest) (*ListBoundRolesResponse, error)
 	ListRoleInheritances(context.Context, *ListRoleInheritancesRequest) (*ListRoleInheritancesResponse, error)
 	// SetRolePermissions 全量覆盖某个角色的权限码集合，变更立即生效。
@@ -201,7 +201,7 @@ type RoleBindingServiceHTTPClient interface {
 	GetMyPermissions(ctx context.Context, req *GetMyPermissionsRequest, opts ...http.CallOption) (rsp *GetMyPermissionsResponse, err error)
 	GetRolePermissions(ctx context.Context, req *GetRolePermissionsRequest, opts ...http.CallOption) (rsp *GetRolePermissionsResponse, err error)
 	// ListBoundRoles 列出本库中已配置过权限的角色。
-	// 注意这不是 Keycloak 的角色全集——从未分配过权限的角色不会出现。
+	// 注意这不是 IdP 的角色全集——从未分配过权限的角色不会出现。
 	ListBoundRoles(ctx context.Context, req *ListBoundRolesRequest, opts ...http.CallOption) (rsp *ListBoundRolesResponse, err error)
 	ListRoleInheritances(ctx context.Context, req *ListRoleInheritancesRequest, opts ...http.CallOption) (rsp *ListRoleInheritancesResponse, err error)
 	// SetRolePermissions 全量覆盖某个角色的权限码集合，变更立即生效。
@@ -284,7 +284,7 @@ func (c *RoleBindingServiceHTTPClientImpl) GetRolePermissions(ctx context.Contex
 }
 
 // ListBoundRoles 列出本库中已配置过权限的角色。
-// 注意这不是 Keycloak 的角色全集——从未分配过权限的角色不会出现。
+// 注意这不是 IdP 的角色全集——从未分配过权限的角色不会出现。
 func (c *RoleBindingServiceHTTPClientImpl) ListBoundRoles(ctx context.Context, in *ListBoundRolesRequest, opts ...http.CallOption) (*ListBoundRolesResponse, error) {
 	var out ListBoundRolesResponse
 	pattern := "/v1/system/role-bindings"

@@ -7,19 +7,7 @@ import (
 	"github.com/eagle-go/eagle/pkg/identity"
 )
 
-// 角色 claim 的默认路径，取 Keycloak 的约定。
-//
-// 之所以做成可配置而不是常量：各家 IdP 放角色的位置完全不同。
-// Keycloak 是 realm_access.roles 与 resource_access.<client>.roles，
-// Auth0 用带命名空间的自定义 claim（https://example.com/roles），
-// Logto、Authing 又各有一套。路径写死就意味着换 IdP 要改代码。
-const (
-	DefaultRealmRolesClaim  = "realm_access.roles"
-	DefaultClientRolesClaim = "resource_access"
-)
-
 // ClaimPaths 指定角色在 token 载荷中的位置，点号分隔逐层下钻。
-// 两个字段留空时分别取上面的 Keycloak 默认值。
 type ClaimPaths struct {
 	// RealmRoles 指向一个字符串数组，是不区分客户端的全局角色。
 	RealmRoles string
@@ -29,16 +17,10 @@ type ClaimPaths struct {
 }
 
 func (p ClaimPaths) realmRoles() string {
-	if p.RealmRoles == "" {
-		return DefaultRealmRolesClaim
-	}
 	return p.RealmRoles
 }
 
 func (p ClaimPaths) clientRoles() string {
-	if p.ClientRoles == "" {
-		return DefaultClientRolesClaim
-	}
 	return p.ClientRoles
 }
 
