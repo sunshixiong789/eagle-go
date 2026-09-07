@@ -43,10 +43,6 @@ var (
 		{Name: "ptype", Type: field.TypeString, Size: 8},
 		{Name: "v0", Type: field.TypeString, Size: 128, Default: ""},
 		{Name: "v1", Type: field.TypeString, Size: 128, Default: ""},
-		{Name: "v2", Type: field.TypeString, Size: 128, Default: ""},
-		{Name: "v3", Type: field.TypeString, Size: 128, Default: ""},
-		{Name: "v4", Type: field.TypeString, Size: 128, Default: ""},
-		{Name: "v5", Type: field.TypeString, Size: 128, Default: ""},
 	}
 	// CasbinRuleTable holds the schema information for the "casbin_rule" table.
 	CasbinRuleTable = &schema.Table{
@@ -55,9 +51,9 @@ var (
 		PrimaryKey: []*schema.Column{CasbinRuleColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "casbinrule_ptype_v0_v1_v2_v3_v4_v5",
+				Name:    "casbinrule_ptype_v0_v1",
 				Unique:  true,
-				Columns: []*schema.Column{CasbinRuleColumns[1], CasbinRuleColumns[2], CasbinRuleColumns[3], CasbinRuleColumns[4], CasbinRuleColumns[5], CasbinRuleColumns[6], CasbinRuleColumns[7]},
+				Columns: []*schema.Column{CasbinRuleColumns[1], CasbinRuleColumns[2], CasbinRuleColumns[3]},
 			},
 			{
 				Name:    "casbinrule_ptype_v0",
@@ -192,7 +188,6 @@ var (
 		{Name: "action", Type: field.TypeString, Size: 64},
 		{Name: "target", Type: field.TypeString, Size: 256},
 		{Name: "actor_subject", Type: field.TypeString, Size: 128, Default: ""},
-		{Name: "actor_client_id", Type: field.TypeString, Size: 128, Default: ""},
 		{Name: "request_id", Type: field.TypeString, Size: 128, Default: ""},
 		{Name: "trace_id", Type: field.TypeString, Size: 64, Default: ""},
 		{Name: "before", Type: field.TypeJSON},
@@ -213,12 +208,12 @@ var (
 			{
 				Name:    "policyaudit_target_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{AuthzPolicyAuditColumns[3], AuthzPolicyAuditColumns[10]},
+				Columns: []*schema.Column{AuthzPolicyAuditColumns[3], AuthzPolicyAuditColumns[9]},
 			},
 			{
 				Name:    "policyaudit_actor_subject_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{AuthzPolicyAuditColumns[4], AuthzPolicyAuditColumns[10]},
+				Columns: []*schema.Column{AuthzPolicyAuditColumns[4], AuthzPolicyAuditColumns[9]},
 			},
 		},
 	}

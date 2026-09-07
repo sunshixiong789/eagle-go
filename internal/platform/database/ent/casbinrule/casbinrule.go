@@ -17,14 +17,6 @@ const (
 	FieldV0 = "v0"
 	// FieldV1 holds the string denoting the v1 field in the database.
 	FieldV1 = "v1"
-	// FieldV2 holds the string denoting the v2 field in the database.
-	FieldV2 = "v2"
-	// FieldV3 holds the string denoting the v3 field in the database.
-	FieldV3 = "v3"
-	// FieldV4 holds the string denoting the v4 field in the database.
-	FieldV4 = "v4"
-	// FieldV5 holds the string denoting the v5 field in the database.
-	FieldV5 = "v5"
 	// Table holds the table name of the casbinrule in the database.
 	Table = "casbin_rule"
 )
@@ -35,10 +27,6 @@ var Columns = []string{
 	FieldPtype,
 	FieldV0,
 	FieldV1,
-	FieldV2,
-	FieldV3,
-	FieldV4,
-	FieldV5,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -62,22 +50,6 @@ var (
 	DefaultV1 string
 	// V1Validator is a validator for the "v1" field. It is called by the builders before save.
 	V1Validator func(string) error
-	// DefaultV2 holds the default value on creation for the "v2" field.
-	DefaultV2 string
-	// V2Validator is a validator for the "v2" field. It is called by the builders before save.
-	V2Validator func(string) error
-	// DefaultV3 holds the default value on creation for the "v3" field.
-	DefaultV3 string
-	// V3Validator is a validator for the "v3" field. It is called by the builders before save.
-	V3Validator func(string) error
-	// DefaultV4 holds the default value on creation for the "v4" field.
-	DefaultV4 string
-	// V4Validator is a validator for the "v4" field. It is called by the builders before save.
-	V4Validator func(string) error
-	// DefaultV5 holds the default value on creation for the "v5" field.
-	DefaultV5 string
-	// V5Validator is a validator for the "v5" field. It is called by the builders before save.
-	V5Validator func(string) error
 )
 
 // OrderOption defines the ordering options for the CasbinRule queries.
@@ -101,24 +73,4 @@ func ByV0(opts ...sql.OrderTermOption) OrderOption {
 // ByV1 orders the results by the v1 field.
 func ByV1(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldV1, opts...).ToFunc()
-}
-
-// ByV2 orders the results by the v2 field.
-func ByV2(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldV2, opts...).ToFunc()
-}
-
-// ByV3 orders the results by the v3 field.
-func ByV3(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldV3, opts...).ToFunc()
-}
-
-// ByV4 orders the results by the v4 field.
-func ByV4(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldV4, opts...).ToFunc()
-}
-
-// ByV5 orders the results by the v5 field.
-func ByV5(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldV5, opts...).ToFunc()
 }

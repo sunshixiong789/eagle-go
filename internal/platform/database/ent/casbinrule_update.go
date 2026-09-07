@@ -69,62 +69,6 @@ func (_u *CasbinRuleUpdate) SetNillableV1(v *string) *CasbinRuleUpdate {
 	return _u
 }
 
-// SetV2 sets the "v2" field.
-func (_u *CasbinRuleUpdate) SetV2(v string) *CasbinRuleUpdate {
-	_u.mutation.SetV2(v)
-	return _u
-}
-
-// SetNillableV2 sets the "v2" field if the given value is not nil.
-func (_u *CasbinRuleUpdate) SetNillableV2(v *string) *CasbinRuleUpdate {
-	if v != nil {
-		_u.SetV2(*v)
-	}
-	return _u
-}
-
-// SetV3 sets the "v3" field.
-func (_u *CasbinRuleUpdate) SetV3(v string) *CasbinRuleUpdate {
-	_u.mutation.SetV3(v)
-	return _u
-}
-
-// SetNillableV3 sets the "v3" field if the given value is not nil.
-func (_u *CasbinRuleUpdate) SetNillableV3(v *string) *CasbinRuleUpdate {
-	if v != nil {
-		_u.SetV3(*v)
-	}
-	return _u
-}
-
-// SetV4 sets the "v4" field.
-func (_u *CasbinRuleUpdate) SetV4(v string) *CasbinRuleUpdate {
-	_u.mutation.SetV4(v)
-	return _u
-}
-
-// SetNillableV4 sets the "v4" field if the given value is not nil.
-func (_u *CasbinRuleUpdate) SetNillableV4(v *string) *CasbinRuleUpdate {
-	if v != nil {
-		_u.SetV4(*v)
-	}
-	return _u
-}
-
-// SetV5 sets the "v5" field.
-func (_u *CasbinRuleUpdate) SetV5(v string) *CasbinRuleUpdate {
-	_u.mutation.SetV5(v)
-	return _u
-}
-
-// SetNillableV5 sets the "v5" field if the given value is not nil.
-func (_u *CasbinRuleUpdate) SetNillableV5(v *string) *CasbinRuleUpdate {
-	if v != nil {
-		_u.SetV5(*v)
-	}
-	return _u
-}
-
 // Mutation returns the CasbinRuleMutation object of the builder.
 func (_u *CasbinRuleUpdate) Mutation() *CasbinRuleMutation {
 	return _u.mutation
@@ -174,26 +118,6 @@ func (_u *CasbinRuleUpdate) check() error {
 			return &ValidationError{Name: "v1", err: fmt.Errorf(`ent: validator failed for field "CasbinRule.v1": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.V2(); ok {
-		if err := casbinrule.V2Validator(v); err != nil {
-			return &ValidationError{Name: "v2", err: fmt.Errorf(`ent: validator failed for field "CasbinRule.v2": %w`, err)}
-		}
-	}
-	if v, ok := _u.mutation.V3(); ok {
-		if err := casbinrule.V3Validator(v); err != nil {
-			return &ValidationError{Name: "v3", err: fmt.Errorf(`ent: validator failed for field "CasbinRule.v3": %w`, err)}
-		}
-	}
-	if v, ok := _u.mutation.V4(); ok {
-		if err := casbinrule.V4Validator(v); err != nil {
-			return &ValidationError{Name: "v4", err: fmt.Errorf(`ent: validator failed for field "CasbinRule.v4": %w`, err)}
-		}
-	}
-	if v, ok := _u.mutation.V5(); ok {
-		if err := casbinrule.V5Validator(v); err != nil {
-			return &ValidationError{Name: "v5", err: fmt.Errorf(`ent: validator failed for field "CasbinRule.v5": %w`, err)}
-		}
-	}
 	return nil
 }
 
@@ -217,18 +141,6 @@ func (_u *CasbinRuleUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	}
 	if value, ok := _u.mutation.V1(); ok {
 		_spec.SetField(casbinrule.FieldV1, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.V2(); ok {
-		_spec.SetField(casbinrule.FieldV2, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.V3(); ok {
-		_spec.SetField(casbinrule.FieldV3, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.V4(); ok {
-		_spec.SetField(casbinrule.FieldV4, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.V5(); ok {
-		_spec.SetField(casbinrule.FieldV5, field.TypeString, value)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -288,62 +200,6 @@ func (_u *CasbinRuleUpdateOne) SetV1(v string) *CasbinRuleUpdateOne {
 func (_u *CasbinRuleUpdateOne) SetNillableV1(v *string) *CasbinRuleUpdateOne {
 	if v != nil {
 		_u.SetV1(*v)
-	}
-	return _u
-}
-
-// SetV2 sets the "v2" field.
-func (_u *CasbinRuleUpdateOne) SetV2(v string) *CasbinRuleUpdateOne {
-	_u.mutation.SetV2(v)
-	return _u
-}
-
-// SetNillableV2 sets the "v2" field if the given value is not nil.
-func (_u *CasbinRuleUpdateOne) SetNillableV2(v *string) *CasbinRuleUpdateOne {
-	if v != nil {
-		_u.SetV2(*v)
-	}
-	return _u
-}
-
-// SetV3 sets the "v3" field.
-func (_u *CasbinRuleUpdateOne) SetV3(v string) *CasbinRuleUpdateOne {
-	_u.mutation.SetV3(v)
-	return _u
-}
-
-// SetNillableV3 sets the "v3" field if the given value is not nil.
-func (_u *CasbinRuleUpdateOne) SetNillableV3(v *string) *CasbinRuleUpdateOne {
-	if v != nil {
-		_u.SetV3(*v)
-	}
-	return _u
-}
-
-// SetV4 sets the "v4" field.
-func (_u *CasbinRuleUpdateOne) SetV4(v string) *CasbinRuleUpdateOne {
-	_u.mutation.SetV4(v)
-	return _u
-}
-
-// SetNillableV4 sets the "v4" field if the given value is not nil.
-func (_u *CasbinRuleUpdateOne) SetNillableV4(v *string) *CasbinRuleUpdateOne {
-	if v != nil {
-		_u.SetV4(*v)
-	}
-	return _u
-}
-
-// SetV5 sets the "v5" field.
-func (_u *CasbinRuleUpdateOne) SetV5(v string) *CasbinRuleUpdateOne {
-	_u.mutation.SetV5(v)
-	return _u
-}
-
-// SetNillableV5 sets the "v5" field if the given value is not nil.
-func (_u *CasbinRuleUpdateOne) SetNillableV5(v *string) *CasbinRuleUpdateOne {
-	if v != nil {
-		_u.SetV5(*v)
 	}
 	return _u
 }
@@ -410,26 +266,6 @@ func (_u *CasbinRuleUpdateOne) check() error {
 			return &ValidationError{Name: "v1", err: fmt.Errorf(`ent: validator failed for field "CasbinRule.v1": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.V2(); ok {
-		if err := casbinrule.V2Validator(v); err != nil {
-			return &ValidationError{Name: "v2", err: fmt.Errorf(`ent: validator failed for field "CasbinRule.v2": %w`, err)}
-		}
-	}
-	if v, ok := _u.mutation.V3(); ok {
-		if err := casbinrule.V3Validator(v); err != nil {
-			return &ValidationError{Name: "v3", err: fmt.Errorf(`ent: validator failed for field "CasbinRule.v3": %w`, err)}
-		}
-	}
-	if v, ok := _u.mutation.V4(); ok {
-		if err := casbinrule.V4Validator(v); err != nil {
-			return &ValidationError{Name: "v4", err: fmt.Errorf(`ent: validator failed for field "CasbinRule.v4": %w`, err)}
-		}
-	}
-	if v, ok := _u.mutation.V5(); ok {
-		if err := casbinrule.V5Validator(v); err != nil {
-			return &ValidationError{Name: "v5", err: fmt.Errorf(`ent: validator failed for field "CasbinRule.v5": %w`, err)}
-		}
-	}
 	return nil
 }
 
@@ -470,18 +306,6 @@ func (_u *CasbinRuleUpdateOne) sqlSave(ctx context.Context) (_node *CasbinRule, 
 	}
 	if value, ok := _u.mutation.V1(); ok {
 		_spec.SetField(casbinrule.FieldV1, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.V2(); ok {
-		_spec.SetField(casbinrule.FieldV2, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.V3(); ok {
-		_spec.SetField(casbinrule.FieldV3, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.V4(); ok {
-		_spec.SetField(casbinrule.FieldV4, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.V5(); ok {
-		_spec.SetField(casbinrule.FieldV5, field.TypeString, value)
 	}
 	_node = &CasbinRule{config: _u.config}
 	_spec.Assign = _node.assignValues

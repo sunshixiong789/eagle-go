@@ -91,20 +91,6 @@ func (_u *PolicyAuditUpdate) SetNillableActorSubject(v *string) *PolicyAuditUpda
 	return _u
 }
 
-// SetActorClientID sets the "actor_client_id" field.
-func (_u *PolicyAuditUpdate) SetActorClientID(v string) *PolicyAuditUpdate {
-	_u.mutation.SetActorClientID(v)
-	return _u
-}
-
-// SetNillableActorClientID sets the "actor_client_id" field if the given value is not nil.
-func (_u *PolicyAuditUpdate) SetNillableActorClientID(v *string) *PolicyAuditUpdate {
-	if v != nil {
-		_u.SetActorClientID(*v)
-	}
-	return _u
-}
-
 // SetRequestID sets the "request_id" field.
 func (_u *PolicyAuditUpdate) SetRequestID(v string) *PolicyAuditUpdate {
 	_u.mutation.SetRequestID(v)
@@ -211,11 +197,6 @@ func (_u *PolicyAuditUpdate) check() error {
 			return &ValidationError{Name: "actor_subject", err: fmt.Errorf(`ent: validator failed for field "PolicyAudit.actor_subject": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.ActorClientID(); ok {
-		if err := policyaudit.ActorClientIDValidator(v); err != nil {
-			return &ValidationError{Name: "actor_client_id", err: fmt.Errorf(`ent: validator failed for field "PolicyAudit.actor_client_id": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.RequestID(); ok {
 		if err := policyaudit.RequestIDValidator(v); err != nil {
 			return &ValidationError{Name: "request_id", err: fmt.Errorf(`ent: validator failed for field "PolicyAudit.request_id": %w`, err)}
@@ -255,9 +236,6 @@ func (_u *PolicyAuditUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	}
 	if value, ok := _u.mutation.ActorSubject(); ok {
 		_spec.SetField(policyaudit.FieldActorSubject, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.ActorClientID(); ok {
-		_spec.SetField(policyaudit.FieldActorClientID, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.RequestID(); ok {
 		_spec.SetField(policyaudit.FieldRequestID, field.TypeString, value)
@@ -360,20 +338,6 @@ func (_u *PolicyAuditUpdateOne) SetActorSubject(v string) *PolicyAuditUpdateOne 
 func (_u *PolicyAuditUpdateOne) SetNillableActorSubject(v *string) *PolicyAuditUpdateOne {
 	if v != nil {
 		_u.SetActorSubject(*v)
-	}
-	return _u
-}
-
-// SetActorClientID sets the "actor_client_id" field.
-func (_u *PolicyAuditUpdateOne) SetActorClientID(v string) *PolicyAuditUpdateOne {
-	_u.mutation.SetActorClientID(v)
-	return _u
-}
-
-// SetNillableActorClientID sets the "actor_client_id" field if the given value is not nil.
-func (_u *PolicyAuditUpdateOne) SetNillableActorClientID(v *string) *PolicyAuditUpdateOne {
-	if v != nil {
-		_u.SetActorClientID(*v)
 	}
 	return _u
 }
@@ -497,11 +461,6 @@ func (_u *PolicyAuditUpdateOne) check() error {
 			return &ValidationError{Name: "actor_subject", err: fmt.Errorf(`ent: validator failed for field "PolicyAudit.actor_subject": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.ActorClientID(); ok {
-		if err := policyaudit.ActorClientIDValidator(v); err != nil {
-			return &ValidationError{Name: "actor_client_id", err: fmt.Errorf(`ent: validator failed for field "PolicyAudit.actor_client_id": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.RequestID(); ok {
 		if err := policyaudit.RequestIDValidator(v); err != nil {
 			return &ValidationError{Name: "request_id", err: fmt.Errorf(`ent: validator failed for field "PolicyAudit.request_id": %w`, err)}
@@ -558,9 +517,6 @@ func (_u *PolicyAuditUpdateOne) sqlSave(ctx context.Context) (_node *PolicyAudit
 	}
 	if value, ok := _u.mutation.ActorSubject(); ok {
 		_spec.SetField(policyaudit.FieldActorSubject, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.ActorClientID(); ok {
-		_spec.SetField(policyaudit.FieldActorClientID, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.RequestID(); ok {
 		_spec.SetField(policyaudit.FieldRequestID, field.TypeString, value)

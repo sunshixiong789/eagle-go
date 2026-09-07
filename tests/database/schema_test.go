@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -37,6 +38,11 @@ func TestEntMatchesGoose(t *testing.T) {
 			assertIndexes(t, db, table)
 		})
 	}
+	assertExactColumnNames(t, db, "casbin_rule", []string{"id", "ptype", "v0", "v1"})
+	assertExactColumnNames(t, db, "authz_policy_audit", []string{
+		"id", "policy_version", "action", "target", "actor_subject",
+		"request_id", "trace_id", "before", "after", "created_at",
+	})
 	rows, err := db.QueryContext(context.Background(), `SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> 'goose_db_version'`)
 	if err != nil {
 		t.Fatal(err)
@@ -57,6 +63,33 @@ func TestEntMatchesGoose(t *testing.T) {
 	}
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func assertExactColumnNames(t *testing.T, db *sql.DB, table string, want []string) {
+	t.Helper()
+	rows, err := db.QueryContext(context.Background(), `
+		SELECT column_name
+		FROM information_schema.columns
+		WHERE table_schema = 'public' AND table_name = $1
+		ORDER BY ordinal_position`, table)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rows.Close() }()
+	var got []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, name)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("%s columns = %v, want %v", table, got, want)
 	}
 }
 

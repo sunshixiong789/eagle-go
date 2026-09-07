@@ -714,10 +714,6 @@ type CasbinRuleMutation struct {
 	ptype         *string
 	v0            *string
 	v1            *string
-	v2            *string
-	v3            *string
-	v4            *string
-	v5            *string
 	clearedFields map[string]struct{}
 	done          bool
 	oldValue      func(context.Context) (*CasbinRule, error)
@@ -936,150 +932,6 @@ func (m *CasbinRuleMutation) ResetV1() {
 	m.v1 = nil
 }
 
-// SetV2 sets the "v2" field.
-func (m *CasbinRuleMutation) SetV2(s string) {
-	m.v2 = &s
-}
-
-// V2 returns the value of the "v2" field in the mutation.
-func (m *CasbinRuleMutation) V2() (r string, exists bool) {
-	v := m.v2
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldV2 returns the old "v2" field's value of the CasbinRule entity.
-// If the CasbinRule object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CasbinRuleMutation) OldV2(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldV2 is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldV2 requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldV2: %w", err)
-	}
-	return oldValue.V2, nil
-}
-
-// ResetV2 resets all changes to the "v2" field.
-func (m *CasbinRuleMutation) ResetV2() {
-	m.v2 = nil
-}
-
-// SetV3 sets the "v3" field.
-func (m *CasbinRuleMutation) SetV3(s string) {
-	m.v3 = &s
-}
-
-// V3 returns the value of the "v3" field in the mutation.
-func (m *CasbinRuleMutation) V3() (r string, exists bool) {
-	v := m.v3
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldV3 returns the old "v3" field's value of the CasbinRule entity.
-// If the CasbinRule object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CasbinRuleMutation) OldV3(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldV3 is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldV3 requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldV3: %w", err)
-	}
-	return oldValue.V3, nil
-}
-
-// ResetV3 resets all changes to the "v3" field.
-func (m *CasbinRuleMutation) ResetV3() {
-	m.v3 = nil
-}
-
-// SetV4 sets the "v4" field.
-func (m *CasbinRuleMutation) SetV4(s string) {
-	m.v4 = &s
-}
-
-// V4 returns the value of the "v4" field in the mutation.
-func (m *CasbinRuleMutation) V4() (r string, exists bool) {
-	v := m.v4
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldV4 returns the old "v4" field's value of the CasbinRule entity.
-// If the CasbinRule object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CasbinRuleMutation) OldV4(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldV4 is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldV4 requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldV4: %w", err)
-	}
-	return oldValue.V4, nil
-}
-
-// ResetV4 resets all changes to the "v4" field.
-func (m *CasbinRuleMutation) ResetV4() {
-	m.v4 = nil
-}
-
-// SetV5 sets the "v5" field.
-func (m *CasbinRuleMutation) SetV5(s string) {
-	m.v5 = &s
-}
-
-// V5 returns the value of the "v5" field in the mutation.
-func (m *CasbinRuleMutation) V5() (r string, exists bool) {
-	v := m.v5
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldV5 returns the old "v5" field's value of the CasbinRule entity.
-// If the CasbinRule object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CasbinRuleMutation) OldV5(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldV5 is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldV5 requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldV5: %w", err)
-	}
-	return oldValue.V5, nil
-}
-
-// ResetV5 resets all changes to the "v5" field.
-func (m *CasbinRuleMutation) ResetV5() {
-	m.v5 = nil
-}
-
 // Where appends a list predicates to the CasbinRuleMutation builder.
 func (m *CasbinRuleMutation) Where(ps ...predicate.CasbinRule) {
 	m.predicates = append(m.predicates, ps...)
@@ -1114,7 +966,7 @@ func (m *CasbinRuleMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CasbinRuleMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 3)
 	if m.ptype != nil {
 		fields = append(fields, casbinrule.FieldPtype)
 	}
@@ -1123,18 +975,6 @@ func (m *CasbinRuleMutation) Fields() []string {
 	}
 	if m.v1 != nil {
 		fields = append(fields, casbinrule.FieldV1)
-	}
-	if m.v2 != nil {
-		fields = append(fields, casbinrule.FieldV2)
-	}
-	if m.v3 != nil {
-		fields = append(fields, casbinrule.FieldV3)
-	}
-	if m.v4 != nil {
-		fields = append(fields, casbinrule.FieldV4)
-	}
-	if m.v5 != nil {
-		fields = append(fields, casbinrule.FieldV5)
 	}
 	return fields
 }
@@ -1150,14 +990,6 @@ func (m *CasbinRuleMutation) Field(name string) (ent.Value, bool) {
 		return m.V0()
 	case casbinrule.FieldV1:
 		return m.V1()
-	case casbinrule.FieldV2:
-		return m.V2()
-	case casbinrule.FieldV3:
-		return m.V3()
-	case casbinrule.FieldV4:
-		return m.V4()
-	case casbinrule.FieldV5:
-		return m.V5()
 	}
 	return nil, false
 }
@@ -1173,14 +1005,6 @@ func (m *CasbinRuleMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldV0(ctx)
 	case casbinrule.FieldV1:
 		return m.OldV1(ctx)
-	case casbinrule.FieldV2:
-		return m.OldV2(ctx)
-	case casbinrule.FieldV3:
-		return m.OldV3(ctx)
-	case casbinrule.FieldV4:
-		return m.OldV4(ctx)
-	case casbinrule.FieldV5:
-		return m.OldV5(ctx)
 	}
 	return nil, fmt.Errorf("unknown CasbinRule field %s", name)
 }
@@ -1210,34 +1034,6 @@ func (m *CasbinRuleMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetV1(v)
-		return nil
-	case casbinrule.FieldV2:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetV2(v)
-		return nil
-	case casbinrule.FieldV3:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetV3(v)
-		return nil
-	case casbinrule.FieldV4:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetV4(v)
-		return nil
-	case casbinrule.FieldV5:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetV5(v)
 		return nil
 	}
 	return fmt.Errorf("unknown CasbinRule field %s", name)
@@ -1296,18 +1092,6 @@ func (m *CasbinRuleMutation) ResetField(name string) error {
 		return nil
 	case casbinrule.FieldV1:
 		m.ResetV1()
-		return nil
-	case casbinrule.FieldV2:
-		m.ResetV2()
-		return nil
-	case casbinrule.FieldV3:
-		m.ResetV3()
-		return nil
-	case casbinrule.FieldV4:
-		m.ResetV4()
-		return nil
-	case casbinrule.FieldV5:
-		m.ResetV5()
 		return nil
 	}
 	return fmt.Errorf("unknown CasbinRule field %s", name)
@@ -5168,7 +4952,6 @@ type PolicyAuditMutation struct {
 	action            *string
 	target            *string
 	actor_subject     *string
-	actor_client_id   *string
 	request_id        *string
 	trace_id          *string
 	before            *[]string
@@ -5450,42 +5233,6 @@ func (m *PolicyAuditMutation) ResetActorSubject() {
 	m.actor_subject = nil
 }
 
-// SetActorClientID sets the "actor_client_id" field.
-func (m *PolicyAuditMutation) SetActorClientID(s string) {
-	m.actor_client_id = &s
-}
-
-// ActorClientID returns the value of the "actor_client_id" field in the mutation.
-func (m *PolicyAuditMutation) ActorClientID() (r string, exists bool) {
-	v := m.actor_client_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldActorClientID returns the old "actor_client_id" field's value of the PolicyAudit entity.
-// If the PolicyAudit object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PolicyAuditMutation) OldActorClientID(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldActorClientID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldActorClientID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldActorClientID: %w", err)
-	}
-	return oldValue.ActorClientID, nil
-}
-
-// ResetActorClientID resets all changes to the "actor_client_id" field.
-func (m *PolicyAuditMutation) ResetActorClientID() {
-	m.actor_client_id = nil
-}
-
 // SetRequestID sets the "request_id" field.
 func (m *PolicyAuditMutation) SetRequestID(s string) {
 	m.request_id = &s
@@ -5730,7 +5477,7 @@ func (m *PolicyAuditMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PolicyAuditMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 9)
 	if m.policy_version != nil {
 		fields = append(fields, policyaudit.FieldPolicyVersion)
 	}
@@ -5742,9 +5489,6 @@ func (m *PolicyAuditMutation) Fields() []string {
 	}
 	if m.actor_subject != nil {
 		fields = append(fields, policyaudit.FieldActorSubject)
-	}
-	if m.actor_client_id != nil {
-		fields = append(fields, policyaudit.FieldActorClientID)
 	}
 	if m.request_id != nil {
 		fields = append(fields, policyaudit.FieldRequestID)
@@ -5777,8 +5521,6 @@ func (m *PolicyAuditMutation) Field(name string) (ent.Value, bool) {
 		return m.Target()
 	case policyaudit.FieldActorSubject:
 		return m.ActorSubject()
-	case policyaudit.FieldActorClientID:
-		return m.ActorClientID()
 	case policyaudit.FieldRequestID:
 		return m.RequestID()
 	case policyaudit.FieldTraceID:
@@ -5806,8 +5548,6 @@ func (m *PolicyAuditMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldTarget(ctx)
 	case policyaudit.FieldActorSubject:
 		return m.OldActorSubject(ctx)
-	case policyaudit.FieldActorClientID:
-		return m.OldActorClientID(ctx)
 	case policyaudit.FieldRequestID:
 		return m.OldRequestID(ctx)
 	case policyaudit.FieldTraceID:
@@ -5854,13 +5594,6 @@ func (m *PolicyAuditMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetActorSubject(v)
-		return nil
-	case policyaudit.FieldActorClientID:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetActorClientID(v)
 		return nil
 	case policyaudit.FieldRequestID:
 		v, ok := value.(string)
@@ -5972,9 +5705,6 @@ func (m *PolicyAuditMutation) ResetField(name string) error {
 		return nil
 	case policyaudit.FieldActorSubject:
 		m.ResetActorSubject()
-		return nil
-	case policyaudit.FieldActorClientID:
-		m.ResetActorClientID()
 		return nil
 	case policyaudit.FieldRequestID:
 		m.ResetRequestID()

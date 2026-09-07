@@ -74,11 +74,6 @@ func ActorSubject(v string) predicate.PolicyAudit {
 	return predicate.PolicyAudit(sql.FieldEQ(FieldActorSubject, v))
 }
 
-// ActorClientID applies equality check predicate on the "actor_client_id" field. It's identical to ActorClientIDEQ.
-func ActorClientID(v string) predicate.PolicyAudit {
-	return predicate.PolicyAudit(sql.FieldEQ(FieldActorClientID, v))
-}
-
 // RequestID applies equality check predicate on the "request_id" field. It's identical to RequestIDEQ.
 func RequestID(v string) predicate.PolicyAudit {
 	return predicate.PolicyAudit(sql.FieldEQ(FieldRequestID, v))
@@ -327,71 +322,6 @@ func ActorSubjectEqualFold(v string) predicate.PolicyAudit {
 // ActorSubjectContainsFold applies the ContainsFold predicate on the "actor_subject" field.
 func ActorSubjectContainsFold(v string) predicate.PolicyAudit {
 	return predicate.PolicyAudit(sql.FieldContainsFold(FieldActorSubject, v))
-}
-
-// ActorClientIDEQ applies the EQ predicate on the "actor_client_id" field.
-func ActorClientIDEQ(v string) predicate.PolicyAudit {
-	return predicate.PolicyAudit(sql.FieldEQ(FieldActorClientID, v))
-}
-
-// ActorClientIDNEQ applies the NEQ predicate on the "actor_client_id" field.
-func ActorClientIDNEQ(v string) predicate.PolicyAudit {
-	return predicate.PolicyAudit(sql.FieldNEQ(FieldActorClientID, v))
-}
-
-// ActorClientIDIn applies the In predicate on the "actor_client_id" field.
-func ActorClientIDIn(vs ...string) predicate.PolicyAudit {
-	return predicate.PolicyAudit(sql.FieldIn(FieldActorClientID, vs...))
-}
-
-// ActorClientIDNotIn applies the NotIn predicate on the "actor_client_id" field.
-func ActorClientIDNotIn(vs ...string) predicate.PolicyAudit {
-	return predicate.PolicyAudit(sql.FieldNotIn(FieldActorClientID, vs...))
-}
-
-// ActorClientIDGT applies the GT predicate on the "actor_client_id" field.
-func ActorClientIDGT(v string) predicate.PolicyAudit {
-	return predicate.PolicyAudit(sql.FieldGT(FieldActorClientID, v))
-}
-
-// ActorClientIDGTE applies the GTE predicate on the "actor_client_id" field.
-func ActorClientIDGTE(v string) predicate.PolicyAudit {
-	return predicate.PolicyAudit(sql.FieldGTE(FieldActorClientID, v))
-}
-
-// ActorClientIDLT applies the LT predicate on the "actor_client_id" field.
-func ActorClientIDLT(v string) predicate.PolicyAudit {
-	return predicate.PolicyAudit(sql.FieldLT(FieldActorClientID, v))
-}
-
-// ActorClientIDLTE applies the LTE predicate on the "actor_client_id" field.
-func ActorClientIDLTE(v string) predicate.PolicyAudit {
-	return predicate.PolicyAudit(sql.FieldLTE(FieldActorClientID, v))
-}
-
-// ActorClientIDContains applies the Contains predicate on the "actor_client_id" field.
-func ActorClientIDContains(v string) predicate.PolicyAudit {
-	return predicate.PolicyAudit(sql.FieldContains(FieldActorClientID, v))
-}
-
-// ActorClientIDHasPrefix applies the HasPrefix predicate on the "actor_client_id" field.
-func ActorClientIDHasPrefix(v string) predicate.PolicyAudit {
-	return predicate.PolicyAudit(sql.FieldHasPrefix(FieldActorClientID, v))
-}
-
-// ActorClientIDHasSuffix applies the HasSuffix predicate on the "actor_client_id" field.
-func ActorClientIDHasSuffix(v string) predicate.PolicyAudit {
-	return predicate.PolicyAudit(sql.FieldHasSuffix(FieldActorClientID, v))
-}
-
-// ActorClientIDEqualFold applies the EqualFold predicate on the "actor_client_id" field.
-func ActorClientIDEqualFold(v string) predicate.PolicyAudit {
-	return predicate.PolicyAudit(sql.FieldEqualFold(FieldActorClientID, v))
-}
-
-// ActorClientIDContainsFold applies the ContainsFold predicate on the "actor_client_id" field.
-func ActorClientIDContainsFold(v string) predicate.PolicyAudit {
-	return predicate.PolicyAudit(sql.FieldContainsFold(FieldActorClientID, v))
 }
 
 // RequestIDEQ applies the EQ predicate on the "request_id" field.

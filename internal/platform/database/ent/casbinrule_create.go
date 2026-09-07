@@ -55,62 +55,6 @@ func (_c *CasbinRuleCreate) SetNillableV1(v *string) *CasbinRuleCreate {
 	return _c
 }
 
-// SetV2 sets the "v2" field.
-func (_c *CasbinRuleCreate) SetV2(v string) *CasbinRuleCreate {
-	_c.mutation.SetV2(v)
-	return _c
-}
-
-// SetNillableV2 sets the "v2" field if the given value is not nil.
-func (_c *CasbinRuleCreate) SetNillableV2(v *string) *CasbinRuleCreate {
-	if v != nil {
-		_c.SetV2(*v)
-	}
-	return _c
-}
-
-// SetV3 sets the "v3" field.
-func (_c *CasbinRuleCreate) SetV3(v string) *CasbinRuleCreate {
-	_c.mutation.SetV3(v)
-	return _c
-}
-
-// SetNillableV3 sets the "v3" field if the given value is not nil.
-func (_c *CasbinRuleCreate) SetNillableV3(v *string) *CasbinRuleCreate {
-	if v != nil {
-		_c.SetV3(*v)
-	}
-	return _c
-}
-
-// SetV4 sets the "v4" field.
-func (_c *CasbinRuleCreate) SetV4(v string) *CasbinRuleCreate {
-	_c.mutation.SetV4(v)
-	return _c
-}
-
-// SetNillableV4 sets the "v4" field if the given value is not nil.
-func (_c *CasbinRuleCreate) SetNillableV4(v *string) *CasbinRuleCreate {
-	if v != nil {
-		_c.SetV4(*v)
-	}
-	return _c
-}
-
-// SetV5 sets the "v5" field.
-func (_c *CasbinRuleCreate) SetV5(v string) *CasbinRuleCreate {
-	_c.mutation.SetV5(v)
-	return _c
-}
-
-// SetNillableV5 sets the "v5" field if the given value is not nil.
-func (_c *CasbinRuleCreate) SetNillableV5(v *string) *CasbinRuleCreate {
-	if v != nil {
-		_c.SetV5(*v)
-	}
-	return _c
-}
-
 // SetID sets the "id" field.
 func (_c *CasbinRuleCreate) SetID(v int64) *CasbinRuleCreate {
 	_c.mutation.SetID(v)
@@ -160,22 +104,6 @@ func (_c *CasbinRuleCreate) defaults() {
 		v := casbinrule.DefaultV1
 		_c.mutation.SetV1(v)
 	}
-	if _, ok := _c.mutation.V2(); !ok {
-		v := casbinrule.DefaultV2
-		_c.mutation.SetV2(v)
-	}
-	if _, ok := _c.mutation.V3(); !ok {
-		v := casbinrule.DefaultV3
-		_c.mutation.SetV3(v)
-	}
-	if _, ok := _c.mutation.V4(); !ok {
-		v := casbinrule.DefaultV4
-		_c.mutation.SetV4(v)
-	}
-	if _, ok := _c.mutation.V5(); !ok {
-		v := casbinrule.DefaultV5
-		_c.mutation.SetV5(v)
-	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -202,38 +130,6 @@ func (_c *CasbinRuleCreate) check() error {
 	if v, ok := _c.mutation.V1(); ok {
 		if err := casbinrule.V1Validator(v); err != nil {
 			return &ValidationError{Name: "v1", err: fmt.Errorf(`ent: validator failed for field "CasbinRule.v1": %w`, err)}
-		}
-	}
-	if _, ok := _c.mutation.V2(); !ok {
-		return &ValidationError{Name: "v2", err: errors.New(`ent: missing required field "CasbinRule.v2"`)}
-	}
-	if v, ok := _c.mutation.V2(); ok {
-		if err := casbinrule.V2Validator(v); err != nil {
-			return &ValidationError{Name: "v2", err: fmt.Errorf(`ent: validator failed for field "CasbinRule.v2": %w`, err)}
-		}
-	}
-	if _, ok := _c.mutation.V3(); !ok {
-		return &ValidationError{Name: "v3", err: errors.New(`ent: missing required field "CasbinRule.v3"`)}
-	}
-	if v, ok := _c.mutation.V3(); ok {
-		if err := casbinrule.V3Validator(v); err != nil {
-			return &ValidationError{Name: "v3", err: fmt.Errorf(`ent: validator failed for field "CasbinRule.v3": %w`, err)}
-		}
-	}
-	if _, ok := _c.mutation.V4(); !ok {
-		return &ValidationError{Name: "v4", err: errors.New(`ent: missing required field "CasbinRule.v4"`)}
-	}
-	if v, ok := _c.mutation.V4(); ok {
-		if err := casbinrule.V4Validator(v); err != nil {
-			return &ValidationError{Name: "v4", err: fmt.Errorf(`ent: validator failed for field "CasbinRule.v4": %w`, err)}
-		}
-	}
-	if _, ok := _c.mutation.V5(); !ok {
-		return &ValidationError{Name: "v5", err: errors.New(`ent: missing required field "CasbinRule.v5"`)}
-	}
-	if v, ok := _c.mutation.V5(); ok {
-		if err := casbinrule.V5Validator(v); err != nil {
-			return &ValidationError{Name: "v5", err: fmt.Errorf(`ent: validator failed for field "CasbinRule.v5": %w`, err)}
 		}
 	}
 	return nil
@@ -280,22 +176,6 @@ func (_c *CasbinRuleCreate) createSpec() (*CasbinRule, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.V1(); ok {
 		_spec.SetField(casbinrule.FieldV1, field.TypeString, value)
 		_node.V1 = value
-	}
-	if value, ok := _c.mutation.V2(); ok {
-		_spec.SetField(casbinrule.FieldV2, field.TypeString, value)
-		_node.V2 = value
-	}
-	if value, ok := _c.mutation.V3(); ok {
-		_spec.SetField(casbinrule.FieldV3, field.TypeString, value)
-		_node.V3 = value
-	}
-	if value, ok := _c.mutation.V4(); ok {
-		_spec.SetField(casbinrule.FieldV4, field.TypeString, value)
-		_node.V4 = value
-	}
-	if value, ok := _c.mutation.V5(); ok {
-		_spec.SetField(casbinrule.FieldV5, field.TypeString, value)
-		_node.V5 = value
 	}
 	return _node, _spec
 }
@@ -382,54 +262,6 @@ func (u *CasbinRuleUpsert) SetV1(v string) *CasbinRuleUpsert {
 // UpdateV1 sets the "v1" field to the value that was provided on create.
 func (u *CasbinRuleUpsert) UpdateV1() *CasbinRuleUpsert {
 	u.SetExcluded(casbinrule.FieldV1)
-	return u
-}
-
-// SetV2 sets the "v2" field.
-func (u *CasbinRuleUpsert) SetV2(v string) *CasbinRuleUpsert {
-	u.Set(casbinrule.FieldV2, v)
-	return u
-}
-
-// UpdateV2 sets the "v2" field to the value that was provided on create.
-func (u *CasbinRuleUpsert) UpdateV2() *CasbinRuleUpsert {
-	u.SetExcluded(casbinrule.FieldV2)
-	return u
-}
-
-// SetV3 sets the "v3" field.
-func (u *CasbinRuleUpsert) SetV3(v string) *CasbinRuleUpsert {
-	u.Set(casbinrule.FieldV3, v)
-	return u
-}
-
-// UpdateV3 sets the "v3" field to the value that was provided on create.
-func (u *CasbinRuleUpsert) UpdateV3() *CasbinRuleUpsert {
-	u.SetExcluded(casbinrule.FieldV3)
-	return u
-}
-
-// SetV4 sets the "v4" field.
-func (u *CasbinRuleUpsert) SetV4(v string) *CasbinRuleUpsert {
-	u.Set(casbinrule.FieldV4, v)
-	return u
-}
-
-// UpdateV4 sets the "v4" field to the value that was provided on create.
-func (u *CasbinRuleUpsert) UpdateV4() *CasbinRuleUpsert {
-	u.SetExcluded(casbinrule.FieldV4)
-	return u
-}
-
-// SetV5 sets the "v5" field.
-func (u *CasbinRuleUpsert) SetV5(v string) *CasbinRuleUpsert {
-	u.Set(casbinrule.FieldV5, v)
-	return u
-}
-
-// UpdateV5 sets the "v5" field to the value that was provided on create.
-func (u *CasbinRuleUpsert) UpdateV5() *CasbinRuleUpsert {
-	u.SetExcluded(casbinrule.FieldV5)
 	return u
 }
 
@@ -520,62 +352,6 @@ func (u *CasbinRuleUpsertOne) SetV1(v string) *CasbinRuleUpsertOne {
 func (u *CasbinRuleUpsertOne) UpdateV1() *CasbinRuleUpsertOne {
 	return u.Update(func(s *CasbinRuleUpsert) {
 		s.UpdateV1()
-	})
-}
-
-// SetV2 sets the "v2" field.
-func (u *CasbinRuleUpsertOne) SetV2(v string) *CasbinRuleUpsertOne {
-	return u.Update(func(s *CasbinRuleUpsert) {
-		s.SetV2(v)
-	})
-}
-
-// UpdateV2 sets the "v2" field to the value that was provided on create.
-func (u *CasbinRuleUpsertOne) UpdateV2() *CasbinRuleUpsertOne {
-	return u.Update(func(s *CasbinRuleUpsert) {
-		s.UpdateV2()
-	})
-}
-
-// SetV3 sets the "v3" field.
-func (u *CasbinRuleUpsertOne) SetV3(v string) *CasbinRuleUpsertOne {
-	return u.Update(func(s *CasbinRuleUpsert) {
-		s.SetV3(v)
-	})
-}
-
-// UpdateV3 sets the "v3" field to the value that was provided on create.
-func (u *CasbinRuleUpsertOne) UpdateV3() *CasbinRuleUpsertOne {
-	return u.Update(func(s *CasbinRuleUpsert) {
-		s.UpdateV3()
-	})
-}
-
-// SetV4 sets the "v4" field.
-func (u *CasbinRuleUpsertOne) SetV4(v string) *CasbinRuleUpsertOne {
-	return u.Update(func(s *CasbinRuleUpsert) {
-		s.SetV4(v)
-	})
-}
-
-// UpdateV4 sets the "v4" field to the value that was provided on create.
-func (u *CasbinRuleUpsertOne) UpdateV4() *CasbinRuleUpsertOne {
-	return u.Update(func(s *CasbinRuleUpsert) {
-		s.UpdateV4()
-	})
-}
-
-// SetV5 sets the "v5" field.
-func (u *CasbinRuleUpsertOne) SetV5(v string) *CasbinRuleUpsertOne {
-	return u.Update(func(s *CasbinRuleUpsert) {
-		s.SetV5(v)
-	})
-}
-
-// UpdateV5 sets the "v5" field to the value that was provided on create.
-func (u *CasbinRuleUpsertOne) UpdateV5() *CasbinRuleUpsertOne {
-	return u.Update(func(s *CasbinRuleUpsert) {
-		s.UpdateV5()
 	})
 }
 
@@ -832,62 +608,6 @@ func (u *CasbinRuleUpsertBulk) SetV1(v string) *CasbinRuleUpsertBulk {
 func (u *CasbinRuleUpsertBulk) UpdateV1() *CasbinRuleUpsertBulk {
 	return u.Update(func(s *CasbinRuleUpsert) {
 		s.UpdateV1()
-	})
-}
-
-// SetV2 sets the "v2" field.
-func (u *CasbinRuleUpsertBulk) SetV2(v string) *CasbinRuleUpsertBulk {
-	return u.Update(func(s *CasbinRuleUpsert) {
-		s.SetV2(v)
-	})
-}
-
-// UpdateV2 sets the "v2" field to the value that was provided on create.
-func (u *CasbinRuleUpsertBulk) UpdateV2() *CasbinRuleUpsertBulk {
-	return u.Update(func(s *CasbinRuleUpsert) {
-		s.UpdateV2()
-	})
-}
-
-// SetV3 sets the "v3" field.
-func (u *CasbinRuleUpsertBulk) SetV3(v string) *CasbinRuleUpsertBulk {
-	return u.Update(func(s *CasbinRuleUpsert) {
-		s.SetV3(v)
-	})
-}
-
-// UpdateV3 sets the "v3" field to the value that was provided on create.
-func (u *CasbinRuleUpsertBulk) UpdateV3() *CasbinRuleUpsertBulk {
-	return u.Update(func(s *CasbinRuleUpsert) {
-		s.UpdateV3()
-	})
-}
-
-// SetV4 sets the "v4" field.
-func (u *CasbinRuleUpsertBulk) SetV4(v string) *CasbinRuleUpsertBulk {
-	return u.Update(func(s *CasbinRuleUpsert) {
-		s.SetV4(v)
-	})
-}
-
-// UpdateV4 sets the "v4" field to the value that was provided on create.
-func (u *CasbinRuleUpsertBulk) UpdateV4() *CasbinRuleUpsertBulk {
-	return u.Update(func(s *CasbinRuleUpsert) {
-		s.UpdateV4()
-	})
-}
-
-// SetV5 sets the "v5" field.
-func (u *CasbinRuleUpsertBulk) SetV5(v string) *CasbinRuleUpsertBulk {
-	return u.Update(func(s *CasbinRuleUpsert) {
-		s.SetV5(v)
-	})
-}
-
-// UpdateV5 sets the "v5" field to the value that was provided on create.
-func (u *CasbinRuleUpsertBulk) UpdateV5() *CasbinRuleUpsertBulk {
-	return u.Update(func(s *CasbinRuleUpsert) {
-		s.UpdateV5()
 	})
 }
 

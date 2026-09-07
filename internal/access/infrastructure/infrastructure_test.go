@@ -523,10 +523,9 @@ func TestPolicyMutationWritesVersionAndAudit(t *testing.T) {
 		t.Fatalf("PolicyVersion: %v", err)
 	}
 	version, err := store.ReplaceRolePermissions(ctx, "test-audit-role", []string{"system:dict:list"}, nil, policyMutationMeta{
-		actorSubject:  "subject-1",
-		actorClientID: "console",
-		requestID:     "request-1",
-		traceID:       "0123456789abcdef0123456789abcdef",
+		actorSubject: "subject-1",
+		requestID:    "request-1",
+		traceID:      "0123456789abcdef0123456789abcdef",
 	})
 	if err != nil {
 		t.Fatalf("ReplaceRolePermissions: %v", err)

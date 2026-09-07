@@ -54,20 +54,6 @@ func (_c *PolicyAuditCreate) SetNillableActorSubject(v *string) *PolicyAuditCrea
 	return _c
 }
 
-// SetActorClientID sets the "actor_client_id" field.
-func (_c *PolicyAuditCreate) SetActorClientID(v string) *PolicyAuditCreate {
-	_c.mutation.SetActorClientID(v)
-	return _c
-}
-
-// SetNillableActorClientID sets the "actor_client_id" field if the given value is not nil.
-func (_c *PolicyAuditCreate) SetNillableActorClientID(v *string) *PolicyAuditCreate {
-	if v != nil {
-		_c.SetActorClientID(*v)
-	}
-	return _c
-}
-
 // SetRequestID sets the "request_id" field.
 func (_c *PolicyAuditCreate) SetRequestID(v string) *PolicyAuditCreate {
 	_c.mutation.SetRequestID(v)
@@ -167,10 +153,6 @@ func (_c *PolicyAuditCreate) defaults() {
 		v := policyaudit.DefaultActorSubject
 		_c.mutation.SetActorSubject(v)
 	}
-	if _, ok := _c.mutation.ActorClientID(); !ok {
-		v := policyaudit.DefaultActorClientID
-		_c.mutation.SetActorClientID(v)
-	}
 	if _, ok := _c.mutation.RequestID(); !ok {
 		v := policyaudit.DefaultRequestID
 		_c.mutation.SetRequestID(v)
@@ -217,14 +199,6 @@ func (_c *PolicyAuditCreate) check() error {
 	if v, ok := _c.mutation.ActorSubject(); ok {
 		if err := policyaudit.ActorSubjectValidator(v); err != nil {
 			return &ValidationError{Name: "actor_subject", err: fmt.Errorf(`ent: validator failed for field "PolicyAudit.actor_subject": %w`, err)}
-		}
-	}
-	if _, ok := _c.mutation.ActorClientID(); !ok {
-		return &ValidationError{Name: "actor_client_id", err: errors.New(`ent: missing required field "PolicyAudit.actor_client_id"`)}
-	}
-	if v, ok := _c.mutation.ActorClientID(); ok {
-		if err := policyaudit.ActorClientIDValidator(v); err != nil {
-			return &ValidationError{Name: "actor_client_id", err: fmt.Errorf(`ent: validator failed for field "PolicyAudit.actor_client_id": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.RequestID(); !ok {
@@ -300,10 +274,6 @@ func (_c *PolicyAuditCreate) createSpec() (*PolicyAudit, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ActorSubject(); ok {
 		_spec.SetField(policyaudit.FieldActorSubject, field.TypeString, value)
 		_node.ActorSubject = value
-	}
-	if value, ok := _c.mutation.ActorClientID(); ok {
-		_spec.SetField(policyaudit.FieldActorClientID, field.TypeString, value)
-		_node.ActorClientID = value
 	}
 	if value, ok := _c.mutation.RequestID(); ok {
 		_spec.SetField(policyaudit.FieldRequestID, field.TypeString, value)
@@ -428,18 +398,6 @@ func (u *PolicyAuditUpsert) SetActorSubject(v string) *PolicyAuditUpsert {
 // UpdateActorSubject sets the "actor_subject" field to the value that was provided on create.
 func (u *PolicyAuditUpsert) UpdateActorSubject() *PolicyAuditUpsert {
 	u.SetExcluded(policyaudit.FieldActorSubject)
-	return u
-}
-
-// SetActorClientID sets the "actor_client_id" field.
-func (u *PolicyAuditUpsert) SetActorClientID(v string) *PolicyAuditUpsert {
-	u.Set(policyaudit.FieldActorClientID, v)
-	return u
-}
-
-// UpdateActorClientID sets the "actor_client_id" field to the value that was provided on create.
-func (u *PolicyAuditUpsert) UpdateActorClientID() *PolicyAuditUpsert {
-	u.SetExcluded(policyaudit.FieldActorClientID)
 	return u
 }
 
@@ -602,20 +560,6 @@ func (u *PolicyAuditUpsertOne) SetActorSubject(v string) *PolicyAuditUpsertOne {
 func (u *PolicyAuditUpsertOne) UpdateActorSubject() *PolicyAuditUpsertOne {
 	return u.Update(func(s *PolicyAuditUpsert) {
 		s.UpdateActorSubject()
-	})
-}
-
-// SetActorClientID sets the "actor_client_id" field.
-func (u *PolicyAuditUpsertOne) SetActorClientID(v string) *PolicyAuditUpsertOne {
-	return u.Update(func(s *PolicyAuditUpsert) {
-		s.SetActorClientID(v)
-	})
-}
-
-// UpdateActorClientID sets the "actor_client_id" field to the value that was provided on create.
-func (u *PolicyAuditUpsertOne) UpdateActorClientID() *PolicyAuditUpsertOne {
-	return u.Update(func(s *PolicyAuditUpsert) {
-		s.UpdateActorClientID()
 	})
 }
 
@@ -952,20 +896,6 @@ func (u *PolicyAuditUpsertBulk) SetActorSubject(v string) *PolicyAuditUpsertBulk
 func (u *PolicyAuditUpsertBulk) UpdateActorSubject() *PolicyAuditUpsertBulk {
 	return u.Update(func(s *PolicyAuditUpsert) {
 		s.UpdateActorSubject()
-	})
-}
-
-// SetActorClientID sets the "actor_client_id" field.
-func (u *PolicyAuditUpsertBulk) SetActorClientID(v string) *PolicyAuditUpsertBulk {
-	return u.Update(func(s *PolicyAuditUpsert) {
-		s.SetActorClientID(v)
-	})
-}
-
-// UpdateActorClientID sets the "actor_client_id" field to the value that was provided on create.
-func (u *PolicyAuditUpsertBulk) UpdateActorClientID() *PolicyAuditUpsertBulk {
-	return u.Update(func(s *PolicyAuditUpsert) {
-		s.UpdateActorClientID()
 	})
 }
 

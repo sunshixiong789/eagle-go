@@ -48,13 +48,9 @@ CREATE TABLE casbin_rule (
     id    bigserial    PRIMARY KEY,
     ptype varchar(8)   NOT NULL,
     v0    varchar(128) NOT NULL DEFAULT '',
-    v1    varchar(128) NOT NULL DEFAULT '',
-    v2    varchar(128) NOT NULL DEFAULT '',
-    v3    varchar(128) NOT NULL DEFAULT '',
-    v4    varchar(128) NOT NULL DEFAULT '',
-    v5    varchar(128) NOT NULL DEFAULT ''
+    v1    varchar(128) NOT NULL DEFAULT ''
 );
-CREATE UNIQUE INDEX uk_casbin_rule ON casbin_rule (ptype, v0, v1, v2, v3, v4, v5);
+CREATE UNIQUE INDEX uk_casbin_rule ON casbin_rule (ptype, v0, v1);
 CREATE INDEX idx_casbin_rule_ptype_v0 ON casbin_rule (ptype, v0);
 
 -- 多副本授权策略对账版本。
@@ -72,7 +68,6 @@ CREATE TABLE authz_policy_audit (
     action          varchar(64)  NOT NULL,
     target          varchar(256) NOT NULL,
     actor_subject   varchar(128) NOT NULL DEFAULT '',
-    actor_client_id varchar(128) NOT NULL DEFAULT '',
     request_id      varchar(128) NOT NULL DEFAULT '',
     trace_id        varchar(64)  NOT NULL DEFAULT '',
     before          jsonb        NOT NULL DEFAULT '[]'::jsonb,
@@ -109,6 +104,35 @@ CREATE TABLE sys_dict_data (
     UNIQUE (dict_type, value)
 );
 CREATE INDEX idx_sys_dict_data_type_sort ON sys_dict_data (dict_type, sort);
+
+-- 社会化身份与本地刷新会话。Google/Apple 仅证明外部身份，Eagle 负责会话。
+CREATE TABLE social_identity (
+    id               bigserial     PRIMARY KEY,
+    subject          varchar(384)  NOT NULL UNIQUE,
+    provider         varchar(16)   NOT NULL CHECK (provider IN ('google', 'apple')),
+    provider_subject varchar(255)  NOT NULL,
+    email            varchar(320)  NOT NULL DEFAULT '',
+    email_verified   boolean       NOT NULL DEFAULT false,
+    display_name     varchar(128)  NOT NULL DEFAULT '',
+    avatar_url       varchar(2048) NOT NULL DEFAULT '',
+    role             varchar(32)   NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
+    last_login_at    timestamptz   NOT NULL DEFAULT now(),
+    created_at       timestamptz   NOT NULL DEFAULT now(),
+    updated_at       timestamptz   NOT NULL DEFAULT now(),
+    UNIQUE (provider, provider_subject)
+);
+
+CREATE TABLE auth_session (
+    id                 varchar(32) PRIMARY KEY,
+    identity_id        bigint      NOT NULL REFERENCES social_identity(id) ON DELETE CASCADE,
+    refresh_token_hash varchar(64) NOT NULL UNIQUE,
+    expires_at         timestamptz NOT NULL,
+    revoked_at         timestamptz,
+    created_at         timestamptz NOT NULL DEFAULT now(),
+    updated_at         timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_auth_session_identity ON auth_session (identity_id);
+CREATE INDEX idx_auth_session_expires ON auth_session (expires_at);
 
 -- 只种入当前 Proto 实际声明的权限码。
 INSERT INTO permission_definition (code, service, resource, action, status, source) VALUES
@@ -170,6 +194,8 @@ INSERT INTO sys_dict_data (dict_type, label, value, sort, css_class, is_default)
 
 -- +goose Down
 -- +goose StatementBegin
+DROP TABLE IF EXISTS auth_session;
+DROP TABLE IF EXISTS social_identity;
 DROP TABLE IF EXISTS sys_dict_data;
 DROP TABLE IF EXISTS sys_dict_type;
 DROP TABLE IF EXISTS authz_policy_audit;

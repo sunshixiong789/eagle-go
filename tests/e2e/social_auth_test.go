@@ -7,8 +7,8 @@ import (
 )
 
 type tokenResponse struct {
-	AccessToken  string `json:"accessToken"`
-	RefreshToken string `json:"refreshToken"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
 }
 
 func TestSocialLoginReturnsUsableEagleToken(t *testing.T) {
@@ -62,7 +62,7 @@ func TestLogoutRevokesRefreshToken(t *testing.T) {
 func (e *testEnv) socialLogin(t *testing.T) tokenResponse {
 	t.Helper()
 	code, body := e.do(t, http.MethodPost, "/v1/auth/social/login", "", `{
-		"provider":"SOCIAL_PROVIDER_GOOGLE",
+		"provider":1,
 		"id_token":"valid-provider-token",
 		"nonce":"valid-provider-nonce"
 	}`)

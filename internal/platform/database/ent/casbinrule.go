@@ -21,15 +21,7 @@ type CasbinRule struct {
 	// V0 holds the value of the "v0" field.
 	V0 string `json:"v0,omitempty"`
 	// V1 holds the value of the "v1" field.
-	V1 string `json:"v1,omitempty"`
-	// V2 holds the value of the "v2" field.
-	V2 string `json:"v2,omitempty"`
-	// V3 holds the value of the "v3" field.
-	V3 string `json:"v3,omitempty"`
-	// V4 holds the value of the "v4" field.
-	V4 string `json:"v4,omitempty"`
-	// V5 holds the value of the "v5" field.
-	V5           string `json:"v5,omitempty"`
+	V1           string `json:"v1,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -40,7 +32,7 @@ func (*CasbinRule) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case casbinrule.FieldID:
 			values[i] = new(sql.NullInt64)
-		case casbinrule.FieldPtype, casbinrule.FieldV0, casbinrule.FieldV1, casbinrule.FieldV2, casbinrule.FieldV3, casbinrule.FieldV4, casbinrule.FieldV5:
+		case casbinrule.FieldPtype, casbinrule.FieldV0, casbinrule.FieldV1:
 			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -80,30 +72,6 @@ func (_m *CasbinRule) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field v1", values[i])
 			} else if value.Valid {
 				_m.V1 = value.String
-			}
-		case casbinrule.FieldV2:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field v2", values[i])
-			} else if value.Valid {
-				_m.V2 = value.String
-			}
-		case casbinrule.FieldV3:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field v3", values[i])
-			} else if value.Valid {
-				_m.V3 = value.String
-			}
-		case casbinrule.FieldV4:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field v4", values[i])
-			} else if value.Valid {
-				_m.V4 = value.String
-			}
-		case casbinrule.FieldV5:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field v5", values[i])
-			} else if value.Valid {
-				_m.V5 = value.String
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
@@ -149,18 +117,6 @@ func (_m *CasbinRule) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("v1=")
 	builder.WriteString(_m.V1)
-	builder.WriteString(", ")
-	builder.WriteString("v2=")
-	builder.WriteString(_m.V2)
-	builder.WriteString(", ")
-	builder.WriteString("v3=")
-	builder.WriteString(_m.V3)
-	builder.WriteString(", ")
-	builder.WriteString("v4=")
-	builder.WriteString(_m.V4)
-	builder.WriteString(", ")
-	builder.WriteString("v5=")
-	builder.WriteString(_m.V5)
 	builder.WriteByte(')')
 	return builder.String()
 }

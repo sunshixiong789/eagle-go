@@ -24,7 +24,6 @@ func (PolicyAudit) Fields() []ent.Field {
 		field.String("action").MaxLen(64),
 		field.String("target").MaxLen(256),
 		field.String("actor_subject").MaxLen(128).Default(""),
-		field.String("actor_client_id").MaxLen(128).Default(""),
 		field.String("request_id").MaxLen(128).Default(""),
 		field.String("trace_id").MaxLen(64).Default(""),
 		field.JSON("before", []string{}),

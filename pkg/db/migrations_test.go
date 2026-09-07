@@ -36,6 +36,7 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	goose.SetLogger(goose.NopLogger())
 
 	dir := testkit.MigrationsDir()
+	assertSingleBaseline(t, sqlDB)
 	assertSeedData(t, sqlDB)
 
 	if err := goose.DownTo(sqlDB, dir, 0); err != nil {
@@ -48,9 +49,28 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	if err := goose.Up(sqlDB, dir); err != nil {
 		t.Fatalf("回滚后重新 up: %v", err)
 	}
+	assertSingleBaseline(t, sqlDB)
 	assertSeedData(t, sqlDB)
 	if err := goose.DownTo(sqlDB, dir, 0); err != nil {
 		t.Fatalf("最终 down-to 0: %v", err)
+	}
+}
+
+func assertSingleBaseline(t *testing.T, db *sql.DB) {
+	t.Helper()
+	if version, err := goose.GetDBVersion(db); err != nil {
+		t.Fatalf("读取迁移版本: %v", err)
+	} else if version != 1 {
+		t.Fatalf("迁移版本 = %d, want 1", version)
+	}
+	for _, table := range []string{"social_identity", "auth_session"} {
+		var exists bool
+		if err := db.QueryRow(`SELECT to_regclass($1) IS NOT NULL`, table).Scan(&exists); err != nil {
+			t.Fatalf("检查表 %s: %v", table, err)
+		}
+		if !exists {
+			t.Errorf("基线迁移缺少表 %s", table)
+		}
 	}
 }
 

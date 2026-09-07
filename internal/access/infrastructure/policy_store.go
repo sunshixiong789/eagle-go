@@ -30,7 +30,7 @@ func (s *PolicyStore) LoadPolicyRows(ctx context.Context) ([]authz.StoredPolicy,
 	for _, row := range rows {
 		out = append(out, authz.StoredPolicy{
 			PType:  row.Ptype,
-			Values: trimTrailingEmpty([]string{row.V0, row.V1, row.V2, row.V3, row.V4, row.V5}),
+			Values: []string{row.V0, row.V1},
 		})
 	}
 	return out, nil
@@ -60,10 +60,9 @@ func (s *PolicyStore) PermissionCatalogCodes(ctx context.Context) ([]string, err
 }
 
 type policyMutationMeta struct {
-	actorSubject  string
-	actorClientID string
-	requestID     string
-	traceID       string
+	actorSubject string
+	requestID    string
+	traceID      string
 }
 
 func (s *PolicyStore) ReplaceRolePermissions(
@@ -109,7 +108,7 @@ func (s *PolicyStore) ReplaceRolePermissions(
 	if len(perms) > 0 {
 		builders := make([]*ent.CasbinRuleCreate, 0, len(perms))
 		for _, perm := range perms {
-			builders = append(builders, newPolicyRule(tx.Client(), "p", []string{role, perm}))
+			builders = append(builders, newPolicyRule(tx.Client(), "p", role, perm))
 		}
 		if _, err := tx.CasbinRule.CreateBulk(builders...).Save(ctx); err != nil {
 			_ = tx.Rollback()
@@ -172,7 +171,7 @@ func (s *PolicyStore) AddRoleInheritance(
 		}
 		return state.Version, nil
 	}
-	if err := newPolicyRule(tx.Client(), "g", []string{child, parent}).Exec(ctx); err != nil {
+	if err := newPolicyRule(tx.Client(), "g", child, parent).Exec(ctx); err != nil {
 		_ = tx.Rollback()
 		return 0, fmt.Errorf("write role inheritance: %w", err)
 	}
@@ -311,7 +310,6 @@ func recordPolicyMutation(
 		SetAction(action).
 		SetTarget(target).
 		SetActorSubject(meta.actorSubject).
-		SetActorClientID(meta.actorClientID).
 		SetRequestID(meta.requestID).
 		SetTraceID(meta.traceID).
 		SetBefore(before).
@@ -341,21 +339,11 @@ func rolePathExists(graph map[string][]string, from, target string) bool {
 	return false
 }
 
-func newPolicyRule(client *ent.Client, ptype string, values []string) *ent.CasbinRuleCreate {
-	v := make([]string, 6)
-	copy(v, values)
+func newPolicyRule(client *ent.Client, ptype, v0, v1 string) *ent.CasbinRuleCreate {
 	return client.CasbinRule.Create().
 		SetPtype(ptype).
-		SetV0(v[0]).SetV1(v[1]).SetV2(v[2]).
-		SetV3(v[3]).SetV4(v[4]).SetV5(v[5])
-}
-
-func trimTrailingEmpty(values []string) []string {
-	end := len(values)
-	for end > 0 && values[end-1] == "" {
-		end--
-	}
-	return values[:end]
+		SetV0(v0).
+		SetV1(v1)
 }
 
 func rollbackPolicyTxOnPanic(tx *ent.Tx) {

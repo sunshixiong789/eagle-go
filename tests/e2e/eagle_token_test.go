@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -28,6 +29,9 @@ func mintEagleToken(t *testing.T, opts tokenOpts) string {
 	alg := opts.algorithm
 	if alg == "" {
 		alg = jose.HS256
+	}
+	if alg == jose.HS512 && len(secret) < 64 {
+		secret = strings.Repeat("x", 64)
 	}
 	signer, err := jose.NewSigner(
 		jose.SigningKey{Algorithm: alg, Key: []byte(secret)},

@@ -26,8 +26,6 @@ type PolicyAudit struct {
 	Target string `json:"target,omitempty"`
 	// ActorSubject holds the value of the "actor_subject" field.
 	ActorSubject string `json:"actor_subject,omitempty"`
-	// ActorClientID holds the value of the "actor_client_id" field.
-	ActorClientID string `json:"actor_client_id,omitempty"`
 	// RequestID holds the value of the "request_id" field.
 	RequestID string `json:"request_id,omitempty"`
 	// TraceID holds the value of the "trace_id" field.
@@ -50,7 +48,7 @@ func (*PolicyAudit) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case policyaudit.FieldID, policyaudit.FieldPolicyVersion:
 			values[i] = new(sql.NullInt64)
-		case policyaudit.FieldAction, policyaudit.FieldTarget, policyaudit.FieldActorSubject, policyaudit.FieldActorClientID, policyaudit.FieldRequestID, policyaudit.FieldTraceID:
+		case policyaudit.FieldAction, policyaudit.FieldTarget, policyaudit.FieldActorSubject, policyaudit.FieldRequestID, policyaudit.FieldTraceID:
 			values[i] = new(sql.NullString)
 		case policyaudit.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -98,12 +96,6 @@ func (_m *PolicyAudit) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field actor_subject", values[i])
 			} else if value.Valid {
 				_m.ActorSubject = value.String
-			}
-		case policyaudit.FieldActorClientID:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field actor_client_id", values[i])
-			} else if value.Valid {
-				_m.ActorClientID = value.String
 			}
 		case policyaudit.FieldRequestID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -186,9 +178,6 @@ func (_m *PolicyAudit) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("actor_subject=")
 	builder.WriteString(_m.ActorSubject)
-	builder.WriteString(", ")
-	builder.WriteString("actor_client_id=")
-	builder.WriteString(_m.ActorClientID)
 	builder.WriteString(", ")
 	builder.WriteString("request_id=")
 	builder.WriteString(_m.RequestID)

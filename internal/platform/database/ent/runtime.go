@@ -60,30 +60,6 @@ func init() {
 	casbinrule.DefaultV1 = casbinruleDescV1.Default.(string)
 	// casbinrule.V1Validator is a validator for the "v1" field. It is called by the builders before save.
 	casbinrule.V1Validator = casbinruleDescV1.Validators[0].(func(string) error)
-	// casbinruleDescV2 is the schema descriptor for v2 field.
-	casbinruleDescV2 := casbinruleFields[4].Descriptor()
-	// casbinrule.DefaultV2 holds the default value on creation for the v2 field.
-	casbinrule.DefaultV2 = casbinruleDescV2.Default.(string)
-	// casbinrule.V2Validator is a validator for the "v2" field. It is called by the builders before save.
-	casbinrule.V2Validator = casbinruleDescV2.Validators[0].(func(string) error)
-	// casbinruleDescV3 is the schema descriptor for v3 field.
-	casbinruleDescV3 := casbinruleFields[5].Descriptor()
-	// casbinrule.DefaultV3 holds the default value on creation for the v3 field.
-	casbinrule.DefaultV3 = casbinruleDescV3.Default.(string)
-	// casbinrule.V3Validator is a validator for the "v3" field. It is called by the builders before save.
-	casbinrule.V3Validator = casbinruleDescV3.Validators[0].(func(string) error)
-	// casbinruleDescV4 is the schema descriptor for v4 field.
-	casbinruleDescV4 := casbinruleFields[6].Descriptor()
-	// casbinrule.DefaultV4 holds the default value on creation for the v4 field.
-	casbinrule.DefaultV4 = casbinruleDescV4.Default.(string)
-	// casbinrule.V4Validator is a validator for the "v4" field. It is called by the builders before save.
-	casbinrule.V4Validator = casbinruleDescV4.Validators[0].(func(string) error)
-	// casbinruleDescV5 is the schema descriptor for v5 field.
-	casbinruleDescV5 := casbinruleFields[7].Descriptor()
-	// casbinrule.DefaultV5 holds the default value on creation for the v5 field.
-	casbinrule.DefaultV5 = casbinruleDescV5.Default.(string)
-	// casbinrule.V5Validator is a validator for the "v5" field. It is called by the builders before save.
-	casbinrule.V5Validator = casbinruleDescV5.Validators[0].(func(string) error)
 	dictdataFields := schema.DictData{}.Fields()
 	_ = dictdataFields
 	// dictdataDescDictType is the schema descriptor for dict_type field.
@@ -336,26 +312,20 @@ func init() {
 	policyaudit.DefaultActorSubject = policyauditDescActorSubject.Default.(string)
 	// policyaudit.ActorSubjectValidator is a validator for the "actor_subject" field. It is called by the builders before save.
 	policyaudit.ActorSubjectValidator = policyauditDescActorSubject.Validators[0].(func(string) error)
-	// policyauditDescActorClientID is the schema descriptor for actor_client_id field.
-	policyauditDescActorClientID := policyauditFields[5].Descriptor()
-	// policyaudit.DefaultActorClientID holds the default value on creation for the actor_client_id field.
-	policyaudit.DefaultActorClientID = policyauditDescActorClientID.Default.(string)
-	// policyaudit.ActorClientIDValidator is a validator for the "actor_client_id" field. It is called by the builders before save.
-	policyaudit.ActorClientIDValidator = policyauditDescActorClientID.Validators[0].(func(string) error)
 	// policyauditDescRequestID is the schema descriptor for request_id field.
-	policyauditDescRequestID := policyauditFields[6].Descriptor()
+	policyauditDescRequestID := policyauditFields[5].Descriptor()
 	// policyaudit.DefaultRequestID holds the default value on creation for the request_id field.
 	policyaudit.DefaultRequestID = policyauditDescRequestID.Default.(string)
 	// policyaudit.RequestIDValidator is a validator for the "request_id" field. It is called by the builders before save.
 	policyaudit.RequestIDValidator = policyauditDescRequestID.Validators[0].(func(string) error)
 	// policyauditDescTraceID is the schema descriptor for trace_id field.
-	policyauditDescTraceID := policyauditFields[7].Descriptor()
+	policyauditDescTraceID := policyauditFields[6].Descriptor()
 	// policyaudit.DefaultTraceID holds the default value on creation for the trace_id field.
 	policyaudit.DefaultTraceID = policyauditDescTraceID.Default.(string)
 	// policyaudit.TraceIDValidator is a validator for the "trace_id" field. It is called by the builders before save.
 	policyaudit.TraceIDValidator = policyauditDescTraceID.Validators[0].(func(string) error)
 	// policyauditDescCreatedAt is the schema descriptor for created_at field.
-	policyauditDescCreatedAt := policyauditFields[10].Descriptor()
+	policyauditDescCreatedAt := policyauditFields[9].Descriptor()
 	// policyaudit.DefaultCreatedAt holds the default value on creation for the created_at field.
 	policyaudit.DefaultCreatedAt = policyauditDescCreatedAt.Default.(func() time.Time)
 	policystateFields := schema.PolicyState{}.Fields()

@@ -21,8 +21,6 @@ const (
 	FieldTarget = "target"
 	// FieldActorSubject holds the string denoting the actor_subject field in the database.
 	FieldActorSubject = "actor_subject"
-	// FieldActorClientID holds the string denoting the actor_client_id field in the database.
-	FieldActorClientID = "actor_client_id"
 	// FieldRequestID holds the string denoting the request_id field in the database.
 	FieldRequestID = "request_id"
 	// FieldTraceID holds the string denoting the trace_id field in the database.
@@ -44,7 +42,6 @@ var Columns = []string{
 	FieldAction,
 	FieldTarget,
 	FieldActorSubject,
-	FieldActorClientID,
 	FieldRequestID,
 	FieldTraceID,
 	FieldBefore,
@@ -73,10 +70,6 @@ var (
 	DefaultActorSubject string
 	// ActorSubjectValidator is a validator for the "actor_subject" field. It is called by the builders before save.
 	ActorSubjectValidator func(string) error
-	// DefaultActorClientID holds the default value on creation for the "actor_client_id" field.
-	DefaultActorClientID string
-	// ActorClientIDValidator is a validator for the "actor_client_id" field. It is called by the builders before save.
-	ActorClientIDValidator func(string) error
 	// DefaultRequestID holds the default value on creation for the "request_id" field.
 	DefaultRequestID string
 	// RequestIDValidator is a validator for the "request_id" field. It is called by the builders before save.
@@ -115,11 +108,6 @@ func ByTarget(opts ...sql.OrderTermOption) OrderOption {
 // ByActorSubject orders the results by the actor_subject field.
 func ByActorSubject(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldActorSubject, opts...).ToFunc()
-}
-
-// ByActorClientID orders the results by the actor_client_id field.
-func ByActorClientID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldActorClientID, opts...).ToFunc()
 }
 
 // ByRequestID orders the results by the request_id field.
