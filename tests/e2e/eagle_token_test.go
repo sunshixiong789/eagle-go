@@ -6,8 +6,6 @@ import (
 
 	jose "github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
-
-	"github.com/eagle-go/eagle/pkg/identity"
 )
 
 type tokenOpts struct {
@@ -66,11 +64,7 @@ func mintEagleToken(t *testing.T, opts tokenOpts) string {
 
 func userToken(t *testing.T, username string, roles ...string) string {
 	t.Helper()
-	canonical := make([]string, 0, len(roles))
-	for _, role := range roles {
-		canonical = append(canonical, identity.RealmRoleKey(role))
-	}
 	return mintEagleToken(t, tokenOpts{
-		subject: "subject-" + username, username: username, roles: canonical,
+		subject: "subject-" + username, username: username, roles: roles,
 	})
 }

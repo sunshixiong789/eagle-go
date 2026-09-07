@@ -38,7 +38,6 @@ import (
 	dictionaryservice "github.com/eagle-go/eagle/internal/dictionary/service"
 	platformdb "github.com/eagle-go/eagle/internal/platform/database"
 	"github.com/eagle-go/eagle/pkg/authz"
-	"github.com/eagle-go/eagle/pkg/identity"
 	"github.com/eagle-go/eagle/pkg/platform/config"
 	"github.com/eagle-go/eagle/pkg/platform/server"
 	"github.com/eagle-go/eagle/tests/testkit"
@@ -204,9 +203,6 @@ func e2eErrorMappings() []server.ErrorMappingRule {
 // grantRole 给角色授予权限码，并让判定器立即生效。
 func (e *testEnv) grantRole(t *testing.T, role string, perms ...string) {
 	t.Helper()
-	if !identity.ValidRoleKey(role) {
-		role = identity.RealmRoleKey(role)
-	}
 	roleValue, err := accessdomain.NewRole(role)
 	if err != nil {
 		t.Fatalf("构造角色 %s: %v", role, err)

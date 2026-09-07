@@ -4,72 +4,21 @@ package identity
 
 import (
 	"context"
-	"strings"
 )
-
-const (
-	realmRolePrefix  = "realm:"
-	clientRolePrefix = "client:"
-)
-
-func RealmRoleKey(role string) string { return realmRolePrefix + role }
-
-func ClientRoleKey(clientID, role string) string {
-	return clientRolePrefix + clientID + ":" + role
-}
-
-func ValidRoleKey(key string) bool {
-	switch {
-	case strings.HasPrefix(key, realmRolePrefix):
-		role := strings.TrimPrefix(key, realmRolePrefix)
-		return role != "" && !strings.Contains(role, ":")
-	case strings.HasPrefix(key, clientRolePrefix):
-		parts := strings.Split(strings.TrimPrefix(key, clientRolePrefix), ":")
-		return len(parts) == 2 && parts[0] != "" && parts[1] != ""
-	default:
-		return false
-	}
-}
 
 type ctxKey struct{}
 
-// Principal 是一次调用的已认证主体，由认证中间件从 IdP 签发的 token 构造。
+// Principal 是一次调用的已认证主体，由认证中间件从 Eagle token 构造。
 type Principal struct {
 	// Subject 是 token 的 sub，用户在本系统的唯一锚点。
-	//
-	// 注意它是 UUID 字符串而不是自增整数：用户主数据在 IdP。
 	Subject string
 
-	// Username 是 preferred_username。用于日志与审计，不参与鉴权判定。
+	// Username 用于展示、日志与审计，不参与鉴权判定。
 	Username string
 	Email    string
 
-	// ClientID 是换取该 token 的客户端（OIDC 的 azp）。
-	ClientID string
-
-	// Scopes 是 token 携带的 scope。
-	Scopes []string
-
-	// Roles 汇总了带命名空间的 realm 角色与本服务 client 角色。
-	// 普通 Casbin 策略判定基于它。
+	// Roles 是 Eagle 分配的稳定角色键，Casbin 判定基于它。
 	Roles []string
-
-	// ClientRoles 只包含本资源服务器命名空间下的 client 角色。
-	// 高影响的管理员短路必须基于它，防止 realm 级同名角色顺带拿到本服务的全部权限。
-	ClientRoles []string
-}
-
-// HasClientRole 判断主体是否拥有本资源服务器命名空间内的角色。
-func (p *Principal) HasClientRole(role string) bool {
-	if p == nil {
-		return false
-	}
-	for _, r := range p.ClientRoles {
-		if r == role {
-			return true
-		}
-	}
-	return false
 }
 
 // NewContext 把主体放入 context。仅认证中间件应调用。

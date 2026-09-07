@@ -68,23 +68,23 @@ func TestUnauthenticatedIsRejected(t *testing.T) {
 		{"无 token", ""},
 		{"伪造签名", mintEagleToken(t, tokenOpts{
 			subject: "s1", username: "mallory",
-			roles: []string{"realm:admin"}, wrongKey: true,
+			roles: []string{"admin"}, wrongKey: true,
 		})},
 		{"已过期", mintEagleToken(t, tokenOpts{
 			subject: "s2", username: "alice",
-			roles: []string{"realm:admin"}, expiresIn: -time.Hour,
+			roles: []string{"admin"}, expiresIn: -time.Hour,
 		})},
 		{"aud 不匹配", mintEagleToken(t, tokenOpts{
 			subject: "subject-3", username: "alice",
-			roles: []string{"realm:admin"}, audience: []string{"another-service"},
+			roles: []string{"admin"}, audience: []string{"another-service"},
 		})},
 		{"尚未生效", mintEagleToken(t, tokenOpts{
 			subject: "s4", username: "alice",
-			roles: []string{"realm:admin"}, notBefore: 10 * time.Minute,
+			roles: []string{"admin"}, notBefore: 10 * time.Minute,
 		})},
 		{"非白名单签名算法", mintEagleToken(t, tokenOpts{
 			subject: "s5", username: "alice",
-			roles: []string{"realm:admin"}, algorithm: jose.HS512,
+			roles: []string{"admin"}, algorithm: jose.HS512,
 		})},
 	}
 

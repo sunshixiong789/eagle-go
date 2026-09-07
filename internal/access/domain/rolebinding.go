@@ -5,24 +5,21 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"strings"
 )
 
 // Role 是带来源命名空间的 IdP 角色键。
 type Role string
 
 func NewRole(s string) (Role, error) {
-	valid := false
-	switch {
-	case strings.HasPrefix(s, "realm:"):
-		name := strings.TrimPrefix(s, "realm:")
-		valid = name != "" && !strings.Contains(name, ":")
-	case strings.HasPrefix(s, "client:"):
-		parts := strings.Split(strings.TrimPrefix(s, "client:"), ":")
-		valid = len(parts) == 2 && parts[0] != "" && parts[1] != ""
-	}
-	if !valid {
+	if len(s) == 0 || len(s) > 64 {
 		return "", ErrEmptyRole
+	}
+	for i, r := range s {
+		letter := r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z'
+		digit := r >= '0' && r <= '9'
+		if !letter && (i == 0 || !digit && r != '-' && r != '_') {
+			return "", ErrEmptyRole
+		}
 	}
 	return Role(s), nil
 }

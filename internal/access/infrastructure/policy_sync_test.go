@@ -12,7 +12,7 @@ func TestPolicyReconcilerSyncsAcrossReplicas(t *testing.T) {
 	skipIfShort(t)
 
 	ctx := context.Background()
-	const role = "realm:test-multi-replica-role"
+	const role = "test-multi-replica-role"
 	const permCode = "system:dict:add"
 
 	t.Cleanup(func() {

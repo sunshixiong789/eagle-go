@@ -11,8 +11,7 @@
 //  1. public 方法直接放行
 //  2. 无主体 -> 401
 //  3. 未声明权限码 -> 已登录即可
-//  4. 本服务命名空间内的超管 client 角色 -> 短路放行
-//  5. 其余 -> 交 Casbin 按角色判定
+//  4. 交 Casbin 按角色判定
 package authz
 
 import (
@@ -33,8 +32,7 @@ const (
 )
 
 type options struct {
-	authorizer     Authorizer
-	superAdminRole string
+	authorizer Authorizer
 }
 
 // Authorizer 是中间件依赖的策略判定端口，由组合根注入
@@ -57,17 +55,12 @@ func WithAuthorizer(a Authorizer) Option {
 	return func(o *options) { o.authorizer = a }
 }
 
-// WithSuperAdminRole 设置超管角色，具备该角色的主体跳过 Casbin 判定。
-func WithSuperAdminRole(role string) Option {
-	return func(o *options) { o.superAdminRole = role }
-}
-
 // Server 返回鉴权中间件。
 //
 // 必须挂在认证中间件之后——后者负责验签 token 并把
 // identity.Principal 放进 context，这里只做授权判定。
 func Server(opts ...Option) middleware.Middleware {
-	o := &options{superAdminRole: "admin"}
+	o := &options{}
 	for _, opt := range opts {
 		opt(o)
 	}
@@ -110,11 +103,6 @@ func Server(opts ...Option) middleware.Middleware {
 }
 
 func (o *options) check(ctx context.Context, p *identity.Principal, perm string) error {
-	if o.superAdminRole != "" && p.HasClientRole(o.superAdminRole) {
-		recordDecision(ctx, "super_admin_bypass", perm)
-		return nil
-	}
-
 	if o.authorizer == nil {
 		// 没配 enforcer 却要求权限码，属于装配错误。
 		// 这里拒绝而不是放行——鉴权组件的失败方向必须是关闭的。

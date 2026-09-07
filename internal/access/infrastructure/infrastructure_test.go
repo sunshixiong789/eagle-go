@@ -268,9 +268,6 @@ func mustRoles(t *testing.T, names ...string) []domain.Role {
 	t.Helper()
 	out := make([]domain.Role, 0, len(names))
 	for _, n := range names {
-		if !strings.Contains(n, ":") {
-			n = "realm:" + n
-		}
 		r, err := domain.NewRole(n)
 		if err != nil {
 			t.Fatalf("构造角色 %q: %v", n, err)
@@ -283,9 +280,6 @@ func mustRoles(t *testing.T, names ...string) []domain.Role {
 // mustBinding 构造角色权限绑定。
 func mustBinding(t *testing.T, role string, codes ...string) *domain.RoleBinding {
 	t.Helper()
-	if !strings.Contains(role, ":") {
-		role = "realm:" + role
-	}
 	r, err := domain.NewRole(role)
 	if err != nil {
 		t.Fatalf("构造角色: %v", err)
@@ -363,8 +357,8 @@ func TestPolicyStoreRejectsRoleInheritanceCycle(t *testing.T) {
 	skipIfShort(t)
 	ctx := context.Background()
 	store := newTestPolicyStore(t)
-	a, _ := domain.NewRole("realm:cycle-a")
-	b, _ := domain.NewRole("realm:cycle-b")
+	a, _ := domain.NewRole("cycle-a")
+	b, _ := domain.NewRole("cycle-b")
 	first, _ := domain.NewRoleInheritance(a, b)
 	if _, err := store.SaveInheritance(ctx, first, nil); err != nil {
 		t.Fatalf("SaveInheritance(a->b): %v", err)
@@ -420,7 +414,7 @@ func TestPolicyRepoFindBindingReadsCurrentDatabaseSnapshot(t *testing.T) {
 		t.Fatalf("NewEnforcer: %v", err)
 	}
 	repo := NewPolicyRepo(enforcer, store)
-	role, _ := domain.NewRole("realm:test-snapshot-role")
+	role, _ := domain.NewRole("test-snapshot-role")
 	t.Cleanup(func() {
 		_, _ = testDB.Client().CasbinRule.Delete().Where(casbinrule.V0EQ(role.String())).Exec(ctx)
 	})
@@ -696,7 +690,7 @@ func TestPolicyStoreListBindings(t *testing.T) {
 		names = append(names, b.Role().String())
 	}
 
-	if !slices.Contains(names, "realm:admin") || !slices.Contains(names, "realm:user") {
+	if !slices.Contains(names, "admin") || !slices.Contains(names, "user") {
 		t.Errorf("应包含种子角色 admin 与 user, got %v", names)
 	}
 	if !slices.IsSorted(names) {
@@ -724,7 +718,7 @@ func TestNewEnforcerLoadsFromDatabase(t *testing.T) {
 	}
 
 	// 直接调用判定即可证明类型与可用性，无需额外的类型断言
-	ok, err := e.Allow([]string{"realm:user"}, "system:dict:list")
+	ok, err := e.Allow([]string{"user"}, "system:dict:list")
 	if err != nil {
 		t.Fatalf("Allow: %v", err)
 	}
@@ -732,7 +726,7 @@ func TestNewEnforcerLoadsFromDatabase(t *testing.T) {
 		t.Error("应从库中加载到种子策略")
 	}
 
-	if err := e.SetRolePermissions(context.Background(), "realm:user", []string{"system:dict:list"}); !errors.Is(err, authz.ErrAdapterReadOnly) {
+	if err := e.SetRolePermissions(context.Background(), "user", []string{"system:dict:list"}); !errors.Is(err, authz.ErrAdapterReadOnly) {
 		t.Fatalf("持久化判定器直接改内存策略: %v", err)
 	}
 }
@@ -741,7 +735,7 @@ func TestBindingCatalogValidationRollsBack(t *testing.T) {
 	skipIfShort(t)
 	ctx := context.Background()
 	store := NewPolicyStore(testDB)
-	role := "realm:catalog-validation"
+	role := "catalog-validation"
 	before, err := store.ReplaceRolePermissions(ctx, role, []string{"system:dict:remove"}, nil, policyMutationMeta{})
 	if err != nil {
 		t.Fatal(err)
@@ -782,7 +776,7 @@ func TestBindingCatalogLocksValidatedRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	if err := validateBindingCatalog(ctx, tx, "realm:catalog-lock", []string{code}); err != nil {
+	if err := validateBindingCatalog(ctx, tx, "catalog-lock", []string{code}); err != nil {
 		t.Fatal(err)
 	}
 	other, err := testDB.Client().Tx(ctx)

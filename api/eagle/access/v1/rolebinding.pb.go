@@ -27,7 +27,7 @@ const (
 // RoleBinding 是一个角色及其被授予的权限码。
 type RoleBinding struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// 带来源命名空间的角色键：realm:<role> 或 client:<client-id>:<role>
+	// Eagle 分配的稳定角色键，如 user、admin、support-agent。
 	Role            string   `protobuf:"bytes,1,opt,name=role,proto3" json:"role,omitempty"`
 	PermissionCodes []string `protobuf:"bytes,2,rep,name=permission_codes,json=permissionCodes,proto3" json:"permission_codes,omitempty"`
 	Revision        int64    `protobuf:"varint,3,opt,name=revision,proto3" json:"revision,omitempty"`
@@ -753,7 +753,7 @@ func (*GetMyPermissionsRequest) Descriptor() ([]byte, []int) {
 
 type GetMyPermissionsResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// 当前登录者的角色（来自 IdP token）
+	// 当前登录者的角色（来自 Eagle token）
 	Roles []string `protobuf:"bytes,1,rep,name=roles,proto3" json:"roles,omitempty"`
 	// 这些角色展开后的全部权限码（含继承）
 	PermissionCodes []string `protobuf:"bytes,2,rep,name=permission_codes,json=permissionCodes,proto3" json:"permission_codes,omitempty"`
@@ -817,21 +817,21 @@ const file_eagle_access_v1_rolebinding_proto_rawDesc = "" +
 	"\x15ListBoundRolesRequest\"y\n" +
 	"\x16ListBoundRolesResponse\x128\n" +
 	"\bbindings\x18\x01 \x03(\v2\x1c.eagle.access.v1.RoleBindingR\bbindings\x12%\n" +
-	"\x0epolicy_version\x18\x02 \x01(\x03R\rpolicyVersion\"_\n" +
-	"\x19GetRolePermissionsRequest\x12B\n" +
-	"\x04role\x18\x01 \x01(\tB.\xbaH+r)\x10\x01\x18\x80\x012\"^(realm:[^:]+|client:[^:]+:[^:]+)$R\x04role\"T\n" +
+	"\x0epolicy_version\x18\x02 \x01(\x03R\rpolicyVersion\"Y\n" +
+	"\x19GetRolePermissionsRequest\x12<\n" +
+	"\x04role\x18\x01 \x01(\tB(\xbaH%r#\x10\x01\x18@2\x1d^[a-zA-Z][a-zA-Z0-9_-]{0,63}$R\x04role\"T\n" +
 	"\x1aGetRolePermissionsResponse\x126\n" +
-	"\abinding\x18\x01 \x01(\v2\x1c.eagle.access.v1.RoleBindingR\abinding\"\xd8\x01\n" +
-	"\x19SetRolePermissionsRequest\x12B\n" +
-	"\x04role\x18\x01 \x01(\tB.\xbaH+r)\x10\x01\x18\x80\x012\"^(realm:[^:]+|client:[^:]+:[^:]+)$R\x04role\x12)\n" +
+	"\abinding\x18\x01 \x01(\v2\x1c.eagle.access.v1.RoleBindingR\abinding\"\xd2\x01\n" +
+	"\x19SetRolePermissionsRequest\x12<\n" +
+	"\x04role\x18\x01 \x01(\tB(\xbaH%r#\x10\x01\x18@2\x1d^[a-zA-Z][a-zA-Z0-9_-]{0,63}$R\x04role\x12)\n" +
 	"\x10permission_codes\x18\x02 \x03(\tR\x0fpermissionCodes\x127\n" +
 	"\x10expected_version\x18\x03 \x01(\x03B\a\xbaH\x04\"\x02 \x00H\x00R\x0fexpectedVersion\x88\x01\x01B\x13\n" +
 	"\x11_expected_version\"C\n" +
 	"\x1aSetRolePermissionsResponse\x12%\n" +
-	"\x0epolicy_version\x18\x01 \x01(\x03R\rpolicyVersion\"\xf7\x01\n" +
-	"\x19AddRoleInheritanceRequest\x12D\n" +
-	"\x05child\x18\x01 \x01(\tB.\xbaH+r)\x10\x01\x18\x80\x012\"^(realm:[^:]+|client:[^:]+:[^:]+)$R\x05child\x12F\n" +
-	"\x06parent\x18\x02 \x01(\tB.\xbaH+r)\x10\x01\x18\x80\x012\"^(realm:[^:]+|client:[^:]+:[^:]+)$R\x06parent\x127\n" +
+	"\x0epolicy_version\x18\x01 \x01(\x03R\rpolicyVersion\"\xeb\x01\n" +
+	"\x19AddRoleInheritanceRequest\x12>\n" +
+	"\x05child\x18\x01 \x01(\tB(\xbaH%r#\x10\x01\x18@2\x1d^[a-zA-Z][a-zA-Z0-9_-]{0,63}$R\x05child\x12@\n" +
+	"\x06parent\x18\x02 \x01(\tB(\xbaH%r#\x10\x01\x18@2\x1d^[a-zA-Z][a-zA-Z0-9_-]{0,63}$R\x06parent\x127\n" +
 	"\x10expected_version\x18\x03 \x01(\x03B\a\xbaH\x04\"\x02 \x00H\x00R\x0fexpectedVersion\x88\x01\x01B\x13\n" +
 	"\x11_expected_version\"C\n" +
 	"\x1aAddRoleInheritanceResponse\x12%\n" +
@@ -842,10 +842,10 @@ const file_eagle_access_v1_rolebinding_proto_rawDesc = "" +
 	"\x1bListRoleInheritancesRequest\"\x8b\x01\n" +
 	"\x1cListRoleInheritancesResponse\x12D\n" +
 	"\finheritances\x18\x01 \x03(\v2 .eagle.access.v1.RoleInheritanceR\finheritances\x12%\n" +
-	"\x0epolicy_version\x18\x02 \x01(\x03R\rpolicyVersion\"\xfa\x01\n" +
-	"\x1cDeleteRoleInheritanceRequest\x12D\n" +
-	"\x05child\x18\x01 \x01(\tB.\xbaH+r)\x10\x01\x18\x80\x012\"^(realm:[^:]+|client:[^:]+:[^:]+)$R\x05child\x12F\n" +
-	"\x06parent\x18\x02 \x01(\tB.\xbaH+r)\x10\x01\x18\x80\x012\"^(realm:[^:]+|client:[^:]+:[^:]+)$R\x06parent\x127\n" +
+	"\x0epolicy_version\x18\x02 \x01(\x03R\rpolicyVersion\"\xee\x01\n" +
+	"\x1cDeleteRoleInheritanceRequest\x12>\n" +
+	"\x05child\x18\x01 \x01(\tB(\xbaH%r#\x10\x01\x18@2\x1d^[a-zA-Z][a-zA-Z0-9_-]{0,63}$R\x05child\x12@\n" +
+	"\x06parent\x18\x02 \x01(\tB(\xbaH%r#\x10\x01\x18@2\x1d^[a-zA-Z][a-zA-Z0-9_-]{0,63}$R\x06parent\x127\n" +
 	"\x10expected_version\x18\x03 \x01(\x03B\a\xbaH\x04\"\x02 \x00H\x00R\x0fexpectedVersion\x88\x01\x01B\x13\n" +
 	"\x11_expected_version\"F\n" +
 	"\x1dDeleteRoleInheritanceResponse\x12%\n" +

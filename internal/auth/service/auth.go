@@ -58,7 +58,7 @@ func toTokenResponse(tokens *domain.Tokens) *v1.TokenResponse {
 		User: &v1.User{
 			Subject: identity.Subject, Provider: provider, Email: identity.Email,
 			EmailVerified: identity.EmailVerified, DisplayName: identity.DisplayName,
-			AvatarUrl: identity.AvatarURL, Roles: []string{"realm:" + identity.Role},
+			AvatarUrl: identity.AvatarURL, Roles: []string{identity.Role},
 		},
 	}
 }

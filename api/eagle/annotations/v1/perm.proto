@@ -34,10 +34,8 @@ extend google.protobuf.MethodOptions {
   // 留空表示只校验登录态、不校验具体权限。
   string perm = 50001;
 
-  // 标记为公开方法，跳过登录态校验（如登录、健康检查、OIDC discovery）。
-  // 显式声明而非靠路径前缀匹配，避免新增接口时漏配导致意外裸奔。
-  bool public = 50002;
+  // 50002 曾是 public 兼容字段，删除后不再复用。
 
-  // RPC 的显式访问级别。新接口必须填写；public 仅为旧契约兼容保留。
+  // RPC 的显式访问级别。每个接口必须填写。
   AccessLevel access = 50003;
 }

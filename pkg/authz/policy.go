@@ -15,13 +15,10 @@ import (
 	annotationsv1 "github.com/eagle-go/eagle/api/eagle/annotations/v1"
 )
 
-// Policy 是某个 RPC 方法的访问策略，来自 proto 上的
-// eagle.annotations.v1.perm / public 扩展。
+// Policy 是某个 RPC 方法的访问策略，来自 proto 上的 access / perm 扩展。
 type Policy struct {
 	// Perm 是调用所需的权限码，空表示只校验登录态。
 	Perm string
-	// Public 表示免登录。
-	Public bool
 	// Known 表示成功解析到了方法描述符。
 	//
 	// 解析不到时（比如 gRPC 反射、健康检查这类非本项目定义的方法）
@@ -74,15 +71,8 @@ func lookupPolicy(operation string) Policy {
 	if v, ok := proto.GetExtension(opts, annotationsv1.E_Perm).(string); ok {
 		p.Perm = v
 	}
-	if v, ok := proto.GetExtension(opts, annotationsv1.E_Public).(bool); ok {
-		p.Public = v
-	}
 	if v, ok := proto.GetExtension(opts, annotationsv1.E_Access).(annotationsv1.AccessLevel); ok {
 		p.Access = v
-	}
-	// 兼容旧契约；新契约必须使用 access。
-	if p.Access == annotationsv1.AccessLevel_ACCESS_LEVEL_PUBLIC {
-		p.Public = true
 	}
 	return p
 }

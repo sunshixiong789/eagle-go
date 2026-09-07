@@ -43,17 +43,12 @@ func NewMiddlewares(
 	logger *slog.Logger,
 	verifier *authn.Verifier,
 	authorizer authz.Authorizer,
-	authConf *config.Auth,
+	_ *config.Auth,
 	errorMappings ...ErrorMappingRule,
 ) ([]middleware.Middleware, error) {
 	if err := authz.ValidateRegisteredPolicies(nil); err != nil {
 		return nil, err
 	}
-	superAdmin := authConf.GetSuperAdminRole()
-	if superAdmin == "" {
-		superAdmin = "admin"
-	}
-
 	metricsMW, err := newMetricsMiddleware()
 	if err != nil {
 		return nil, err
@@ -70,7 +65,6 @@ func NewMiddlewares(
 		ratelimit.Server(),
 		authn.Server(verifier),
 		authz.Server(
-			authz.WithSuperAdminRole(superAdmin),
 			authz.WithAuthorizer(authorizer),
 		),
 		ErrorMapping(errorMappings...),

@@ -122,7 +122,6 @@ func mutationMeta(ctx context.Context) policyMutationMeta {
 	meta := policyMutationMeta{}
 	if p, ok := identity.FromContext(ctx); ok {
 		meta.actorSubject = p.Subject
-		meta.actorClientID = p.ClientID
 	}
 	if sc := trace.SpanContextFromContext(ctx); sc.IsValid() {
 		meta.traceID = sc.TraceID().String()

@@ -50,7 +50,7 @@ func (s *changingPolicySource) LoadPolicyRows(context.Context) ([]StoredPolicy, 
 	if s.loadCalls > 1 {
 		permission = "system:dict:add"
 	}
-	return []StoredPolicy{{PType: "p", Values: []string{"realm:editor", permission}}}, nil
+	return []StoredPolicy{{PType: "p", Values: []string{"editor", permission}}}, nil
 }
 
 func TestStorageAdapterRetriesUntilPolicySnapshotIsStable(t *testing.T) {
@@ -62,10 +62,10 @@ func TestStorageAdapterRetriesUntilPolicySnapshotIsStable(t *testing.T) {
 	if enforcer.LoadedPolicyVersion() != 2 {
 		t.Fatalf("loaded version = %d, want 2", enforcer.LoadedPolicyVersion())
 	}
-	if allowed, err := enforcer.Allow([]string{"realm:editor"}, "system:dict:list"); err != nil || allowed {
+	if allowed, err := enforcer.Allow([]string{"editor"}, "system:dict:list"); err != nil || allowed {
 		t.Fatalf("unstable first snapshot remained active: allowed=%v err=%v", allowed, err)
 	}
-	if allowed, err := enforcer.Allow([]string{"realm:editor"}, "system:dict:add"); err != nil || !allowed {
+	if allowed, err := enforcer.Allow([]string{"editor"}, "system:dict:add"); err != nil || !allowed {
 		t.Fatalf("stable second snapshot not active: allowed=%v err=%v", allowed, err)
 	}
 }

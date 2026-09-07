@@ -79,7 +79,7 @@ func TestUpdatePermissionFailureBoundaries(t *testing.T) {
 func TestMenuResolutionStopsOnPolicyFailure(t *testing.T) {
 	want := errors.New("policy unavailable")
 	uc := NewPermissionUsecase(permissionFake{}, policyFake{err: want})
-	menus, codes, err := uc.GetMenusForRoles(context.Background(), []string{"realm:user"})
+	menus, codes, err := uc.GetMenusForRoles(context.Background(), []string{"user"})
 	if menus != nil || codes != nil || !errors.Is(err, want) {
 		t.Fatalf("menus = %v, %v, %v", menus, codes, err)
 	}

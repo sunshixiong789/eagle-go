@@ -8,7 +8,7 @@
 - 权限码先进入 `permission_definition`，导航节点只能引用已有且启用的权限码，不能自行创造权限契约。
 - handler 不根据角色或权限写 `if`。认证与权限判定统一由 server 中间件完成。
 - 当前主体使用 `pkg/identity.FromContext` / `Subject`；第三方身份与会话只归 `auth` 模块所有，其他模块不自行解析 JWT，也不把请求参数当作当前用户角色。
-- 角色分两级命名空间：realm 角色写作 `realm:<name>`，本 client 的角色写作 `client:<clientID>:<name>`；超管短路只认 client 角色。
+- 角色使用 Eagle 分配的稳定键，例如 `user`、`admin`、`support-agent`；管理员也必须通过 Casbin 策略授权，不写代码短路。
 - `auth` 模块负责验证 Google/Apple ID Token 并签发 Eagle token；`pkg/authn` 只验证最终用于业务请求的 Eagle token。第三方 issuer、JWKS 和 claim 处理留在 `auth/infrastructure`。
 - Casbin 存储适配器保持只读；策略写入沿用 access 模块现有的版本检查、审计和事务路径，不直接调用 AutoSave / `SavePolicy` / `AddPolicy`。
 - domain/application 返回标准库错误；传输错误映射在 service/server 边界完成。字段校验优先写在 Proto，不在 service 重复。

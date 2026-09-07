@@ -236,44 +236,19 @@ func TestServerHonorsRoleInheritance(t *testing.T) {
 	}
 }
 
-func TestServerSuperAdminShortCircuits(t *testing.T) {
+func TestServerAdminCannotBypassPolicy(t *testing.T) {
 	var called bool
-	// 判定器里没有任何策略，超管仍应放行
-	mw := Server(
-		WithSuperAdminRole("admin"),
-		WithEnforcer(newTestEnforcer(t, nil)),
-	)
+	mw := Server(WithEnforcer(newTestEnforcer(t, nil)))
 
 	ctx := identity.NewContext(serverCtx(opCreatePermission), &identity.Principal{
-		Subject: "u-1", Roles: []string{"admin"}, ClientRoles: []string{"admin"},
-	})
-	if _, err := mw(probeHandler(&called))(ctx, nil); err != nil {
-		t.Fatalf("超管应被放行, got %v", err)
-	}
-	if !called {
-		t.Error("handler 应被执行")
-	}
-}
-
-func TestServerRealmRoleCannotTriggerSuperAdminBypass(t *testing.T) {
-	var called bool
-	mw := Server(
-		WithSuperAdminRole("admin"),
-		WithEnforcer(newTestEnforcer(t, nil)),
-	)
-
-	// Roles 中的 admin 模拟 realm_access.roles；没有对应 ClientRoles 时
-	// 必须继续走 Casbin，并因没有策略而拒绝。
-	ctx := identity.NewContext(serverCtx(opCreatePermission), &identity.Principal{
-		Subject: "u-1",
-		Roles:   []string{"admin"},
+		Subject: "u-1", Roles: []string{"admin"},
 	})
 	_, err := mw(probeHandler(&called))(ctx, nil)
 	if kratoserrors.Code(err) != 403 {
-		t.Fatalf("realm admin 状态码 = %d, want 403", kratoserrors.Code(err))
+		t.Fatalf("admin without policy status = %d, want 403", kratoserrors.Code(err))
 	}
 	if called {
-		t.Error("realm admin 不应触发本服务超管短路")
+		t.Error("admin bypassed the policy decision")
 	}
 }
 

@@ -61,9 +61,9 @@ func TestMigrationsRoundTrip(t *testing.T) {
 func assertSeedData(t *testing.T, db *sql.DB) {
 	t.Helper()
 
-	// Casbin 策略里必须有内置角色。角色本身在外部 IdP，
+	// Casbin 策略里必须有内置角色。角色由 Eagle 令牌提供，
 	// 这里存的是「角色 -> 权限码」映射
-	for _, role := range []string{"realm:admin", "realm:user"} {
+	for _, role := range []string{"admin", "user"} {
 		var exists bool
 		err := db.QueryRow(
 			`SELECT EXISTS(SELECT 1 FROM casbin_rule WHERE ptype = 'p' AND v0 = $1)`, role).Scan(&exists)
@@ -95,7 +95,7 @@ func assertSeedData(t *testing.T, db *sql.DB) {
 	var writeGrants int
 	err := db.QueryRow(`
 		SELECT count(*) FROM casbin_rule
-		WHERE ptype = 'p' AND v0 = 'realm:user'
+		WHERE ptype = 'p' AND v0 = 'user'
 		  AND v1 NOT LIKE '%:query'
 		  AND v1 NOT LIKE '%:list'`).Scan(&writeGrants)
 	if err != nil {
@@ -109,7 +109,7 @@ func assertSeedData(t *testing.T, db *sql.DB) {
 	var wildcards int
 	err = db.QueryRow(`
 		SELECT count(*) FROM casbin_rule
-		WHERE ptype = 'p' AND v0 = 'realm:user' AND v1 LIKE '%*%'`).Scan(&wildcards)
+		WHERE ptype = 'p' AND v0 = 'user' AND v1 LIKE '%*%'`).Scan(&wildcards)
 	if err != nil {
 		t.Fatalf("查询 user 角色的通配策略: %v", err)
 	}
@@ -120,7 +120,7 @@ func assertSeedData(t *testing.T, db *sql.DB) {
 	// 但它必须确实有只读权限，否则说明策略根本没种进去
 	var readGrants int
 	err = db.QueryRow(
-		`SELECT count(*) FROM casbin_rule WHERE ptype = 'p' AND v0 = 'realm:user'`).Scan(&readGrants)
+		`SELECT count(*) FROM casbin_rule WHERE ptype = 'p' AND v0 = 'user'`).Scan(&readGrants)
 	if err != nil {
 		t.Fatalf("查询 user 角色的权限数: %v", err)
 	}

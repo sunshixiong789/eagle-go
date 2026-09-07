@@ -15,7 +15,6 @@ func TestPolicyFor(t *testing.T) {
 		name       string
 		operation  string
 		wantPerm   string
-		wantPublic bool
 		wantKnown  bool
 		wantAccess annotationsv1.AccessLevel
 	}{
@@ -73,9 +72,6 @@ func TestPolicyFor(t *testing.T) {
 			got := PolicyFor(tt.operation)
 			if got.Perm != tt.wantPerm {
 				t.Errorf("Perm = %q, want %q", got.Perm, tt.wantPerm)
-			}
-			if got.Public != tt.wantPublic {
-				t.Errorf("Public = %v, want %v", got.Public, tt.wantPublic)
 			}
 			if got.Known != tt.wantKnown {
 				t.Errorf("Known = %v, want %v", got.Known, tt.wantKnown)

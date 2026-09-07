@@ -587,7 +587,7 @@ components:
                     type: array
                     items:
                         type: string
-                    description: 当前登录者的角色（来自 IdP token）
+                    description: 当前登录者的角色（来自 Eagle token）
                 permissionCodes:
                     type: array
                     items:
@@ -672,7 +672,7 @@ components:
             properties:
                 role:
                     type: string
-                    description: 带来源命名空间的角色键：realm:<role> 或 client:<client-id>:<role>
+                    description: Eagle 分配的稳定角色键，如 user、admin、support-agent。
                 permissionCodes:
                     type: array
                     items:

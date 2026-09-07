@@ -142,15 +142,15 @@ INSERT INTO navigation_node (id, parent_id, name, permission_code, type, path, c
     (134, 130,  '字典删除', 'system:dict:remove',       3, '',           '',                  '',         4);
 SELECT setval(pg_get_serial_sequence('navigation_node', 'id'), (SELECT max(id) FROM navigation_node));
 
--- realm 角色由 IdP 提供；本库只保存角色与权限的关系。
+-- 角色由 Eagle 令牌提供；本库只保存角色与权限的关系。
 INSERT INTO casbin_rule (ptype, v0, v1) VALUES
-    ('p', 'realm:admin', 'system:*'),
-    ('p', 'realm:user',  'system:role:list'),
-    ('p', 'realm:user',  'system:role:query'),
-    ('p', 'realm:user',  'system:permission:list'),
-    ('p', 'realm:user',  'system:permission:query'),
-    ('p', 'realm:user',  'system:dict:list'),
-    ('g', 'realm:admin', 'realm:user');
+    ('p', 'admin', 'system:*'),
+    ('p', 'user',  'system:role:list'),
+    ('p', 'user',  'system:role:query'),
+    ('p', 'user',  'system:permission:list'),
+    ('p', 'user',  'system:permission:query'),
+    ('p', 'user',  'system:dict:list'),
+    ('g', 'admin', 'user');
 
 INSERT INTO sys_dict_type (name, type, remark) VALUES
     ('通用状态', 'sys_common_status',   '启用/禁用'),
