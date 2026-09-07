@@ -29,26 +29,8 @@ auth:
   # 它只作为 token 标识，不要求该地址实际提供 OIDC 服务。
   issuer: "${AUTH_ISSUER:https://eagle.local}"
 
-  # 本服务在 IdP 中的 client id，
-  # 用于从 client 角色 claim 里取出本服务的角色
-  client_id: "${AUTH_CLIENT_ID:eagle-api}"
-
   # Eagle access token 的 audience。
   audience: "${AUTH_AUDIENCE:eagle-api}"
-
-  # signing_secret 为空、兼容外部 OIDC token 时才使用 JWKS 配置。
-  jwks_url: "${AUTH_JWKS_URL:}"
-
-  # JWKS 与角色 claim 没有跨 IdP 的统一路径，接入时按供应商文档覆盖。
-  # jwks_url 非空时忽略 jwks_path；client_roles_claim 可以指向字符串数组，
-  # 也可以指向按 client_id 分组的对象。
-  jwks_path: "${AUTH_JWKS_PATH:/.well-known/jwks.json}"
-  realm_roles_claim: "${AUTH_REALM_ROLES_CLAIM:realm_access.roles}"
-  client_roles_claim: "${AUTH_CLIENT_ROLES_CLAIM:resource_access}"
-
-  # 仅本服务 client role 会触发短路；
-  # 同名 realm role 不具备超管能力。
-  super_admin_role: admin
 
   # 仅供本地开箱调试；部署环境必须用随机 Secret 覆盖。
   signing_secret: "${AUTH_SIGNING_SECRET:development-only-signing-secret-change-me}"

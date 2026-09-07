@@ -35,10 +35,9 @@ type Components struct {
 type Builder func(*config.Bootstrap, *slog.Logger) (Components, error)
 
 type Spec struct {
-	Name         string
-	Version      string
-	Requirements config.Requirements
-	Build        Builder
+	Name    string
+	Version string
+	Build   Builder
 }
 
 // Run loads configuration, initializes observability, builds one service and
@@ -72,7 +71,7 @@ func run(spec Spec) error {
 	if err := c.Scan(&bc); err != nil {
 		return err
 	}
-	if err := config.Validate(&bc, spec.Requirements); err != nil {
+	if err := config.Validate(&bc); err != nil {
 		return err
 	}
 

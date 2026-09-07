@@ -50,8 +50,7 @@ func TestEnvironmentOverridesSensitiveDefaults(t *testing.T) {
 	path := configDir(t)
 	t.Setenv("EAGLE_DATABASE_DSN", "postgres://runtime:secret@db.internal:5432/eagle?sslmode=require")
 	t.Setenv("EAGLE_SERVER_HTTP_ADDR", "0.0.0.0:18000")
-	t.Setenv("EAGLE_AUTH_JWKS_PATH", "/.well-known/jwks.json")
-	t.Setenv("EAGLE_AUTH_REALM_ROLES_CLAIM", "https://eagle.example.com/roles")
+	t.Setenv("EAGLE_AUTH_SIGNING_SECRET", "runtime-signing-secret-at-least-32-bytes")
 	t.Setenv("EAGLE_OBSERVABILITY_TRACE_SAMPLE_RATIO", "0.05")
 
 	c := kratosconfig.New(
@@ -72,11 +71,8 @@ func TestEnvironmentOverridesSensitiveDefaults(t *testing.T) {
 	if got := bc.GetServer().GetHttp().GetAddr(); got != "0.0.0.0:18000" {
 		t.Fatalf("SERVER_HTTP_ADDR override not applied: %q", got)
 	}
-	if got := bc.GetAuth().GetJwksPath(); got != "/.well-known/jwks.json" {
-		t.Fatalf("AUTH_JWKS_PATH override not applied: %q", got)
-	}
-	if got := bc.GetAuth().GetRealmRolesClaim(); got != "https://eagle.example.com/roles" {
-		t.Fatalf("AUTH_REALM_ROLES_CLAIM override not applied: %q", got)
+	if got := bc.GetAuth().GetSigningSecret(); got != "runtime-signing-secret-at-least-32-bytes" {
+		t.Fatalf("AUTH_SIGNING_SECRET override not applied: %q", got)
 	}
 	if got := bc.GetObservability().GetTraceSampleRatio(); got != 0.05 {
 		t.Fatalf("OBSERVABILITY_TRACE_SAMPLE_RATIO override not applied: %v", got)
@@ -85,7 +81,7 @@ func TestEnvironmentOverridesSensitiveDefaults(t *testing.T) {
 
 func TestConfigParses(t *testing.T) {
 	bc := loadConfig(t)
-	if err := appconfig.Validate(bc, appconfig.Requirements{Database: true, Auth: true, HTTP: true}); err != nil {
+	if err := appconfig.Validate(bc); err != nil {
 		t.Fatalf("配置校验失败: %v", err)
 	}
 	if got := bc.GetServer().GetHttp().GetAddr(); got != "0.0.0.0:8000" {
@@ -99,20 +95,17 @@ func TestConfigParses(t *testing.T) {
 	}
 }
 
-func TestAuthConfigRequiresProviderSpecificLocations(t *testing.T) {
-	bc := &appconfig.Bootstrap{Auth: &appconfig.Auth{
-		Issuer:         "https://idp.example.com",
-		ClientId:       "eagle-api",
-		Audience:       "eagle-api",
-		SuperAdminRole: "admin",
-	}}
+func TestAuthConfigRequiresEagleTokenSettings(t *testing.T) {
+	bc := loadConfig(t)
+	bc.Auth.Audience = ""
+	bc.Auth.SigningSecret = ""
 
-	err := appconfig.Validate(bc, appconfig.Requirements{Auth: true})
+	err := appconfig.Validate(bc)
 	if err == nil {
-		t.Fatal("未配置 JWKS 和角色 claim 时应拒绝启动")
+		t.Fatal("未配置 Eagle token audience 和签名密钥时应拒绝启动")
 	}
 	message := err.Error()
-	for _, want := range []string{"auth.jwks_url or auth.jwks_path is required", "auth.client_roles_claim is required"} {
+	for _, want := range []string{"auth.audience is required", "auth.signing_secret must be at least 32 bytes"} {
 		if !strings.Contains(message, want) {
 			t.Errorf("Validate error = %q, want %q", message, want)
 		}
@@ -135,21 +128,17 @@ func TestAuthConfigIsUsable(t *testing.T) {
 		t.Errorf("issuer = %q 带了尾斜杠，与 token 里的 iss 对不上", issuer)
 	}
 
-	if auth.GetClientId() == "" {
-		t.Error("auth.client_id 未配置，取不到本服务的 client 角色")
+	if auth.GetAudience() == "" {
+		t.Error("auth.audience 未配置")
 	}
-	if auth.GetSuperAdminRole() == "" {
-		t.Error("auth.super_admin_role 未配置")
+	if len(auth.GetSigningSecret()) < 32 {
+		t.Error("auth.signing_secret 必须至少 32 字节")
 	}
-	if auth.GetJwksUrl() == "" && auth.GetJwksPath() == "" {
-		t.Error("auth.jwks_url 与 auth.jwks_path 至少配置一个")
+	if auth.GetAccessTokenTtl().AsDuration() <= 0 {
+		t.Error("auth.access_token_ttl 必须为正数")
 	}
-	// 相对 JWKS 路径必须以 / 开头，否则会与 issuer 拼出错误地址。
-	if jwksPath := auth.GetJwksPath(); jwksPath != "" && !strings.HasPrefix(jwksPath, "/") {
-		t.Errorf("auth.jwks_path = %q，必须以 / 开头", jwksPath)
-	}
-	if auth.GetClientRolesClaim() == "" {
-		t.Error("auth.client_roles_claim 未配置")
+	if auth.GetRefreshTokenTtl().AsDuration() <= auth.GetAccessTokenTtl().AsDuration() {
+		t.Error("auth.refresh_token_ttl 必须大于 access_token_ttl")
 	}
 }
 

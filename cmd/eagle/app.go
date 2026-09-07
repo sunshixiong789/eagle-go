@@ -1,22 +1,14 @@
 package main
 
 import (
-	"log/slog"
-
 	accessv1 "github.com/eagle-go/eagle/api/eagle/access/v1"
 	authv1 "github.com/eagle-go/eagle/api/eagle/auth/v1"
 	dictionaryv1 "github.com/eagle-go/eagle/api/eagle/dictionary/v1"
 	accessdomain "github.com/eagle-go/eagle/internal/access/domain"
 	authdomain "github.com/eagle-go/eagle/internal/auth/domain"
 	dictionarydomain "github.com/eagle-go/eagle/internal/dictionary/domain"
-	"github.com/eagle-go/eagle/pkg/platform/config"
-	platformruntime "github.com/eagle-go/eagle/pkg/platform/runtime"
 	"github.com/eagle-go/eagle/pkg/platform/server"
 )
-
-func buildApp(bc *config.Bootstrap, logger *slog.Logger) (platformruntime.Components, error) {
-	return composeApp(bc, logger)
-}
 
 func errorMappings() []server.ErrorMappingRule {
 	return []server.ErrorMappingRule{

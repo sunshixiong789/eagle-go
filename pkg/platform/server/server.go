@@ -43,7 +43,6 @@ func NewMiddlewares(
 	logger *slog.Logger,
 	verifier *authn.Verifier,
 	authorizer authz.Authorizer,
-	_ *config.Auth,
 	errorMappings ...ErrorMappingRule,
 ) ([]middleware.Middleware, error) {
 	if err := authz.ValidateRegisteredPolicies(nil); err != nil {

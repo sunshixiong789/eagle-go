@@ -44,8 +44,6 @@ import (
 )
 
 const (
-	clientID       = "eagle-system"
-	adminRole      = "admin"
 	testIssuer     = "https://eagle.test"
 	testAudience   = "eagle-api"
 	testAuthSecret = "test-signing-secret-at-least-32-bytes"
@@ -89,9 +87,7 @@ func newTestEnv(t *testing.T) *testEnv {
 
 	authConf := &config.Auth{
 		Issuer:          testIssuer,
-		ClientId:        clientID,
 		Audience:        testAudience,
-		SuperAdminRole:  adminRole,
 		SigningSecret:   testAuthSecret,
 		AccessTokenTtl:  durationpb.New(15 * time.Minute),
 		RefreshTokenTtl: durationpb.New(30 * 24 * time.Hour),
@@ -114,7 +110,7 @@ func newTestEnv(t *testing.T) *testEnv {
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	verifier := server.NewVerifier(authConf)
-	middlewares, err := server.NewMiddlewares(logger, verifier, enforcer, authConf, e2eErrorMappings()...)
+	middlewares, err := server.NewMiddlewares(logger, verifier, enforcer, e2eErrorMappings()...)
 	if err != nil {
 		t.Fatalf("构造中间件链: %v", err)
 	}

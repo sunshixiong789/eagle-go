@@ -41,7 +41,7 @@ func composeApp(bc *config.Bootstrap, logger *slog.Logger) (platformruntime.Comp
 		return platformruntime.Components{}, err
 	}
 	auth := bc.GetAuth()
-	ms, err := server.NewMiddlewares(logger, server.NewVerifier(auth), enforcer, auth, errorMappings()...)
+	ms, err := server.NewMiddlewares(logger, server.NewVerifier(auth), enforcer, errorMappings()...)
 	if err != nil {
 		return platformruntime.Components{}, err
 	}

@@ -180,39 +180,15 @@ func (x *Data) GetDatabase() *Data_Database {
 	return nil
 }
 
-// 登录、Eagle token 签发及兼容外部 OIDC token 验签的配置。
+// 社会化登录与 Eagle token 签发配置。
 type Auth struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// IdP 的 issuer，形如 https://idp.example.com。
-	// 必须与 token 里的 iss 完全一致，含协议、端口和是否带尾斜杠
+	// Eagle token 的 issuer，必须与 token 里的 iss 完全一致。
 	Issuer string `protobuf:"bytes,1,opt,name=issuer,proto3" json:"issuer,omitempty"`
-	// 本服务在 IdP 中的 client id。
-	// 用于从 token 的 client 角色 claim 里取出本服务的角色
-	ClientId string `protobuf:"bytes,2,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
-	// 期望的 aud，必须与 IdP 为本 API 签发的 audience 一致。
+	// Eagle API 的 audience。
 	Audience string `protobuf:"bytes,3,opt,name=audience,proto3" json:"audience,omitempty"`
-	// 在 <client_roles_claim>.<client_id>.roles 中拥有该角色的主体
-	// 跳过 Casbin 判定；同名 realm 角色不会触发短路。
-	SuperAdminRole string `protobuf:"bytes,5,opt,name=super_admin_role,json=superAdminRole,proto3" json:"super_admin_role,omitempty"`
-	// 拉取 JWKS 的地址，留空则拼接为 <issuer><jwks_path>。
-	//
-	// 之所以能与 issuer 分开配：容器与 K8s 里，token 里的公开 issuer
-	// （https://sso.example.com）可能不等于本服务该走的
-	// 集群内地址（http://idp.default.svc:8080）。
-	// 两者不分开就只能二选一——要么让内网流量绕到公网再回来，
-	// 要么放弃 iss 校验。
-	JwksUrl string `protobuf:"bytes,6,opt,name=jwks_url,json=jwksUrl,proto3" json:"jwks_url,omitempty"`
-	// JWKS 相对 issuer 的路径。jwks_url 为空时必填；
-	// jwks_url 非空时本字段被忽略。
-	JwksPath string `protobuf:"bytes,8,opt,name=jwks_path,json=jwksPath,proto3" json:"jwks_path,omitempty"`
-	// realm（全局）角色所在的 claim 路径，点号分隔；留空表示不读取。
-	// 指向一个字符串数组。
-	RealmRolesClaim string `protobuf:"bytes,9,opt,name=realm_roles_claim,json=realmRolesClaim,proto3" json:"realm_roles_claim,omitempty"`
-	// client 角色所在的 claim 路径，点号分隔，必填。既可以直接指向
-	// 字符串数组，也可以指向 {"<client-id>": {"roles": [...]}} 结构。
-	ClientRolesClaim string `protobuf:"bytes,10,opt,name=client_roles_claim,json=clientRolesClaim,proto3" json:"client_roles_claim,omitempty"`
-	// 非空时由 Eagle 使用 HS256 签发和验证自己的 access token。
-	// 至少 32 字节；生产环境必须通过 Secret 注入随机值。
+	// Eagle 使用 HS256 签发和验证 access token。至少 32 字节；
+	// 生产环境必须通过 Secret 注入随机值。
 	SigningSecret   string               `protobuf:"bytes,11,opt,name=signing_secret,json=signingSecret,proto3" json:"signing_secret,omitempty"`
 	AccessTokenTtl  *durationpb.Duration `protobuf:"bytes,12,opt,name=access_token_ttl,json=accessTokenTtl,proto3" json:"access_token_ttl,omitempty"`
 	RefreshTokenTtl *durationpb.Duration `protobuf:"bytes,13,opt,name=refresh_token_ttl,json=refreshTokenTtl,proto3" json:"refresh_token_ttl,omitempty"`
@@ -259,51 +235,9 @@ func (x *Auth) GetIssuer() string {
 	return ""
 }
 
-func (x *Auth) GetClientId() string {
-	if x != nil {
-		return x.ClientId
-	}
-	return ""
-}
-
 func (x *Auth) GetAudience() string {
 	if x != nil {
 		return x.Audience
-	}
-	return ""
-}
-
-func (x *Auth) GetSuperAdminRole() string {
-	if x != nil {
-		return x.SuperAdminRole
-	}
-	return ""
-}
-
-func (x *Auth) GetJwksUrl() string {
-	if x != nil {
-		return x.JwksUrl
-	}
-	return ""
-}
-
-func (x *Auth) GetJwksPath() string {
-	if x != nil {
-		return x.JwksPath
-	}
-	return ""
-}
-
-func (x *Auth) GetRealmRolesClaim() string {
-	if x != nil {
-		return x.RealmRolesClaim
-	}
-	return ""
-}
-
-func (x *Auth) GetClientRolesClaim() string {
-	if x != nil {
-		return x.ClientRolesClaim
 	}
 	return ""
 }
@@ -647,17 +581,10 @@ const file_config_proto_rawDesc = "" +
 	"\tmax_conns\x18\x02 \x01(\x05R\bmaxConns\x12$\n" +
 	"\x0emax_idle_conns\x18\x03 \x01(\x05R\fmaxIdleConns\x12E\n" +
 	"\x11max_conn_lifetime\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\x0fmaxConnLifetime\x12F\n" +
-	"\x12max_conn_idle_time\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\x0fmaxConnIdleTimeJ\x04\b\x02\x10\x03\"\xa1\x05\n" +
+	"\x12max_conn_idle_time\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\x0fmaxConnIdleTimeJ\x04\b\x02\x10\x03\"\xec\x03\n" +
 	"\x04Auth\x12\x16\n" +
-	"\x06issuer\x18\x01 \x01(\tR\x06issuer\x12\x1b\n" +
-	"\tclient_id\x18\x02 \x01(\tR\bclientId\x12\x1a\n" +
-	"\baudience\x18\x03 \x01(\tR\baudience\x12(\n" +
-	"\x10super_admin_role\x18\x05 \x01(\tR\x0esuperAdminRole\x12\x19\n" +
-	"\bjwks_url\x18\x06 \x01(\tR\ajwksUrl\x12\x1b\n" +
-	"\tjwks_path\x18\b \x01(\tR\bjwksPath\x12*\n" +
-	"\x11realm_roles_claim\x18\t \x01(\tR\x0frealmRolesClaim\x12,\n" +
-	"\x12client_roles_claim\x18\n" +
-	" \x01(\tR\x10clientRolesClaim\x12%\n" +
+	"\x06issuer\x18\x01 \x01(\tR\x06issuer\x12\x1a\n" +
+	"\baudience\x18\x03 \x01(\tR\baudience\x12%\n" +
 	"\x0esigning_secret\x18\v \x01(\tR\rsigningSecret\x12C\n" +
 	"\x10access_token_ttl\x18\f \x01(\v2\x19.google.protobuf.DurationR\x0eaccessTokenTtl\x12E\n" +
 	"\x11refresh_token_ttl\x18\r \x01(\v2\x19.google.protobuf.DurationR\x0frefreshTokenTtl\x12B\n" +
@@ -665,7 +592,9 @@ const file_config_proto_rawDesc = "" +
 	"\x05apple\x18\x0f \x01(\v2*.eagle.platform.config.Auth.SocialProviderR\x05apple\x1aG\n" +
 	"\x0eSocialProvider\x12\x18\n" +
 	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x1b\n" +
-	"\tclient_id\x18\x02 \x01(\tR\bclientIdJ\x04\b\x04\x10\x05J\x04\b\a\x10\b\"\xc7\x01\n" +
+	"\tclient_id\x18\x02 \x01(\tR\bclientIdJ\x04\b\x02\x10\x03J\x04\b\x04\x10\x05J\x04\b\x05\x10\x06J\x04\b\x06\x10\aJ\x04\b\a\x10\bJ\x04\b\b\x10\tJ\x04\b\t\x10\n" +
+	"J\x04\b\n" +
+	"\x10\v\"\xc7\x01\n" +
 	"\rObservability\x12#\n" +
 	"\rotlp_endpoint\x18\x01 \x01(\tR\fotlpEndpoint\x12,\n" +
 	"\x12trace_sample_ratio\x18\x02 \x01(\x01R\x10traceSampleRatio\x12\x1b\n" +
