@@ -28,9 +28,10 @@ func NewVerifier(c *config.Auth) *authn.Verifier {
 	return authn.NewVerifier(
 		context.Background(),
 		authn.Config{
-			Issuer:   c.GetIssuer(),
-			ClientID: c.GetClientId(),
-			Audience: c.GetAudience(),
+			Issuer:        c.GetIssuer(),
+			ClientID:      c.GetClientId(),
+			Audience:      c.GetAudience(),
+			SigningSecret: c.GetSigningSecret(),
 			// 容器/K8s 里可以显式指定：token 里的公开 issuer
 			// 与本服务可达的集群内地址往往不是同一个。
 			JWKSURL:  c.GetJwksUrl(),

@@ -5,6 +5,7 @@ package ent
 import (
 	"time"
 
+	"github.com/eagle-go/eagle/internal/platform/database/ent/authsession"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/casbinrule"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/dictdata"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/dicttype"
@@ -14,12 +15,33 @@ import (
 	"github.com/eagle-go/eagle/internal/platform/database/ent/policyaudit"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/policystate"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/schema"
+	"github.com/eagle-go/eagle/internal/platform/database/ent/socialidentity"
 )
 
 // The init function reads all schema descriptors with runtime code
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	authsessionFields := schema.AuthSession{}.Fields()
+	_ = authsessionFields
+	// authsessionDescRefreshTokenHash is the schema descriptor for refresh_token_hash field.
+	authsessionDescRefreshTokenHash := authsessionFields[2].Descriptor()
+	// authsession.RefreshTokenHashValidator is a validator for the "refresh_token_hash" field. It is called by the builders before save.
+	authsession.RefreshTokenHashValidator = authsessionDescRefreshTokenHash.Validators[0].(func(string) error)
+	// authsessionDescCreatedAt is the schema descriptor for created_at field.
+	authsessionDescCreatedAt := authsessionFields[5].Descriptor()
+	// authsession.DefaultCreatedAt holds the default value on creation for the created_at field.
+	authsession.DefaultCreatedAt = authsessionDescCreatedAt.Default.(func() time.Time)
+	// authsessionDescUpdatedAt is the schema descriptor for updated_at field.
+	authsessionDescUpdatedAt := authsessionFields[6].Descriptor()
+	// authsession.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	authsession.DefaultUpdatedAt = authsessionDescUpdatedAt.Default.(func() time.Time)
+	// authsession.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	authsession.UpdateDefaultUpdatedAt = authsessionDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// authsessionDescID is the schema descriptor for id field.
+	authsessionDescID := authsessionFields[0].Descriptor()
+	// authsession.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	authsession.IDValidator = authsessionDescID.Validators[0].(func(string) error)
 	casbinruleFields := schema.CasbinRule{}.Fields()
 	_ = casbinruleFields
 	// casbinruleDescPtype is the schema descriptor for ptype field.
@@ -350,4 +372,56 @@ func init() {
 	policystate.DefaultUpdatedAt = policystateDescUpdatedAt.Default.(func() time.Time)
 	// policystate.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	policystate.UpdateDefaultUpdatedAt = policystateDescUpdatedAt.UpdateDefault.(func() time.Time)
+	socialidentityFields := schema.SocialIdentity{}.Fields()
+	_ = socialidentityFields
+	// socialidentityDescSubject is the schema descriptor for subject field.
+	socialidentityDescSubject := socialidentityFields[1].Descriptor()
+	// socialidentity.SubjectValidator is a validator for the "subject" field. It is called by the builders before save.
+	socialidentity.SubjectValidator = socialidentityDescSubject.Validators[0].(func(string) error)
+	// socialidentityDescProvider is the schema descriptor for provider field.
+	socialidentityDescProvider := socialidentityFields[2].Descriptor()
+	// socialidentity.ProviderValidator is a validator for the "provider" field. It is called by the builders before save.
+	socialidentity.ProviderValidator = socialidentityDescProvider.Validators[0].(func(string) error)
+	// socialidentityDescProviderSubject is the schema descriptor for provider_subject field.
+	socialidentityDescProviderSubject := socialidentityFields[3].Descriptor()
+	// socialidentity.ProviderSubjectValidator is a validator for the "provider_subject" field. It is called by the builders before save.
+	socialidentity.ProviderSubjectValidator = socialidentityDescProviderSubject.Validators[0].(func(string) error)
+	// socialidentityDescEmail is the schema descriptor for email field.
+	socialidentityDescEmail := socialidentityFields[4].Descriptor()
+	// socialidentity.DefaultEmail holds the default value on creation for the email field.
+	socialidentity.DefaultEmail = socialidentityDescEmail.Default.(string)
+	// socialidentity.EmailValidator is a validator for the "email" field. It is called by the builders before save.
+	socialidentity.EmailValidator = socialidentityDescEmail.Validators[0].(func(string) error)
+	// socialidentityDescEmailVerified is the schema descriptor for email_verified field.
+	socialidentityDescEmailVerified := socialidentityFields[5].Descriptor()
+	// socialidentity.DefaultEmailVerified holds the default value on creation for the email_verified field.
+	socialidentity.DefaultEmailVerified = socialidentityDescEmailVerified.Default.(bool)
+	// socialidentityDescDisplayName is the schema descriptor for display_name field.
+	socialidentityDescDisplayName := socialidentityFields[6].Descriptor()
+	// socialidentity.DefaultDisplayName holds the default value on creation for the display_name field.
+	socialidentity.DefaultDisplayName = socialidentityDescDisplayName.Default.(string)
+	// socialidentity.DisplayNameValidator is a validator for the "display_name" field. It is called by the builders before save.
+	socialidentity.DisplayNameValidator = socialidentityDescDisplayName.Validators[0].(func(string) error)
+	// socialidentityDescAvatarURL is the schema descriptor for avatar_url field.
+	socialidentityDescAvatarURL := socialidentityFields[7].Descriptor()
+	// socialidentity.DefaultAvatarURL holds the default value on creation for the avatar_url field.
+	socialidentity.DefaultAvatarURL = socialidentityDescAvatarURL.Default.(string)
+	// socialidentity.AvatarURLValidator is a validator for the "avatar_url" field. It is called by the builders before save.
+	socialidentity.AvatarURLValidator = socialidentityDescAvatarURL.Validators[0].(func(string) error)
+	// socialidentityDescRole is the schema descriptor for role field.
+	socialidentityDescRole := socialidentityFields[8].Descriptor()
+	// socialidentity.DefaultRole holds the default value on creation for the role field.
+	socialidentity.DefaultRole = socialidentityDescRole.Default.(string)
+	// socialidentity.RoleValidator is a validator for the "role" field. It is called by the builders before save.
+	socialidentity.RoleValidator = socialidentityDescRole.Validators[0].(func(string) error)
+	// socialidentityDescCreatedAt is the schema descriptor for created_at field.
+	socialidentityDescCreatedAt := socialidentityFields[10].Descriptor()
+	// socialidentity.DefaultCreatedAt holds the default value on creation for the created_at field.
+	socialidentity.DefaultCreatedAt = socialidentityDescCreatedAt.Default.(func() time.Time)
+	// socialidentityDescUpdatedAt is the schema descriptor for updated_at field.
+	socialidentityDescUpdatedAt := socialidentityFields[11].Descriptor()
+	// socialidentity.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	socialidentity.DefaultUpdatedAt = socialidentityDescUpdatedAt.Default.(func() time.Time)
+	// socialidentity.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	socialidentity.UpdateDefaultUpdatedAt = socialidentityDescUpdatedAt.UpdateDefault.(func() time.Time)
 }

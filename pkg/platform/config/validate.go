@@ -4,6 +4,9 @@ import (
 	"errors"
 	"net/url"
 	"strings"
+	"time"
+
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 type Requirements struct {
@@ -42,8 +45,27 @@ func Validate(b *Bootstrap, requirements ...Requirements) error {
 		if err := validateIssuer(auth.GetIssuer()); err != nil {
 			errs = append(errs, err)
 		}
-		if err := validateJWKS(auth.GetJwksUrl(), auth.GetJwksPath()); err != nil {
-			errs = append(errs, err)
+		if auth.GetSigningSecret() == "" {
+			if err := validateJWKS(auth.GetJwksUrl(), auth.GetJwksPath()); err != nil {
+				errs = append(errs, err)
+			}
+		} else {
+			if len(auth.GetSigningSecret()) < 32 {
+				errs = append(errs, errors.New("auth.signing_secret must be at least 32 bytes"))
+			}
+			accessTTL := protoDuration(auth.GetAccessTokenTtl())
+			refreshTTL := protoDuration(auth.GetRefreshTokenTtl())
+			if accessTTL <= 0 || refreshTTL <= 0 {
+				errs = append(errs, errors.New("auth access_token_ttl and refresh_token_ttl must be positive"))
+			} else if refreshTTL <= accessTTL {
+				errs = append(errs, errors.New("auth.refresh_token_ttl must exceed access_token_ttl"))
+			}
+		}
+		if auth.GetGoogle().GetEnabled() && auth.GetGoogle().GetClientId() == "" {
+			errs = append(errs, errors.New("auth.google.client_id is required when Google login is enabled"))
+		}
+		if auth.GetApple().GetEnabled() && auth.GetApple().GetClientId() == "" {
+			errs = append(errs, errors.New("auth.apple.client_id is required when Apple login is enabled"))
 		}
 		if auth.GetClientId() == "" || auth.GetAudience() == "" {
 			errs = append(errs, errors.New("auth.client_id and auth.audience are required"))
@@ -65,6 +87,13 @@ func Validate(b *Bootstrap, requirements ...Requirements) error {
 		errs = append(errs, errors.New("observability.metrics_addr must differ from server.http.addr"))
 	}
 	return errors.Join(errs...)
+}
+
+func protoDuration(d *durationpb.Duration) time.Duration {
+	if d == nil {
+		return 0
+	}
+	return d.AsDuration()
 }
 
 // validateIssuer 只要求 issuer 是一个不带尾斜杠的绝对 URL。

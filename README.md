@@ -1,9 +1,9 @@
 # eagle-go
 
-基于 Kratos 的 Go 单体后端脚手架：一个进程、一个数据库、一个镜像，内置 OIDC 认证、
+基于 Kratos 的 Go 单体后端脚手架：一个进程、一个数据库、一个镜像，内置 Google/Apple 登录、
 集中式 RBAC 和结构化日志 / 指标 / trace 埋点。适合作为新项目的起点，而不是一套需要先拆分才能用的微服务底座。
 
-技术栈：Go 1.27、Kratos v3、Google Wire、Protobuf、buf、Ent、PostgreSQL 17、Casbin、
+技术栈：Go 1.27、Kratos v3、Protobuf、buf、Ent、PostgreSQL 17、Casbin、
 OIDC 资源服务器、OpenTelemetry、Docker Compose。
 
 ## 项目现状
@@ -47,7 +47,7 @@ flowchart TB
 ```text
 eagle-go/
 ├── api/eagle/<module>/v1/  # Protobuf 契约，HTTP 映射与权限注解的唯一来源
-├── cmd/eagle/              # 进程入口与 Wire 组合根
+├── cmd/eagle/              # 进程入口与 显式组合根
 ├── configs/config.yaml     # 默认配置，生产由 EAGLE_* 环境变量覆盖
 ├── internal/
 │   ├── access/             # 权限与角色绑定
@@ -94,7 +94,7 @@ service -> application -> domain <- infrastructure
 - Docker Desktop 或兼容 Docker Compose 的运行环境
 - Git、Make 和 Bash；Windows 建议使用 WSL 或 Git Bash
 
-项目工具不要求全局安装。buf、goose、golangci-lint、wire 和 Protobuf 插件的版本固定在
+项目工具不要求全局安装。buf、goose、golangci-lint 和 Protobuf 插件的版本固定在
 `tools/go.mod`，Makefile 会把它们编译到 `bin/` 后在仓库根目录执行——工具链版本被锁定，
 但不会污染业务模块的依赖。
 
@@ -108,8 +108,7 @@ make init
 make generate
 ```
 
-`make init` 会编译并验证锁定版本的开发工具。`make generate` 依次生成 API、配置、Ent 和
-Wire 代码，再整理依赖。生成文件已经提交到仓库；无源文件变更时，执行后 `git status` 不应
+`make init` 会编译并验证锁定版本的开发工具。`make generate` 依次生成 API、配置和 Ent 代码，再整理依赖。生成文件已经提交到仓库；无源文件变更时，执行后 `git status` 不应
 出现新的差异，CI 会检查这一点。
 
 ### 3. 启动完整本地环境
@@ -161,16 +160,18 @@ make run
 默认配置位于 `configs/config.yaml`，可用 `EAGLE_*` 环境变量覆盖。宿主机进程与 `eagle`
 容器使用同一组端口，不能同时运行；完整的调试组合见[开发环境部署](docs/development-deployment.md)。
 
-### 5. 接入外部 IdP 并调用接口
+### 5. 启用 Google/Apple 登录并调用接口
 
-仓库不附带认证中心。先在 OIDC IdP 中创建 API/client，并通过 `EAGLE_AUTH_*` 配置 issuer、
-audience、JWKS 和角色 claim。取得 access token 后调用受保护接口：
+在 Google Cloud 或 Apple Developer 创建客户端，通过 `EAGLE_AUTH_GOOGLE_*` / `EAGLE_AUTH_APPLE_*`
+启用对应方式。客户端 SDK 取得 ID Token 和登录 nonce 后调用 `/v1/auth/social/login`，响应中的
+Eagle access token 用于受保护接口：
 
 ```bash
 curl --fail -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8000/v1/system/permissions
 ```
 
-不带 `Authorization` 应返回 401。具体的登录、账号绑定和 token 获取流程由选用的 IdP 提供。
+刷新与退出分别使用 `/v1/auth/token/refresh` 和 `/v1/auth/logout`。详细接入见
+[Google/Apple 登录](docs/social-login.md)。
 
 ## 常用命令
 
@@ -189,7 +190,7 @@ make help
 make init
 ```
 
-生成 API、配置、Ent、Wire 并整理依赖：
+生成 API、配置、Ent 并整理依赖：
 
 ```bash
 make generate
@@ -267,7 +268,7 @@ go test -short ./...
 3. 新权限码通过 `migrations/` 下的 goose 迁移写入 `permission_definition`。
 4. 执行 `make api`，不要手改 `*.pb.go`。
 5. 按用例复杂度选择 `service -> domain <- infrastructure` 或 `service -> application -> domain <- infrastructure`。
-6. 只有新增一个 Protobuf Service 时，才在 `cmd/eagle` 的 Wire provider 里注册。
+6. 只有新增一个 Protobuf Service 时，才在 `cmd/eagle` 的 组合根 里注册。
 7. 添加测试并执行 `make lint && make test`。
 
 需要权限的 RPC 示例：
@@ -336,21 +337,20 @@ subject := identity.Subject(ctx)
 3. 在 `migrations/` 添加 goose SQL；生产不使用 Ent 自动迁移。
 4. 在 `api/` 定义 RPC、校验规则、HTTP 映射和访问级别，然后执行 `make api`。
 5. 在 `internal/<module>/domain` 放模型、规则和仓储/存储接口。
-6. 仅在存在多端口、聚合变更、事务、幂等、补偿或多入口复用时在 `application` 编排用例；纯 CRUD 由 `service` 依赖 domain 端口。`infrastructure` 实现数据库或外部服务端口，`service` 只转换协议对象。
-7. 在 `cmd/eagle` 的 `providerSet` 装配新模块，然后执行 `make wire`。禁止手改 `wire_gen.go`。
+6. 仅在存在多端口、聚合变更、用例级事务编排、幂等、补偿或多入口复用时在 `application` 编排用例；纯 CRUD 由 `service` 依赖 domain 端口。单个仓储操作内部使用事务不要求增加 application。`infrastructure` 实现数据库或外部服务端口，`service` 只转换协议对象。
+7. 在 `cmd/eagle` 的 `composeApp` 装配新模块，并检查构造失败和退出时的资源清理。
 8. 先测领域不变量，再测真实基础设施与 HTTP 链路。
 
-模块之间只能通过对方的 `domain` 端口或 `application` 用例协作：禁止 import 别的模块的
+跨模块用例在本模块 `domain` 声明所需能力，由本模块 `infrastructure` 适配到对方公开的
+`domain` 端口或 `application` 用例；`application` 仍只依赖本模块 domain。禁止 import 别的模块的
 `infrastructure` 或 `service`。单体里没有网络边界拦着，这条约束靠架构测试保证——它是把
 “以后可以拆出去”这件事留在桌面上的唯一成本。简单 CRUD 不必为了形式引入聚合根、工厂或 DTO 体系。
 
 ## 认证与授权约定
 
-IdP 负责“你是谁、有哪些角色”，Casbin 负责“角色能不能调用接口”。应用是一个 OIDC 资源服务器：
-只用 JWKS 在本地验签，不做 OIDC discovery、不签发 token、不保存用户。
-
-IdP 可以替换。issuer、JWKS 和两个角色 claim 路径都是配置项，切换兼容供应商时
-**只改配置不改代码**；短信、手机号一键登录和第三方登录都在 IdP 侧配置，应用侧无感。
+Google/Apple 负责证明“第三方账号是谁”，Eagle 将其映射为本地身份、维护可撤销会话并签发
+自己的 access/refresh token；Casbin 继续负责“这个身份的角色能不能调用接口”。新身份默认是
+`realm:user`，不会根据客户端提交内容获得管理员权限。
 
 权限策略存在数据库里，每个实例本地持有一份 Casbin 模型，靠版本号每 5 秒对账一次。
 多副本部署时，改完角色绑定最坏要等一个对账周期才会全部生效。进程启动时会校验 proto 声明的
@@ -373,6 +373,9 @@ IdP 可以替换。issuer、JWKS 和两个角色 claim 路径都是配置项，�
 | `EAGLE_DATABASE_DSN` | 数据库连接，生产必须 `sslmode=require` 或更强 |
 | `EAGLE_AUTH_ISSUER` | 必须与 token 的 `iss` 完全一致 |
 | `EAGLE_AUTH_CLIENT_ID` / `EAGLE_AUTH_AUDIENCE` | 本资源服务的 client 与必填 audience |
+| `EAGLE_AUTH_SIGNING_SECRET` | Eagle token 的 HS256 密钥，生产必须是至少 32 字节的随机 Secret |
+| `EAGLE_AUTH_GOOGLE_ENABLED` / `EAGLE_AUTH_GOOGLE_CLIENT_ID` | 启用 Google 登录及其 OAuth Client ID |
+| `EAGLE_AUTH_APPLE_ENABLED` / `EAGLE_AUTH_APPLE_CLIENT_ID` | 启用 Apple 登录及其 Services ID / Bundle ID |
 | `EAGLE_AUTH_JWKS_URL` | issuer 外网地址与服务访问地址不同时指定 JWKS 内网地址 |
 | `EAGLE_AUTH_JWKS_PATH` | JWKS 相对 issuer 的路径；未设置 `JWKS_URL` 时必填 |
 | `EAGLE_AUTH_REALM_ROLES_CLAIM` / `EAGLE_AUTH_CLIENT_ROLES_CLAIM` | 角色 claim 路径；realm 可省略，client 必填 |
@@ -405,7 +408,7 @@ make push-image VERSION=v1.2.0 REGISTRY=registry.example.com/eagle
 使用云效 Flow 部署开发、测试环境时，参见
 [云效 Flow 开发与测试环境部署](docs/aliyun-flow-deployment.md)。
 
-多副本部署时有两点要知道：权限策略每 5 秒按版本号对账，改完角色绑定最坏要等一个周期才在
+多副本部署时有两点要知道：权限策略每 5 秒按版本号对账，正常情况下改完角色绑定约一个周期后在
 所有副本生效；进程启动时校验 proto 声明的权限码与数据库 catalog 一致，不一致直接 fail
 closed，所以**必须先跑迁移再发服务**。
 
@@ -437,7 +440,7 @@ audience 和 JWKS 地址。若 IdP 的公开 issuer 与服务访问 JWKS 的内�
 
 ### 修改 proto 或 Ent schema 后行为不一致
 
-执行 `make api`、`make ent` 或 `make wire`，完整场景直接执行 `make generate`。生成文件禁止
+执行 `make api` 或 `make ent`，完整场景直接执行 `make generate`。生成文件禁止
 手改，CI 会检查生成结果和源定义是否一致。
 
 ### Windows 上 `go test -race` 报 cgo 错误

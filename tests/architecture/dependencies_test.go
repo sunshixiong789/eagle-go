@@ -22,18 +22,18 @@ func TestLayerDependencies(t *testing.T) {
 		basePath := "./internal/" + module
 		baseImport := modulePrefix + module
 
-		assertImports(t, root, basePath+"/domain", nil, func(imp string) bool {
+		assertImports(t, root, basePath+"/domain/...", nil, func(imp string) bool {
 			return !isStandardImport(imp)
 		})
 
 		if isDirectory(filepath.Join(root, "internal", module, "application")) {
-			assertImports(t, root, basePath+"/application", []string{baseImport + "/domain"}, func(imp string) bool {
+			assertImports(t, root, basePath+"/application/...", []string{baseImport + "/domain"}, func(imp string) bool {
 				return !isStandardImport(imp)
 			})
 		}
 
 		if isDirectory(filepath.Join(root, "internal", module, "service")) {
-			assertImports(t, root, basePath+"/service", nil, func(imp string) bool {
+			assertImports(t, root, basePath+"/service/...", nil, func(imp string) bool {
 				return strings.HasPrefix(imp, baseImport+"/infrastructure") ||
 					strings.Contains(imp, "/internal/platform/database")
 			})
@@ -48,7 +48,8 @@ func TestLayerDependencies(t *testing.T) {
 }
 
 // 单体不代表模块可以互相穿透。模块之间只允许通过对方的 domain 端口或
-// application 用例协作：service 是 HTTP 适配层、infrastructure 是持久化细节，
+// application 用例协作，跨模块依赖集中在本模块 infrastructure 适配器中。
+// service 是 HTTP 适配层、infrastructure 是持久化细节，
 // 被别的模块直接引用就等于把实现绑死，日后想把某个模块拆出去时会寸步难行。
 func TestModuleBoundaries(t *testing.T) {
 	root := repositoryRoot()
@@ -65,8 +66,11 @@ func TestModuleBoundaries(t *testing.T) {
 				continue
 			}
 			rest := strings.TrimPrefix(imp, modulePrefix+target+"/")
-			if strings.HasPrefix(rest, "service") || strings.HasPrefix(rest, "infrastructure") {
-				t.Errorf("模块 %s 直接引用了模块 %s 的实现包 %s（只能经由 domain 端口或 application 用例）",
+			publicPort := rest == "domain" || strings.HasPrefix(rest, "domain/") || rest == "application" || strings.HasPrefix(rest, "application/")
+			adapter := strings.TrimPrefix(pkg.ImportPath, modulePrefix+owner+"/")
+			isAdapter := adapter == "infrastructure" || strings.HasPrefix(adapter, "infrastructure/")
+			if !isAdapter || !publicPort {
+				t.Errorf("模块 %s 直接引用了模块 %s 的实现包 %s（只能由本模块 infrastructure 适配到对方 domain 端口或 application 用例）",
 					owner, target, imp)
 			}
 		}
@@ -196,6 +200,7 @@ func TestInfrastructureBoundaries(t *testing.T) {
 // 这些库是 AI 生成代码时最常顺手引进、但本仓库已明确拒绝的。
 // 标准库 slices/maps/cmp、encoding/json、errors、log/slog 已经覆盖对应需求。
 var bannedModulePrefixes = []string{
+	"github.com/google/wire",
 	"github.com/samber/lo",
 	"github.com/duke-git/lancet",
 	"github.com/jinzhu/copier",
@@ -209,20 +214,6 @@ var bannedModulePrefixes = []string{
 	"github.com/go-redis/redis/v8",
 	"github.com/go-redis/redis/v7",
 	"github.com/redis/go-redis",
-}
-
-// Wire 只能出现在组合根。散落到业务包里，依赖关系就从「一处可读的装配清单」
-// 退化成到处都是的隐式全局注册。
-func TestWireOnlyInCompositionRoot(t *testing.T) {
-	root := repositoryRoot()
-	for _, pkg := range listPackages(t, root, "./...") {
-		if !slices.Contains(pkg.Imports, "github.com/google/wire") {
-			continue
-		}
-		if pkg.ImportPath != "github.com/eagle-go/eagle/cmd/eagle" {
-			t.Errorf("%s imports github.com/google/wire; Wire stays in cmd/eagle", pkg.ImportPath)
-		}
-	}
 }
 
 func TestBannedDependencies(t *testing.T) {

@@ -60,10 +60,7 @@ message Data {
   reserved 2;
 }
 
-// 本进程作为 OAuth2 / OIDC 资源服务器的配置。
-//
-// 只验签、不建用户表：用户与角色由外部 IdP 管理。JWKS 与角色 claim
-// 显式配置，因此更换兼容的 IdP 不需要修改代码。
+// 登录、Eagle token 签发及兼容外部 OIDC token 验签的配置。
 message Auth {
   // IdP 的 issuer，形如 https://idp.example.com。
   // 必须与 token 里的 iss 完全一致，含协议、端口和是否带尾斜杠
@@ -105,6 +102,20 @@ message Auth {
   // client 角色所在的 claim 路径，点号分隔，必填。既可以直接指向
   // 字符串数组，也可以指向 {"<client-id>": {"roles": [...]}} 结构。
   string client_roles_claim = 10;
+
+  // 非空时由 Eagle 使用 HS256 签发和验证自己的 access token。
+  // 至少 32 字节；生产环境必须通过 Secret 注入随机值。
+  string signing_secret = 11;
+  google.protobuf.Duration access_token_ttl = 12;
+  google.protobuf.Duration refresh_token_ttl = 13;
+
+  message SocialProvider {
+    bool enabled = 1;
+    // Google OAuth Client ID 或 Apple Services ID / Bundle ID。
+    string client_id = 2;
+  }
+  SocialProvider google = 14;
+  SocialProvider apple = 15;
 }
 
 message Observability {

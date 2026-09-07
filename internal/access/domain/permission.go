@@ -215,5 +215,4 @@ type PermissionRepo interface {
 	List(ctx context.Context, q ListPermissionsQuery) ([]*Permission, error)
 	Update(ctx context.Context, p *Permission, expectedRevision *int64) (*Permission, error)
 	Delete(ctx context.Context, id int64, expectedRevision *int64) error
-	KnownCodes(ctx context.Context) (map[string]struct{}, error)
 }

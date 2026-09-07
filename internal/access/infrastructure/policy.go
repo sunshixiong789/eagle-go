@@ -67,14 +67,10 @@ func (r *policyRepo) SaveInheritance(ctx context.Context, ri domain.RoleInherita
 	return r.commitPolicy(ctx, version, err)
 }
 
-func (r *policyRepo) PolicyVersion(ctx context.Context) (int64, error) {
-	return r.store.PolicyVersion(ctx)
-}
-
-func (r *policyRepo) ListInheritances(ctx context.Context) ([]domain.RoleInheritance, error) {
-	rules, _, err := r.store.RulesSnapshot(ctx, "g")
+func (r *policyRepo) ListInheritances(ctx context.Context) ([]domain.RoleInheritance, int64, error) {
+	rules, version, err := r.store.RulesSnapshot(ctx, "g")
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	type rolePair struct{ Child, Parent string }
 	pairs := make([]rolePair, 0, len(rules))
@@ -104,7 +100,7 @@ func (r *policyRepo) ListInheritances(ctx context.Context) ([]domain.RoleInherit
 			out = append(out, ri)
 		}
 	}
-	return out, nil
+	return out, version, nil
 }
 
 func (r *policyRepo) DeleteInheritance(ctx context.Context, ri domain.RoleInheritance, expectedVersion *int64) (int64, error) {
@@ -138,10 +134,10 @@ func mutationMeta(ctx context.Context) policyMutationMeta {
 }
 
 // ListBindings 用一次数据库查询完成全部角色及其直接权限的分组。
-func (r *policyRepo) ListBindings(ctx context.Context) ([]*domain.RoleBinding, error) {
+func (r *policyRepo) ListBindings(ctx context.Context) ([]*domain.RoleBinding, int64, error) {
 	rules, version, err := r.store.RulesSnapshot(ctx, "p")
 	if err != nil {
-		return nil, fmt.Errorf("list role bindings: %w", err)
+		return nil, 0, fmt.Errorf("list role bindings: %w", err)
 	}
 
 	grouped := make(map[string][]string)
@@ -161,15 +157,15 @@ func (r *policyRepo) ListBindings(ctx context.Context) ([]*domain.RoleBinding, e
 		}
 		codes, err := domain.ParsePermissionCodes(grouped[n])
 		if err != nil {
-			return nil, fmt.Errorf("角色 %q 的策略中含非法权限码: %w", role, err)
+			return nil, 0, fmt.Errorf("角色 %q 的策略中含非法权限码: %w", role, err)
 		}
 		binding, err := domain.NewRoleBinding(role, codes)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		out = append(out, binding.WithRevision(version))
 	}
-	return out, nil
+	return out, version, nil
 }
 
 func roleNames(roles []domain.Role) []string {

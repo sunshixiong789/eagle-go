@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/eagle-go/eagle/internal/access/domain"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/casbinrule"
@@ -387,7 +388,7 @@ func TestPolicyStoreSetRolePermissionsPersists(t *testing.T) {
 			Where(casbinrule.V0EQ(role)).Exec(ctx)
 	})
 
-	binding := mustBinding(t, role, "system:dict:query", "system:dict:list")
+	binding := mustBinding(t, role, "system:dict:remove", "system:dict:list")
 	if _, err := store.SaveBinding(ctx, binding, nil); err != nil {
 		t.Fatalf("SaveBinding: %v", err)
 	}
@@ -401,7 +402,7 @@ func TestPolicyStoreSetRolePermissionsPersists(t *testing.T) {
 
 	perms := got.CodeStrings()
 	slices.Sort(perms)
-	want := []string{"system:dict:list", "system:dict:query"}
+	want := []string{"system:dict:list", "system:dict:remove"}
 	if !slices.Equal(perms, want) {
 		t.Errorf("重新加载后的策略 = %v, want %v", perms, want)
 	}
@@ -459,10 +460,10 @@ func TestPolicyStoreSetRolePermissionsReplaces(t *testing.T) {
 			Where(casbinrule.V0EQ(role)).Exec(ctx)
 	})
 
-	if _, err := store.SaveBinding(ctx, mustBinding(t, role, "system:dict:query", "system:dict:add"), nil); err != nil {
+	if _, err := store.SaveBinding(ctx, mustBinding(t, role, "system:dict:remove", "system:dict:add"), nil); err != nil {
 		t.Fatalf("首次设置: %v", err)
 	}
-	if _, err := store.SaveBinding(ctx, mustBinding(t, role, "system:dict:query"), nil); err != nil {
+	if _, err := store.SaveBinding(ctx, mustBinding(t, role, "system:dict:remove"), nil); err != nil {
 		t.Fatalf("覆盖设置: %v", err)
 	}
 
@@ -474,20 +475,20 @@ func TestPolicyStoreSetRolePermissionsReplaces(t *testing.T) {
 	if codesCover(codes, "system:dict:add") {
 		t.Error("被覆盖掉的权限不应残留")
 	}
-	if !codesCover(codes, "system:dict:query") {
+	if !codesCover(codes, "system:dict:remove") {
 		t.Error("保留的权限应仍然有效")
 	}
 }
 
-// 替换中的新策略写入失败时，删除旧策略也必须一并回滚。
-func TestPolicyStoreReplaceIsAtomicOnInsertFailure(t *testing.T) {
+// 替换策略后的审计写入失败时，策略和版本必须一并回滚。
+func TestPolicyStoreReplaceIsAtomicOnAuditFailure(t *testing.T) {
 	skipIfShort(t)
 
 	ctx := context.Background()
 	store := NewPolicyStore(testDB)
 	const role = "test-atomic-role"
 
-	if _, err := store.ReplaceRolePermissions(ctx, role, []string{"system:dict:query"}, nil, policyMutationMeta{}); err != nil {
+	if _, err := store.ReplaceRolePermissions(ctx, role, []string{"system:dict:remove"}, nil, policyMutationMeta{}); err != nil {
 		t.Fatalf("seed role permissions: %v", err)
 	}
 	versionBefore, err := store.PolicyVersion(ctx)
@@ -495,8 +496,8 @@ func TestPolicyStoreReplaceIsAtomicOnInsertFailure(t *testing.T) {
 		t.Fatalf("PolicyVersion: %v", err)
 	}
 
-	// Casbin v1 最大 128 字节，强制让批量插入在删除之后失败。
-	if _, err := store.ReplaceRolePermissions(ctx, role, []string{strings.Repeat("x", 129)}, nil, policyMutationMeta{}); err == nil {
+	// 审计 request_id 最大 128 字节，强制在替换策略和递增版本后失败。
+	if _, err := store.ReplaceRolePermissions(ctx, role, []string{"system:dict:add"}, nil, policyMutationMeta{requestID: strings.Repeat("x", 129)}); err == nil {
 		t.Fatal("expected replacement failure")
 	}
 	versionAfter, err := store.PolicyVersion(ctx)
@@ -513,7 +514,7 @@ func TestPolicyStoreReplaceIsAtomicOnInsertFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("query role policies: %v", err)
 	}
-	if len(rows) != 1 || rows[0].V1 != "system:dict:query" {
+	if len(rows) != 1 || rows[0].V1 != "system:dict:remove" {
 		t.Fatalf("old policy was not preserved: %#v", rows)
 	}
 }
@@ -549,7 +550,7 @@ func TestPolicyMutationWritesVersionAndAudit(t *testing.T) {
 	}
 }
 
-func TestAuthzPolicyReadyIgnoresVersionLag(t *testing.T) {
+func TestAuthzPolicyReadyBoundsVersionLag(t *testing.T) {
 	skipIfShort(t)
 
 	ctx := context.Background()
@@ -559,7 +560,7 @@ func TestAuthzPolicyReadyIgnoresVersionLag(t *testing.T) {
 		t.Fatalf("NewEnforcer: %v", err)
 	}
 	loaded := enforcer.LoadedPolicyVersion()
-	version, err := store.ReplaceRolePermissions(ctx, "test-ready-lag-role", []string{"system:dict:query"}, nil, policyMutationMeta{})
+	version, err := store.ReplaceRolePermissions(ctx, "test-ready-lag-role", []string{"system:dict:remove"}, nil, policyMutationMeta{})
 	if err != nil {
 		t.Fatalf("ReplaceRolePermissions: %v", err)
 	}
@@ -570,13 +571,27 @@ func TestAuthzPolicyReadyIgnoresVersionLag(t *testing.T) {
 		t.Fatalf("loaded version changed without reload: %d -> %d", loaded, got)
 	}
 
-	if err := checkAuthzPolicyReady(ctx, store, enforcer); err != nil {
+	health := &policyReadiness{}
+	now := time.Now()
+	if err := health.check(ctx, store, enforcer, now); err != nil {
 		t.Fatalf("policy readiness with version lag = %v", err)
+	}
+	if err := health.check(ctx, store, enforcer, now.Add(policyLagGrace)); err == nil {
+		t.Fatal("persistent lag must fail readiness")
+	}
+	if err := enforcer.ReloadPolicy(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := health.check(ctx, store, enforcer, now.Add(policyLagGrace)); err != nil {
+		t.Fatalf("recovered policy readiness = %v", err)
+	}
+	if !health.lagSince.IsZero() {
+		t.Fatal("recovery must reset the grace window")
 	}
 
 	canceled, cancel := context.WithCancel(ctx)
 	cancel()
-	if err := checkAuthzPolicyReady(canceled, store, enforcer); err == nil {
+	if err := health.check(canceled, store, enforcer, now); err == nil {
 		t.Fatal("unable to read policy version should still fail readiness")
 	}
 }
@@ -668,13 +683,16 @@ func TestPolicyStoreListBindings(t *testing.T) {
 	ctx := context.Background()
 	store := newTestPolicyStore(t)
 
-	bindings, err := store.ListBindings(ctx)
+	bindings, version, err := store.ListBindings(ctx)
 	if err != nil {
 		t.Fatalf("ListBindings: %v", err)
 	}
 
 	names := make([]string, 0, len(bindings))
 	for _, b := range bindings {
+		if b.Revision() != version {
+			t.Fatalf("binding revision %d differs from snapshot %d", b.Revision(), version)
+		}
 		names = append(names, b.Role().String())
 	}
 
@@ -716,5 +734,104 @@ func TestNewEnforcerLoadsFromDatabase(t *testing.T) {
 
 	if err := e.SetRolePermissions(context.Background(), "realm:user", []string{"system:dict:list"}); !errors.Is(err, authz.ErrAdapterReadOnly) {
 		t.Fatalf("持久化判定器直接改内存策略: %v", err)
+	}
+}
+
+func TestBindingCatalogValidationRollsBack(t *testing.T) {
+	skipIfShort(t)
+	ctx := context.Background()
+	store := NewPolicyStore(testDB)
+	role := "realm:catalog-validation"
+	before, err := store.ReplaceRolePermissions(ctx, role, []string{"system:dict:remove"}, nil, policyMutationMeta{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, code := range []string{"test:catalog:missing", "test:catalog:disabled"} {
+		if strings.HasSuffix(code, "disabled") {
+			mustCatalogCode(t, code)
+			if _, err := testDB.Client().PermissionDefinition.Update().Where(permissiondefinition.CodeEQ(code)).SetStatus(0).Save(ctx); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, err := store.ReplaceRolePermissions(ctx, role, []string{code}, nil, policyMutationMeta{}); !errors.Is(err, domain.ErrUnknownPermissionCode) {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		codes, version, err := store.RolePermissionsSnapshot(ctx, role)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if version != before || !slices.Equal(codes, []string{"system:dict:remove"}) {
+			t.Fatalf("failed write changed snapshot: %v, %d", codes, version)
+		}
+	}
+	if _, err := store.ReplaceRolePermissions(ctx, role, []string{"test:catalog:*"}, nil, policyMutationMeta{}); err != nil {
+		t.Fatalf("wildcard: %v", err)
+	}
+	if _, err := store.ReplaceRolePermissions(ctx, role, nil, nil, policyMutationMeta{}); err != nil {
+		t.Fatalf("clear: %v", err)
+	}
+}
+
+func TestBindingCatalogLocksValidatedRows(t *testing.T) {
+	skipIfShort(t)
+	ctx := context.Background()
+	code := "test:catalog:locked"
+	mustCatalogCode(t, code)
+	tx, err := testDB.Client().Tx(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := validateBindingCatalog(ctx, tx, "realm:catalog-lock", []string{code}); err != nil {
+		t.Fatal(err)
+	}
+	other, err := testDB.Client().Tx(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = other.Rollback() }()
+	if _, err := other.Client().ExecContext(ctx, "SET LOCAL lock_timeout = '100ms'"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := other.PermissionDefinition.Update().Where(permissiondefinition.CodeEQ(code)).SetStatus(0).Save(ctx); err == nil {
+		t.Fatal("catalog update bypassed validation lock")
+	} else if !strings.Contains(err.Error(), "lock timeout") {
+		t.Fatalf("expected lock timeout: %v", err)
+	}
+	if err := tx.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.Client().PermissionDefinition.Update().Where(permissiondefinition.CodeEQ(code)).SetStatus(0).Save(ctx); err != nil {
+		t.Fatalf("lock was not released: %v", err)
+	}
+}
+
+func TestEmptyPolicyListsRetainSnapshotVersion(t *testing.T) {
+	skipIfShort(t)
+	ctx := context.Background()
+	tx, err := testDB.Client().Tx(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.CasbinRule.Delete().Exec(ctx); err != nil {
+		t.Fatal(err)
+	}
+	store := &PolicyStore{client: tx.Client()}
+	version, err := store.PolicyVersion(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo := NewPolicyRepo(nil, store)
+	bindings, bindingVersion, err := repo.ListBindings(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inheritances, inheritanceVersion, err := repo.ListInheritances(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bindings) != 0 || len(inheritances) != 0 || bindingVersion != version || inheritanceVersion != version {
+		t.Fatalf("empty snapshots lost version %d: %v/%d, %v/%d", version, bindings, bindingVersion, inheritances, inheritanceVersion)
 	}
 }

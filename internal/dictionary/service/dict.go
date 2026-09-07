@@ -90,7 +90,7 @@ func (s *DictService) ListDictTypes(ctx context.Context, req *v1.ListDictTypesRe
 
 // UpdateDictType 更新字典类型。
 func (s *DictService) UpdateDictType(ctx context.Context, req *v1.UpdateDictTypeRequest) (*v1.UpdateDictTypeResponse, error) {
-	t, err := s.repo.UpdateType(ctx, &domain.DictType{
+	t, err := s.repo.UpdateType(ctx, domain.UpdateDictType{
 		ID:     req.GetId(),
 		Name:   req.GetName(),
 		Status: toStatus(req.GetStatus()),

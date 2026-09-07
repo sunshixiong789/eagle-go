@@ -9,6 +9,34 @@ import (
 )
 
 var (
+	// AuthSessionColumns holds the columns for the "auth_session" table.
+	AuthSessionColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Size: 32},
+		{Name: "identity_id", Type: field.TypeInt64},
+		{Name: "refresh_token_hash", Type: field.TypeString, Unique: true, Size: 64},
+		{Name: "expires_at", Type: field.TypeTime},
+		{Name: "revoked_at", Type: field.TypeTime, Nullable: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// AuthSessionTable holds the schema information for the "auth_session" table.
+	AuthSessionTable = &schema.Table{
+		Name:       "auth_session",
+		Columns:    AuthSessionColumns,
+		PrimaryKey: []*schema.Column{AuthSessionColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "authsession_identity_id",
+				Unique:  false,
+				Columns: []*schema.Column{AuthSessionColumns[1]},
+			},
+			{
+				Name:    "authsession_expires_at",
+				Unique:  false,
+				Columns: []*schema.Column{AuthSessionColumns[3]},
+			},
+		},
+	}
 	// CasbinRuleColumns holds the columns for the "casbin_rule" table.
 	CasbinRuleColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -206,8 +234,37 @@ var (
 		Columns:    AuthzPolicyStateColumns,
 		PrimaryKey: []*schema.Column{AuthzPolicyStateColumns[0]},
 	}
+	// SocialIdentityColumns holds the columns for the "social_identity" table.
+	SocialIdentityColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "subject", Type: field.TypeString, Unique: true, Size: 384},
+		{Name: "provider", Type: field.TypeString, Size: 16},
+		{Name: "provider_subject", Type: field.TypeString, Size: 255},
+		{Name: "email", Type: field.TypeString, Size: 320, Default: ""},
+		{Name: "email_verified", Type: field.TypeBool, Default: false},
+		{Name: "display_name", Type: field.TypeString, Size: 128, Default: ""},
+		{Name: "avatar_url", Type: field.TypeString, Size: 2048, Default: ""},
+		{Name: "role", Type: field.TypeString, Size: 32, Default: "user"},
+		{Name: "last_login_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// SocialIdentityTable holds the schema information for the "social_identity" table.
+	SocialIdentityTable = &schema.Table{
+		Name:       "social_identity",
+		Columns:    SocialIdentityColumns,
+		PrimaryKey: []*schema.Column{SocialIdentityColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "socialidentity_provider_provider_subject",
+				Unique:  true,
+				Columns: []*schema.Column{SocialIdentityColumns[2], SocialIdentityColumns[3]},
+			},
+		},
+	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		AuthSessionTable,
 		CasbinRuleTable,
 		SysDictDataTable,
 		SysDictTypeTable,
@@ -216,10 +273,14 @@ var (
 		PermissionTreeStateTable,
 		AuthzPolicyAuditTable,
 		AuthzPolicyStateTable,
+		SocialIdentityTable,
 	}
 )
 
 func init() {
+	AuthSessionTable.Annotation = &entsql.Annotation{
+		Table: "auth_session",
+	}
 	CasbinRuleTable.Annotation = &entsql.Annotation{
 		Table: "casbin_rule",
 	}
@@ -243,5 +304,8 @@ func init() {
 	}
 	AuthzPolicyStateTable.Annotation = &entsql.Annotation{
 		Table: "authz_policy_state",
+	}
+	SocialIdentityTable.Annotation = &entsql.Annotation{
+		Table: "social_identity",
 	}
 }

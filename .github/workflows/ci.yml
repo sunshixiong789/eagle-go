@@ -35,6 +35,12 @@ jobs:
       - name: 编译 buf
         run: go -C tools build -o "$PWD/bin/buf" github.com/bufbuild/buf/cmd/buf
 
+      - name: 已合入迁移不可改写
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_COMMIT: ${{ github.event.pull_request.base.sha }}
+        run: sh tools/scripts/check-migrations.sh "$BASE_COMMIT"
+
       - name: buf lint
         run: ./bin/buf lint
 
@@ -48,8 +54,8 @@ jobs:
       # 改了 proto 却忘记重新生成的提交会一路合进主干。
       - name: 验证生成代码是最新的
         run: |
-          make api config ent wire
-          if ! git diff --exit-code; then
+          make api config ent
+          if [ -n "$(git status --porcelain)" ]; then
             echo "::error::生成代码不一致，请在本地运行 make generate 后提交"
             exit 1
           fi

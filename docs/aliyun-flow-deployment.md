@@ -52,6 +52,9 @@ ECS 上只运行一次性迁移任务和 `eagle` 应用。若后续迁移到 ACK
 | `EAGLE_AUTH_ISSUER` | 普通 | 必须与 token 的 `iss` 完全一致 |
 | `EAGLE_AUTH_CLIENT_ID` | 普通 | 当前环境 IdP client |
 | `EAGLE_AUTH_AUDIENCE` | 普通 | 当前环境 audience |
+| `EAGLE_AUTH_SIGNING_SECRET` | 私密 | 至少 32 字节的随机 Eagle token 签名密钥 |
+| `EAGLE_AUTH_GOOGLE_ENABLED` / `EAGLE_AUTH_GOOGLE_CLIENT_ID` | 普通 | 启用 Google 登录及 Client ID |
+| `EAGLE_AUTH_APPLE_ENABLED` / `EAGLE_AUTH_APPLE_CLIENT_ID` | 普通 | 启用 Apple 登录及 Services ID / Bundle ID |
 | `EAGLE_AUTH_JWKS_URL` | 普通 | 可选，推荐填写可从 ECS 访问的地址 |
 | `EAGLE_OBSERVABILITY_OTLP_ENDPOINT` | 普通 | 可选，环境自己的 collector |
 | `EAGLE_BIND_ADDRESS` | 普通 | 默认 `127.0.0.1`，由同机网关反代；直连时按网络设计调整 |

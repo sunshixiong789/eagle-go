@@ -159,6 +159,7 @@ func assertTablesDropped(t *testing.T, db *sql.DB) {
 	t.Helper()
 
 	for _, table := range []string{
+		"auth_session", "social_identity",
 		"navigation_node", "permission_definition", "permission_tree_state",
 		"sys_dict_type", "sys_dict_data", "casbin_rule",
 		"authz_policy_state", "authz_policy_audit",

@@ -83,6 +83,11 @@ func (s *PolicyStore) ReplaceRolePermissions(
 		return 0, err
 	}
 
+	if err := validateBindingCatalog(ctx, tx, role, perms); err != nil {
+		_ = tx.Rollback()
+		return 0, err
+	}
+
 	oldRows, err := tx.CasbinRule.Query().
 		Where(casbinrule.PtypeEQ("p"), casbinrule.V0EQ(role)).
 		All(ctx)
@@ -358,4 +363,37 @@ func rollbackPolicyTxOnPanic(tx *ent.Tx) {
 		_ = tx.Rollback()
 		panic(p)
 	}
+}
+
+// 锁住读到的目录行直到绑定提交；迁移或 SQL 更新/删除这些行也会等待。
+// 目录由迁移维护，新增行不会使已通过的具体权限码校验失效。
+func validateBindingCatalog(ctx context.Context, tx *ent.Tx, role string, perms []string) error {
+	codes, err := domain.ParsePermissionCodes(perms)
+	if err != nil {
+		return err
+	}
+	binding, err := domain.NewRoleBinding(domain.Role(role), codes)
+	if err != nil {
+		return err
+	}
+	rows, err := tx.Client().QueryContext(ctx, "SELECT code, status FROM permission_definition FOR SHARE")
+	if err != nil {
+		return fmt.Errorf("lock permission catalog: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	known := make(map[string]struct{})
+	for rows.Next() {
+		var code string
+		var status int32
+		if err := rows.Scan(&code, &status); err != nil {
+			return fmt.Errorf("read permission catalog: %w", err)
+		}
+		if status == 1 {
+			known[code] = struct{}{}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("read permission catalog: %w", err)
+	}
+	return binding.EnsureCodesKnown(known)
 }

@@ -10,8 +10,8 @@ import (
 
 const policyReconcileInterval = 5 * time.Second
 
-// runPolicyReconciler 比对数据库版本与内存版本，各副本最多在一个
-// 对账周期内追上数据库中的权威策略。
+// runPolicyReconciler 每个周期对账；数据库或重载失败时持续重试，
+// 持续版本落后由 readiness 的容忍窗口约束。
 func runPolicyReconciler(
 	ctx context.Context,
 	store *PolicyStore,
@@ -22,7 +22,9 @@ func runPolicyReconciler(
 	defer ticker.Stop()
 
 	reconcile := func() {
-		version, err := store.PolicyVersion(ctx)
+		attemptCtx, cancel := context.WithTimeout(ctx, policyReconcileInterval)
+		defer cancel()
+		version, err := store.PolicyVersion(attemptCtx)
 		if err != nil {
 			if ctx.Err() == nil {
 				logger.ErrorContext(ctx, "authz: 对账时读取策略版本失败", "error", err)
@@ -33,7 +35,7 @@ func runPolicyReconciler(
 		if version == enforcer.LoadedPolicyVersion() {
 			return
 		}
-		if err := enforcer.ReloadPolicy(ctx); err != nil {
+		if err := enforcer.ReloadPolicy(attemptCtx); err != nil {
 			if ctx.Err() == nil {
 				logger.ErrorContext(ctx, "authz: 对账重载策略失败", "error", err, "database_version", version, "loaded_version", enforcer.LoadedPolicyVersion())
 			}

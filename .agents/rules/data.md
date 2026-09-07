@@ -9,3 +9,6 @@
 - infrastructure 将 Ent/SQL 的 not found、唯一冲突和并发冲突翻译成稳定的领域错误，不把 Ent 类型泄漏到上层。
 - 缓存、消息投递和对象存储都是 infrastructure 适配；只有任务确有需求时才引入，不作为默认 CRUD 模板。
 - 可以修改 schema 和迁移，禁止手改 `internal/platform/database/ent/` 下的生成文件。
+
+- 已发布迁移保持不变，使用新的增量迁移；迁移必须兼容运行中及允许回滚的旧应用，发布顺序与验证见 `docs/migration-compatibility.md`。
+- 新增表时同步维护 `tests/architecture/data_ownership_test.go` 的所有权清单；`tests/database` 检查 Ent 与 goose 的字段及必需索引一致性。

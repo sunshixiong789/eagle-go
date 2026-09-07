@@ -9,6 +9,18 @@ import (
 	"github.com/eagle-go/eagle/internal/platform/database/ent"
 )
 
+// The AuthSessionFunc type is an adapter to allow the use of ordinary
+// function as AuthSession mutator.
+type AuthSessionFunc func(context.Context, *ent.AuthSessionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AuthSessionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AuthSessionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AuthSessionMutation", m)
+}
+
 // The CasbinRuleFunc type is an adapter to allow the use of ordinary
 // function as CasbinRule mutator.
 type CasbinRuleFunc func(context.Context, *ent.CasbinRuleMutation) (ent.Value, error)
@@ -103,6 +115,18 @@ func (f PolicyStateFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value,
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PolicyStateMutation", m)
+}
+
+// The SocialIdentityFunc type is an adapter to allow the use of ordinary
+// function as SocialIdentity mutator.
+type SocialIdentityFunc func(context.Context, *ent.SocialIdentityMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SocialIdentityFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SocialIdentityMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SocialIdentityMutation", m)
 }
 
 // Condition is a hook condition function.

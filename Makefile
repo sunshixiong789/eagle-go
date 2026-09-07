@@ -3,7 +3,7 @@ VERSION := $(shell git describe --tags --always 2>/dev/null || echo "dev")
 LDFLAGS := -X main.Version=$(VERSION)
 
 # 业务代码是单一 module；tools 独立成模块，用来锁定生成工具链版本，
-# 不让 buf/goose/golangci-lint/wire 的依赖污染业务依赖图。
+# 不让 buf/goose/golangci-lint 的依赖污染业务依赖图。
 MODULES := . tools
 REGISTRY ?= eagle
 IMAGE ?= $(REGISTRY)/eagle
@@ -12,19 +12,17 @@ EAGLE_RUNTIME_IMAGE ?= gcr.io/distroless/static-debian12:nonroot
 
 # 工具从 tools module 编译成二进制后在仓库根目录执行。
 # 不用 `go -C tools tool xxx`：那会把工作目录切到 tools/，
-# buf.gen.yaml 里的 `directory: api`、goose 的 -dir、wire 的包路径都会解析错。
+# buf.gen.yaml 里的 `directory: api`、goose 的 -dir 都会解析错。
 BIN := $(CURDIR)/bin
 BUF := $(BIN)/buf
 ENT := $(BIN)/ent
 GOOSE := $(BIN)/goose
 GOLANGCI_LINT := $(BIN)/golangci-lint
-WIRE := $(BIN)/wire
 
 TOOL_PKG_buf := github.com/bufbuild/buf/cmd/buf
 TOOL_PKG_ent := entgo.io/ent/cmd/ent
 TOOL_PKG_goose := github.com/pressly/goose/v3/cmd/goose
 TOOL_PKG_golangci-lint := github.com/golangci/golangci-lint/v2/cmd/golangci-lint
-TOOL_PKG_wire := github.com/google/wire/cmd/wire
 
 $(BIN)/%:
 	@mkdir -p $(BIN)
@@ -35,7 +33,7 @@ MIGRATION_DIR := migrations
 
 .PHONY: init
 # 下载并验证项目锁定的开发期工具链
-init: $(BUF) $(GOOSE) $(GOLANGCI_LINT) $(WIRE)
+init: $(BUF) $(GOOSE) $(GOLANGCI_LINT)
 	$(BUF) --version
 	$(GOOSE) -version
 	$(GOLANGCI_LINT) --version
@@ -82,14 +80,9 @@ migrate-down: $(GOOSE)
 migrate-status: $(GOOSE)
 	$(GOOSE) -dir $(MIGRATION_DIR) postgres "$(EAGLE_DSN)" status
 
-.PHONY: wire
-# 生成组合根的 Wire 注入代码
-wire: $(WIRE)
-	$(WIRE) ./cmd/eagle
-
 .PHONY: generate
-# 全量生成：对外契约 + 进程配置 + Ent + Wire
-generate: api config ent wire tidy
+# 全量生成：对外契约 + 进程配置 + Ent
+generate: api config ent tidy
 
 .PHONY: build
 # 编译服务与迁移工具到 bin/

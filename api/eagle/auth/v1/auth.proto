@@ -1,0 +1,94 @@
+syntax = "proto3";
+
+package eagle.auth.v1;
+
+import "buf/validate/validate.proto";
+import "eagle/annotations/v1/perm.proto";
+import "google/api/annotations.proto";
+
+option go_package = "github.com/eagle-go/eagle/api/eagle/auth/v1;authv1";
+
+service AuthService {
+  // SocialLogin 接收客户端从 Google/Apple SDK 获得的 ID Token。
+  rpc SocialLogin(SocialLoginRequest) returns (TokenResponse) {
+    option (google.api.http) = {
+      post: "/v1/auth/social/login"
+      body: "*"
+    };
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PUBLIC;
+  }
+
+  rpc RefreshToken(RefreshTokenRequest) returns (TokenResponse) {
+    option (google.api.http) = {
+      post: "/v1/auth/token/refresh"
+      body: "*"
+    };
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PUBLIC;
+  }
+
+  rpc Logout(LogoutRequest) returns (LogoutResponse) {
+    option (google.api.http) = {
+      post: "/v1/auth/logout"
+      body: "*"
+    };
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PUBLIC;
+  }
+}
+
+enum SocialProvider {
+  SOCIAL_PROVIDER_UNSPECIFIED = 0;
+  SOCIAL_PROVIDER_GOOGLE = 1;
+  SOCIAL_PROVIDER_APPLE = 2;
+}
+
+message SocialLoginRequest {
+  SocialProvider provider = 1 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+  string id_token = 2 [(buf.validate.field).string = {
+    min_len: 16
+    max_len: 8192
+  }];
+  // 发起第三方登录时使用的原始 nonce。Apple 原生 SDK 会在 token 中返回其 SHA-256 值。
+  string nonce = 3 [(buf.validate.field).string = {
+    min_len: 16
+    max_len: 256
+  }];
+  // Apple 仅在首次授权返回姓名，客户端应在首次交换时一并提交。
+  string display_name = 4 [(buf.validate.field).string.max_len = 128];
+}
+
+message RefreshTokenRequest {
+  string refresh_token = 1 [(buf.validate.field).string = {
+    min_len: 32
+    max_len: 256
+  }];
+}
+
+message LogoutRequest {
+  string refresh_token = 1 [(buf.validate.field).string = {
+    min_len: 32
+    max_len: 256
+  }];
+}
+
+message LogoutResponse {}
+
+message User {
+  string subject = 1;
+  SocialProvider provider = 2;
+  string email = 3;
+  bool email_verified = 4;
+  string display_name = 5;
+  string avatar_url = 6;
+  repeated string roles = 7;
+}
+
+message TokenResponse {
+  string access_token = 1;
+  string refresh_token = 2;
+  string token_type = 3;
+  int64 expires_in = 4;
+  User user = 5;
+}

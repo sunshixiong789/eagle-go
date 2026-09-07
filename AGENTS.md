@@ -14,7 +14,7 @@
 本仓库是单进程单体，只有一个业务 module（`tools/` 另有独立 module，仅用于锁定生成工具链）。代码按业务模块划分：
 
 ```text
-cmd/eagle                       # 进程入口和 Wire 组合根
+cmd/eagle                       # 进程入口和 显式组合根
 internal/<module>/
 ├── service                     # 入站适配：Protobuf handler 和任务入口
 ├── application                 # 可选；只在存在用例编排时创建
@@ -42,8 +42,9 @@ service -> application -> domain <- infrastructure
 DDD 用来保护边界和不变量，不用来增加代码量：
 
 - 只有存在生命周期、状态转换或必须始终成立的业务规则时，才使用聚合根、值对象或领域方法。字典、查询等简单 CRUD 保持简单。
-- 仅包含 `return repo.Xxx(...)` 的 application 应删除，由 service 依赖 domain 定义的最小端口。一旦用例需要多端口协作、聚合加载-变更-保存、事务、幂等、补偿、审计或多入口复用，必须增加 application。
+- 仅包含 `return repo.Xxx(...)` 的 application 应删除，由 service 依赖 domain 定义的最小端口。一旦用例需要多端口协作、聚合加载-变更-保存、用例级事务编排、幂等、补偿、审计或多入口复用，必须增加 application。
 - 不依赖 I/O 的规则放在 domain 构造器或方法中；跨端口的用例流程放在 application；必须依赖数据库锁、唯一约束或当前持久化状态的检查，放在 infrastructure 的同一事务内，不在 application 重复预检。
+- 单个仓储操作内部使用事务，本身不构成增加 application 的理由；已有真实编排的 application 可以保留同一用例下的简单查询转发。
 - 一个聚合的原子持久化可由聚合仓储内部完成；涉及多个本地写入时使用语义化的原子端口，禁止向 application 暴露 Ent Tx 或通过 context 隐式传递事务。
 - 更新端口优先接收只含允许修改字段的明确参数，不用完整公开实体依赖调用方约定保护不可变字段。
 - domain 定义的是业务需要的最小端口，不是对 Ent API 的包装。端口方法必须有当前生产调用方。
@@ -51,17 +52,17 @@ DDD 用来保护边界和不变量，不用来增加代码量：
 
 ## 模块与数据边界
 
-- 单进程不等于可以互相穿透。模块之间禁止 import 对方的 `service` 或 `infrastructure`；需要协作时依赖对方 `domain` 定义的端口或 `application` 用例。
-- 新增模块就是在 `internal/` 下新建一个带 `domain` 的目录，并在 `cmd/eagle` 的组合根装配。Wire 只允许出现在 `cmd/eagle`。
+- 单进程不等于可以互相穿透。模块之间禁止 import 对方的 `service` 或 `infrastructure`；跨模块用例由本模块 `domain` 声明所需能力，`application` 依赖该端口，由本模块 `infrastructure` 适配到对方公开的 `domain` 端口或 `application` 用例；只在有实际调用方时增加适配器。
+- 新增模块就是在 `internal/` 下新建一个带 `domain` 的目录，并在 `cmd/eagle` 的组合根装配。通过显式构造函数装配，不引入 DI 容器或 Wire。
 - 全进程共用一个数据库与 Ent Client；表由模块拥有，跨模块读写对方的表要经过对方端口，不在 infrastructure 里直连别人的表。
 - `pkg/` 只放无业务语义、可复用的技术能力，禁止 import `internal/`。业务模型留在拥有它的模块。
 
 ## API、身份与数据
 
 - API 先改 `api/**/*.proto`，只生成 HTTP。每个 RPC 必须显式声明 `access`；需要权限时同时声明 `perm`。鉴权由中间件完成，handler 不写重复鉴权分支。
-- IdP 负责用户和角色，本仓库不建用户表。当前主体统一从 `pkg/identity` 获取，不自行解析 JWT 或创建第二套 Principal。
+- Google/Apple 负责证明第三方身份；`auth` 模块保存社会化身份与会话并签发 Eagle token。当前主体统一从 `pkg/identity` 获取，业务 handler 不自行解析 JWT 或创建第二套 Principal。
 - 表结构通过 `internal/platform/database/ent/schema` 表达，生产迁移通过 `migrations/` 的 goose SQL 表达；两者必须同步维护。
-- 只修改源文件。禁止手改 `*.pb.go`、`internal/platform/database/ent/`、`wire_gen.go` 等生成文件；分别通过 `make api`、`make ent`、`make wire` 或 `make generate` 生成。
+- 只修改源文件。禁止手改 `*.pb.go`、`internal/platform/database/ent/` 等生成文件；分别通过 `make api`、`make ent` 或 `make generate` 生成。
 
 ## 质量底线
 

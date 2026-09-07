@@ -112,11 +112,11 @@ docker compose -f deploy/docker-compose.yml stop eagle
 `EAGLE_OBSERVABILITY_OTLP_ENDPOINT=host:4317` 打开，collector 不可达只会在后台重试，
 不会阻止应用启动。
 
-## 接入外部 IdP
+## 接入 Google / Apple 登录
 
-本仓库不启动或管理用户目录。联调受保护接口前，在外部 OIDC IdP 创建 API/client，配置
-`EAGLE_AUTH_ISSUER`、`EAGLE_AUTH_AUDIENCE`、JWKS 地址以及角色 claim 路径。取得 access token
-后调用接口：
+在 Google Cloud 或 Apple Developer 创建客户端，通过 `EAGLE_AUTH_GOOGLE_*` / `EAGLE_AUTH_APPLE_*`
+启用登录。客户端 SDK 取得 ID Token 后调用 `/v1/auth/social/login`，再用响应中的 Eagle access token
+调用接口。完整请求格式见[Google / Apple 登录](social-login.md)。
 
 ```bash
 curl --fail -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8000/v1/system/permissions

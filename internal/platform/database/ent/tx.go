@@ -14,6 +14,8 @@ import (
 // Tx is a transactional client that is created by calling Client.Tx().
 type Tx struct {
 	config
+	// AuthSession is the client for interacting with the AuthSession builders.
+	AuthSession *AuthSessionClient
 	// CasbinRule is the client for interacting with the CasbinRule builders.
 	CasbinRule *CasbinRuleClient
 	// DictData is the client for interacting with the DictData builders.
@@ -30,6 +32,8 @@ type Tx struct {
 	PolicyAudit *PolicyAuditClient
 	// PolicyState is the client for interacting with the PolicyState builders.
 	PolicyState *PolicyStateClient
+	// SocialIdentity is the client for interacting with the SocialIdentity builders.
+	SocialIdentity *SocialIdentityClient
 
 	// lazily loaded.
 	client     *Client
@@ -161,6 +165,7 @@ func (tx *Tx) Client() *Client {
 }
 
 func (tx *Tx) init() {
+	tx.AuthSession = NewAuthSessionClient(tx.config)
 	tx.CasbinRule = NewCasbinRuleClient(tx.config)
 	tx.DictData = NewDictDataClient(tx.config)
 	tx.DictType = NewDictTypeClient(tx.config)
@@ -169,6 +174,7 @@ func (tx *Tx) init() {
 	tx.PermissionTreeState = NewPermissionTreeStateClient(tx.config)
 	tx.PolicyAudit = NewPolicyAuditClient(tx.config)
 	tx.PolicyState = NewPolicyStateClient(tx.config)
+	tx.SocialIdentity = NewSocialIdentityClient(tx.config)
 }
 
 // txDriver wraps the given dialect.Tx with a nop dialect.Driver implementation.
@@ -178,7 +184,7 @@ func (tx *Tx) init() {
 // of them in order to commit or rollback the transaction.
 //
 // If a closed transaction is embedded in one of the generated entities, and the entity
-// applies a query, for example: CasbinRule.QueryXXX(), the query will be executed
+// applies a query, for example: AuthSession.QueryXXX(), the query will be executed
 // through the driver which created this transaction.
 //
 // Note that txDriver is not goroutine safe.

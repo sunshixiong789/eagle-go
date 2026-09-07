@@ -6,6 +6,9 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
+// AuthSession is the predicate function for authsession builders.
+type AuthSession func(*sql.Selector)
+
 // CasbinRule is the predicate function for casbinrule builders.
 type CasbinRule func(*sql.Selector)
 
@@ -29,3 +32,6 @@ type PolicyAudit func(*sql.Selector)
 
 // PolicyState is the predicate function for policystate builders.
 type PolicyState func(*sql.Selector)
+
+// SocialIdentity is the predicate function for socialidentity builders.
+type SocialIdentity func(*sql.Selector)

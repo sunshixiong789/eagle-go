@@ -268,20 +268,6 @@ func (r *permissionRepo) currentRevision(ctx context.Context) (int64, error) {
 	return state.Revision, nil
 }
 
-func (r *permissionRepo) KnownCodes(ctx context.Context) (map[string]struct{}, error) {
-	rows, err := r.db.Client().PermissionDefinition.Query().All(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("list permission definitions: %w", err)
-	}
-	out := make(map[string]struct{}, len(rows))
-	for _, row := range rows {
-		if row.Status == 1 {
-			out[row.Code] = struct{}{}
-		}
-	}
-	return out, nil
-}
-
 func lockPermissionTree(ctx context.Context, tx *ent.Tx, expected *int64) (*ent.PermissionTreeState, error) {
 	// UPDATE 即使只改 updated_at 也会取得该单例行的排他锁，使所有树写入串行。
 	state, err := tx.PermissionTreeState.UpdateOneID(1).SetUpdatedAt(time.Now()).Save(ctx)

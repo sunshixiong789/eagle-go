@@ -35,6 +35,12 @@ func BadRequest(domainErr error, reason errorReason) ErrorMappingRule {
 	}}
 }
 
+func Unauthorized(domainErr error, reason errorReason) ErrorMappingRule {
+	return ErrorMappingRule{domainErr: domainErr, toKratos: func(error) *kerrors.Error {
+		return kerrors.Unauthorized(reason.String(), domainErr.Error())
+	}}
+}
+
 func ErrorMapping(rules ...ErrorMappingRule) middleware.Middleware {
 	return func(handler middleware.Handler) middleware.Handler {
 		return func(ctx context.Context, req any) (any, error) {

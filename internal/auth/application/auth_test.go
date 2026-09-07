@@ -1,0 +1,94 @@
+package application
+
+import (
+	"context"
+	"errors"
+	"testing"
+	"time"
+
+	"github.com/eagle-go/eagle/internal/auth/domain"
+)
+
+type providerFake struct{ err error }
+
+func (p providerFake) Verify(context.Context, domain.Provider, string, string) (*domain.ExternalIdentity, error) {
+	if p.err != nil {
+		return nil, p.err
+	}
+	return &domain.ExternalIdentity{Provider: domain.ProviderGoogle, ProviderID: "user"}, nil
+}
+
+type sessionsFake struct {
+	domain.SessionRepository
+	create func(context.Context, *domain.ExternalIdentity, domain.Session) (*domain.SessionGrant, error)
+	rotate func(context.Context, string, string, time.Time) (*domain.SessionGrant, error)
+}
+
+func (s sessionsFake) Create(ctx context.Context, e *domain.ExternalIdentity, session domain.Session) (*domain.SessionGrant, error) {
+	return s.create(ctx, e, session)
+}
+func (s sessionsFake) Rotate(ctx context.Context, old, next string, expiry time.Time) (*domain.SessionGrant, error) {
+	return s.rotate(ctx, old, next, expiry)
+}
+
+func TestLoginDoesNotPersistUnverifiedIdentity(t *testing.T) {
+	want := errors.New("provider failed")
+	uc := NewUsecase(providerFake{want}, sessionsFake{}, time.Minute, time.Hour)
+	if tokens, err := uc.Login(context.Background(), domain.ProviderGoogle, "id", "nonce", ""); tokens != nil || !errors.Is(err, want) {
+		t.Fatalf("login = %+v, %v", tokens, err)
+	}
+}
+
+func TestRefreshReturnsOnlyCommittedGrant(t *testing.T) {
+	now := time.Now()
+	failure := errors.New("transaction failed")
+	for _, commitErr := range []error{nil, failure} {
+		t.Run(map[bool]string{true: "failure", false: "success"}[commitErr != nil], func(t *testing.T) {
+			var hash string
+			uc := NewUsecase(providerFake{}, sessionsFake{rotate: func(_ context.Context, old, next string, expiry time.Time) (*domain.SessionGrant, error) {
+				if old != tokenHash("old-token") || next == old || !expiry.Equal(now.Add(time.Hour)) {
+					t.Fatal("incorrect rotation arguments")
+				}
+				hash = next
+				if commitErr != nil {
+					return nil, commitErr
+				}
+				return &domain.SessionGrant{AccessToken: "access", Identity: &domain.Identity{Subject: "user"}}, nil
+			}}, time.Minute, time.Hour)
+			uc.now = func() time.Time { return now }
+			tokens, err := uc.Refresh(context.Background(), "old-token")
+			if commitErr != nil {
+				if tokens != nil || !errors.Is(err, commitErr) {
+					t.Fatalf("refresh = %+v, %v", tokens, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tokenHash(tokens.RefreshToken) != hash || tokens.AccessToken != "access" || tokens.ExpiresIn != time.Minute {
+				t.Fatalf("tokens = %+v", tokens)
+			}
+		})
+	}
+}
+
+func TestLoginPersistsOnlyRefreshHash(t *testing.T) {
+	now := time.Now()
+	var saved domain.Session
+	uc := NewUsecase(providerFake{}, sessionsFake{create: func(_ context.Context, e *domain.ExternalIdentity, s domain.Session) (*domain.SessionGrant, error) {
+		saved = s
+		if e.DisplayName != "Name" || e.ProviderID != "user" {
+			t.Fatalf("external = %+v", e)
+		}
+		return &domain.SessionGrant{Identity: &domain.Identity{Subject: "user"}, AccessToken: "access"}, nil
+	}}, time.Minute, time.Hour)
+	uc.now = func() time.Time { return now }
+	tokens, err := uc.Login(context.Background(), domain.ProviderGoogle, "id", "nonce", "Name")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(saved.ID) != 32 || saved.RefreshTokenHash != tokenHash(tokens.RefreshToken) || !saved.ExpiresAt.Equal(now.Add(time.Hour)) {
+		t.Fatalf("session = %+v", saved)
+	}
+}

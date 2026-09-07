@@ -136,11 +136,12 @@ func NewRoleInheritance(child, parent Role) (RoleInheritance, error) {
 // 日后换实现或加数据权限的 ABAC 模型，领域层不应受影响。
 type PolicyRepo interface {
 	FindBinding(ctx context.Context, role Role) (*RoleBinding, error)
+	// SaveBinding 在同一事务中校验当前权限目录、保存绑定并推进版本。
 	SaveBinding(ctx context.Context, b *RoleBinding, expectedVersion *int64) (int64, error)
-	ListBindings(ctx context.Context) ([]*RoleBinding, error)
-	PolicyVersion(ctx context.Context) (int64, error)
+	// 列表与版本必须来自同一快照，包括空列表。
+	ListBindings(ctx context.Context) ([]*RoleBinding, int64, error)
 	ResolveCodes(ctx context.Context, roles []Role) ([]PermissionCode, error)
 	SaveInheritance(ctx context.Context, ri RoleInheritance, expectedVersion *int64) (int64, error)
-	ListInheritances(ctx context.Context) ([]RoleInheritance, error)
+	ListInheritances(ctx context.Context) ([]RoleInheritance, int64, error)
 	DeleteInheritance(ctx context.Context, ri RoleInheritance, expectedVersion *int64) (int64, error)
 }

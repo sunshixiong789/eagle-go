@@ -42,6 +42,11 @@ services:
     build: *eagle-build
     environment:
       EAGLE_DATABASE_DSN: postgres://eagle:eagle@postgres:5432/eagle?sslmode=disable
+      EAGLE_AUTH_SIGNING_SECRET: "${EAGLE_AUTH_SIGNING_SECRET:-development-only-signing-secret-change-me}"
+      EAGLE_AUTH_GOOGLE_ENABLED: "${EAGLE_AUTH_GOOGLE_ENABLED:-false}"
+      EAGLE_AUTH_GOOGLE_CLIENT_ID: "${EAGLE_AUTH_GOOGLE_CLIENT_ID:-}"
+      EAGLE_AUTH_APPLE_ENABLED: "${EAGLE_AUTH_APPLE_ENABLED:-false}"
+      EAGLE_AUTH_APPLE_CLIENT_ID: "${EAGLE_AUTH_APPLE_CLIENT_ID:-}"
     ports:
       - "${EAGLE_HTTP_PORT:-8000}:8000"
       - "${EAGLE_METRICS_PORT:-9101}:9100"

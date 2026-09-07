@@ -3,99 +3,70 @@ package main
 import (
 	"log/slog"
 
-	"github.com/go-kratos/kratos/v3/middleware"
 	"github.com/go-kratos/kratos/v3/transport"
 	"github.com/go-kratos/kratos/v3/transport/http"
-	"github.com/google/wire"
 
 	accessv1 "github.com/eagle-go/eagle/api/eagle/access/v1"
+	authv1 "github.com/eagle-go/eagle/api/eagle/auth/v1"
 	dictionaryv1 "github.com/eagle-go/eagle/api/eagle/dictionary/v1"
 	accessapp "github.com/eagle-go/eagle/internal/access/application"
 	accessinfra "github.com/eagle-go/eagle/internal/access/infrastructure"
 	accessservice "github.com/eagle-go/eagle/internal/access/service"
+	authapp "github.com/eagle-go/eagle/internal/auth/application"
+	authinfra "github.com/eagle-go/eagle/internal/auth/infrastructure"
+	authservice "github.com/eagle-go/eagle/internal/auth/service"
 	dictionaryinfra "github.com/eagle-go/eagle/internal/dictionary/infrastructure"
 	dictionaryservice "github.com/eagle-go/eagle/internal/dictionary/service"
 	platformdb "github.com/eagle-go/eagle/internal/platform/database"
-	"github.com/eagle-go/eagle/pkg/authn"
-	"github.com/eagle-go/eagle/pkg/authz"
 	"github.com/eagle-go/eagle/pkg/platform/config"
 	platformruntime "github.com/eagle-go/eagle/pkg/platform/runtime"
 	"github.com/eagle-go/eagle/pkg/platform/server"
 )
 
-type policyHealth struct{}
-type policyReconciler struct{}
+// composeApp 是唯一组合根。所有可能失败的构造完成后才启动后台任务。
+func composeApp(bc *config.Bootstrap, logger *slog.Logger) (platformruntime.Components, error) {
+	db, closeDB, err := platformdb.Open(bc.GetData())
+	if err != nil {
+		return platformruntime.Components{}, err
+	}
+	ready := false
+	defer func() {
+		if !ready {
+			closeDB()
+		}
+	}()
+	store := accessinfra.NewPolicyStore(db)
+	enforcer, err := accessinfra.NewEnforcer(store)
+	if err != nil {
+		return platformruntime.Components{}, err
+	}
+	auth := bc.GetAuth()
+	ms, err := server.NewMiddlewares(logger, server.NewVerifier(auth), enforcer, auth, errorMappings()...)
+	if err != nil {
+		return platformruntime.Components{}, err
+	}
+	issuer, err := authinfra.NewTokenIssuer(auth.GetSigningSecret(), auth.GetIssuer(), auth.GetAudience(), auth.GetClientId(), auth.GetAccessTokenTtl().AsDuration())
+	if err != nil {
+		return platformruntime.Components{}, err
+	}
 
-var providerSet = wire.NewSet(
-	provideData,
-	provideAuth,
-	provideServer,
-	platformdb.Open,
-	accessinfra.NewPolicyStore,
-	accessinfra.NewEnforcer,
-	accessinfra.NewPermissionRepo,
-	accessinfra.NewPolicyRepo,
-	provideAuthorizer,
-	providePolicyHealth,
-	providePolicyReconciler,
-	accessapp.NewPermissionUsecase,
-	accessapp.NewRoleBindingUsecase,
-	accessservice.NewPermissionService,
-	accessservice.NewRoleBindingService,
-	dictionaryinfra.NewDictRepo,
-	dictionaryservice.NewDictService,
-	server.NewVerifier,
-	provideMiddlewares,
-	provideHTTPServer,
-	newComponents,
-)
-
-// 默认构建不编译 wire.go，保留对 providerSet 的引用以免被标成未使用。
-var _ = providerSet
-
-func provideData(bc *config.Bootstrap) *config.Data     { return bc.GetData() }
-func provideAuth(bc *config.Bootstrap) *config.Auth     { return bc.GetAuth() }
-func provideServer(bc *config.Bootstrap) *config.Server { return bc.GetServer() }
-
-func provideAuthorizer(enforcer *authz.Enforcer) authz.Authorizer {
-	return enforcer
-}
-
-func providePolicyHealth(store *accessinfra.PolicyStore, enforcer *authz.Enforcer) (policyHealth, func(), error) {
-	return policyHealth{}, accessinfra.RegisterPolicyHealth(store, enforcer), nil
-}
-
-func providePolicyReconciler(store *accessinfra.PolicyStore, enforcer *authz.Enforcer, logger *slog.Logger) (policyReconciler, func(), error) {
-	return policyReconciler{}, accessinfra.NewPolicyReconciler(store, enforcer, logger), nil
-}
-
-func provideMiddlewares(
-	logger *slog.Logger,
-	verifier *authn.Verifier,
-	authorizer authz.Authorizer,
-	auth *config.Auth,
-) ([]middleware.Middleware, error) {
-	return server.NewMiddlewares(logger, verifier, authorizer, auth, errorMappings()...)
-}
-
-func provideHTTPServer(
-	c *config.Server,
-	ms []middleware.Middleware,
-	permission *accessservice.PermissionService,
-	role *accessservice.RoleBindingService,
-	dict *dictionaryservice.DictService,
-) *http.Server {
-	return server.NewHTTPServer(c, ms, func(s *http.Server) {
-		accessv1.RegisterPermissionServiceHTTPServer(s, permission)
-		accessv1.RegisterRoleBindingServiceHTTPServer(s, role)
-		dictionaryv1.RegisterDictServiceHTTPServer(s, dict)
+	policy := accessinfra.NewPolicyRepo(enforcer, store)
+	permissions := accessservice.NewPermissionService(accessapp.NewPermissionUsecase(accessinfra.NewPermissionRepo(db), policy))
+	roles := accessservice.NewRoleBindingService(accessapp.NewRoleBindingUsecase(policy))
+	dictionaries := dictionaryservice.NewDictService(dictionaryinfra.NewDictRepo(db))
+	sessions := authinfra.NewSessionRepository(db, issuer)
+	login := authservice.NewAuthService(authapp.NewUsecase(authinfra.NewProviderVerifier(auth), sessions, auth.GetAccessTokenTtl().AsDuration(), auth.GetRefreshTokenTtl().AsDuration()))
+	hs := server.NewHTTPServer(bc.GetServer(), ms, func(s *http.Server) {
+		accessv1.RegisterPermissionServiceHTTPServer(s, permissions)
+		accessv1.RegisterRoleBindingServiceHTTPServer(s, roles)
+		dictionaryv1.RegisterDictServiceHTTPServer(s, dictionaries)
+		authv1.RegisterAuthServiceHTTPServer(s, login)
 	})
-}
-
-func newComponents(
-	hs *http.Server,
-	_ policyHealth,
-	_ policyReconciler,
-) platformruntime.Components {
-	return platformruntime.Components{Servers: []transport.Server{hs}}
+	unregisterHealth := accessinfra.RegisterPolicyHealth(store, enforcer)
+	stopReconciler := accessinfra.NewPolicyReconciler(store, enforcer, logger)
+	ready = true
+	return platformruntime.Components{
+		Servers: []transport.Server{hs},
+		Cleanup: func() { stopReconciler(); unregisterHealth(); closeDB() },
+	}, nil
 }

@@ -12,7 +12,6 @@ require (
 	github.com/go-kratos/kratos/contrib/middleware/validate/v3 v3.0.0-20260626125723-668db92c2c00
 	github.com/go-kratos/kratos/contrib/otel/v3 v3.0.0-20260626125723-668db92c2c00
 	github.com/go-kratos/kratos/v3 v3.0.0
-	github.com/google/wire v0.7.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/pressly/goose/v3 v3.27.3
 	github.com/prometheus/client_golang v1.24.1

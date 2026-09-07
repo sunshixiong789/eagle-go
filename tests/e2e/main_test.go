@@ -124,7 +124,7 @@ func newTestEnv(t *testing.T) *testEnv {
 
 	permSvc := accessservice.NewPermissionService(accessapp.NewPermissionUsecase(permRepo, policyRepo))
 	dictSvc := dictionaryservice.NewDictService(dictRepo)
-	bindingSvc := accessservice.NewRoleBindingService(accessapp.NewRoleBindingUsecase(policyRepo, permRepo))
+	bindingSvc := accessservice.NewRoleBindingService(accessapp.NewRoleBindingUsecase(policyRepo))
 
 	// addr 留空：不监听真实端口，只把 Server 当 http.Handler 用
 	srv := server.NewHTTPServer(&config.Server{

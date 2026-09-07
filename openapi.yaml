@@ -6,6 +6,61 @@ info:
     title: ""
     version: 0.0.1
 paths:
+    /v1/auth/logout:
+        post:
+            tags:
+                - AuthService
+            operationId: AuthService_Logout
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.auth.v1.LogoutRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.auth.v1.LogoutResponse'
+    /v1/auth/social/login:
+        post:
+            tags:
+                - AuthService
+            description: SocialLogin 接收客户端从 Google/Apple SDK 获得的 ID Token。
+            operationId: AuthService_SocialLogin
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.auth.v1.SocialLoginRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.auth.v1.TokenResponse'
+    /v1/auth/token/refresh:
+        post:
+            tags:
+                - AuthService
+            operationId: AuthService_RefreshToken
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.auth.v1.RefreshTokenRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.auth.v1.TokenResponse'
     /v1/system/dict/data:
         get:
             tags:
@@ -684,6 +739,66 @@ components:
             properties:
                 permission:
                     $ref: '#/components/schemas/eagle.access.v1.Permission'
+        eagle.auth.v1.LogoutRequest:
+            type: object
+            properties:
+                refreshToken:
+                    type: string
+        eagle.auth.v1.LogoutResponse:
+            type: object
+            properties: {}
+        eagle.auth.v1.RefreshTokenRequest:
+            type: object
+            properties:
+                refreshToken:
+                    type: string
+        eagle.auth.v1.SocialLoginRequest:
+            type: object
+            properties:
+                provider:
+                    type: integer
+                    format: enum
+                idToken:
+                    type: string
+                nonce:
+                    type: string
+                    description: 发起第三方登录时使用的原始 nonce。Apple 原生 SDK 会在 token 中返回其 SHA-256 值。
+                displayName:
+                    type: string
+                    description: Apple 仅在首次授权返回姓名，客户端应在首次交换时一并提交。
+        eagle.auth.v1.TokenResponse:
+            type: object
+            properties:
+                accessToken:
+                    type: string
+                refreshToken:
+                    type: string
+                tokenType:
+                    type: string
+                expiresIn:
+                    type: string
+                user:
+                    $ref: '#/components/schemas/eagle.auth.v1.User'
+        eagle.auth.v1.User:
+            type: object
+            properties:
+                subject:
+                    type: string
+                provider:
+                    type: integer
+                    format: enum
+                email:
+                    type: string
+                emailVerified:
+                    type: boolean
+                displayName:
+                    type: string
+                avatarUrl:
+                    type: string
+                roles:
+                    type: array
+                    items:
+                        type: string
         eagle.dictionary.v1.CreateDictDataRequest:
             type: object
             properties:
@@ -851,6 +966,7 @@ components:
                 dictType:
                     $ref: '#/components/schemas/eagle.dictionary.v1.DictType'
 tags:
+    - name: AuthService
     - name: DictService
       description: |-
         DictService 管理数据字典。字典类型（sys_common_status）下挂若干字典项，

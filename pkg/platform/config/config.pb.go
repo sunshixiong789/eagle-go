@@ -180,10 +180,7 @@ func (x *Data) GetDatabase() *Data_Database {
 	return nil
 }
 
-// 本进程作为 OAuth2 / OIDC 资源服务器的配置。
-//
-// 只验签、不建用户表：用户与角色由外部 IdP 管理。JWKS 与角色 claim
-// 显式配置，因此更换兼容的 IdP 不需要修改代码。
+// 登录、Eagle token 签发及兼容外部 OIDC token 验签的配置。
 type Auth struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// IdP 的 issuer，形如 https://idp.example.com。
@@ -214,8 +211,15 @@ type Auth struct {
 	// client 角色所在的 claim 路径，点号分隔，必填。既可以直接指向
 	// 字符串数组，也可以指向 {"<client-id>": {"roles": [...]}} 结构。
 	ClientRolesClaim string `protobuf:"bytes,10,opt,name=client_roles_claim,json=clientRolesClaim,proto3" json:"client_roles_claim,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// 非空时由 Eagle 使用 HS256 签发和验证自己的 access token。
+	// 至少 32 字节；生产环境必须通过 Secret 注入随机值。
+	SigningSecret   string               `protobuf:"bytes,11,opt,name=signing_secret,json=signingSecret,proto3" json:"signing_secret,omitempty"`
+	AccessTokenTtl  *durationpb.Duration `protobuf:"bytes,12,opt,name=access_token_ttl,json=accessTokenTtl,proto3" json:"access_token_ttl,omitempty"`
+	RefreshTokenTtl *durationpb.Duration `protobuf:"bytes,13,opt,name=refresh_token_ttl,json=refreshTokenTtl,proto3" json:"refresh_token_ttl,omitempty"`
+	Google          *Auth_SocialProvider `protobuf:"bytes,14,opt,name=google,proto3" json:"google,omitempty"`
+	Apple           *Auth_SocialProvider `protobuf:"bytes,15,opt,name=apple,proto3" json:"apple,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *Auth) Reset() {
@@ -302,6 +306,41 @@ func (x *Auth) GetClientRolesClaim() string {
 		return x.ClientRolesClaim
 	}
 	return ""
+}
+
+func (x *Auth) GetSigningSecret() string {
+	if x != nil {
+		return x.SigningSecret
+	}
+	return ""
+}
+
+func (x *Auth) GetAccessTokenTtl() *durationpb.Duration {
+	if x != nil {
+		return x.AccessTokenTtl
+	}
+	return nil
+}
+
+func (x *Auth) GetRefreshTokenTtl() *durationpb.Duration {
+	if x != nil {
+		return x.RefreshTokenTtl
+	}
+	return nil
+}
+
+func (x *Auth) GetGoogle() *Auth_SocialProvider {
+	if x != nil {
+		return x.Google
+	}
+	return nil
+}
+
+func (x *Auth) GetApple() *Auth_SocialProvider {
+	if x != nil {
+		return x.Apple
+	}
+	return nil
 }
 
 type Observability struct {
@@ -531,6 +570,59 @@ func (x *Data_Database) GetMaxConnIdleTime() *durationpb.Duration {
 	return nil
 }
 
+type Auth_SocialProvider struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Enabled bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	// Google OAuth Client ID 或 Apple Services ID / Bundle ID。
+	ClientId      string `protobuf:"bytes,2,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Auth_SocialProvider) Reset() {
+	*x = Auth_SocialProvider{}
+	mi := &file_config_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Auth_SocialProvider) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Auth_SocialProvider) ProtoMessage() {}
+
+func (x *Auth_SocialProvider) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Auth_SocialProvider.ProtoReflect.Descriptor instead.
+func (*Auth_SocialProvider) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{3, 0}
+}
+
+func (x *Auth_SocialProvider) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *Auth_SocialProvider) GetClientId() string {
+	if x != nil {
+		return x.ClientId
+	}
+	return ""
+}
+
 var File_config_proto protoreflect.FileDescriptor
 
 const file_config_proto_rawDesc = "" +
@@ -555,7 +647,7 @@ const file_config_proto_rawDesc = "" +
 	"\tmax_conns\x18\x02 \x01(\x05R\bmaxConns\x12$\n" +
 	"\x0emax_idle_conns\x18\x03 \x01(\x05R\fmaxIdleConns\x12E\n" +
 	"\x11max_conn_lifetime\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\x0fmaxConnLifetime\x12F\n" +
-	"\x12max_conn_idle_time\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\x0fmaxConnIdleTimeJ\x04\b\x02\x10\x03\"\x9f\x02\n" +
+	"\x12max_conn_idle_time\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\x0fmaxConnIdleTimeJ\x04\b\x02\x10\x03\"\xa1\x05\n" +
 	"\x04Auth\x12\x16\n" +
 	"\x06issuer\x18\x01 \x01(\tR\x06issuer\x12\x1b\n" +
 	"\tclient_id\x18\x02 \x01(\tR\bclientId\x12\x1a\n" +
@@ -565,7 +657,15 @@ const file_config_proto_rawDesc = "" +
 	"\tjwks_path\x18\b \x01(\tR\bjwksPath\x12*\n" +
 	"\x11realm_roles_claim\x18\t \x01(\tR\x0frealmRolesClaim\x12,\n" +
 	"\x12client_roles_claim\x18\n" +
-	" \x01(\tR\x10clientRolesClaimJ\x04\b\x04\x10\x05J\x04\b\a\x10\b\"\xc7\x01\n" +
+	" \x01(\tR\x10clientRolesClaim\x12%\n" +
+	"\x0esigning_secret\x18\v \x01(\tR\rsigningSecret\x12C\n" +
+	"\x10access_token_ttl\x18\f \x01(\v2\x19.google.protobuf.DurationR\x0eaccessTokenTtl\x12E\n" +
+	"\x11refresh_token_ttl\x18\r \x01(\v2\x19.google.protobuf.DurationR\x0frefreshTokenTtl\x12B\n" +
+	"\x06google\x18\x0e \x01(\v2*.eagle.platform.config.Auth.SocialProviderR\x06google\x12@\n" +
+	"\x05apple\x18\x0f \x01(\v2*.eagle.platform.config.Auth.SocialProviderR\x05apple\x1aG\n" +
+	"\x0eSocialProvider\x12\x18\n" +
+	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x1b\n" +
+	"\tclient_id\x18\x02 \x01(\tR\bclientIdJ\x04\b\x04\x10\x05J\x04\b\a\x10\b\"\xc7\x01\n" +
 	"\rObservability\x12#\n" +
 	"\rotlp_endpoint\x18\x01 \x01(\tR\fotlpEndpoint\x12,\n" +
 	"\x12trace_sample_ratio\x18\x02 \x01(\x01R\x10traceSampleRatio\x12\x1b\n" +
@@ -585,7 +685,7 @@ func file_config_proto_rawDescGZIP() []byte {
 	return file_config_proto_rawDescData
 }
 
-var file_config_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_config_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_config_proto_goTypes = []any{
 	(*Bootstrap)(nil),           // 0: eagle.platform.config.Bootstrap
 	(*Server)(nil),              // 1: eagle.platform.config.Server
@@ -594,23 +694,28 @@ var file_config_proto_goTypes = []any{
 	(*Observability)(nil),       // 4: eagle.platform.config.Observability
 	(*Server_HTTP)(nil),         // 5: eagle.platform.config.Server.HTTP
 	(*Data_Database)(nil),       // 6: eagle.platform.config.Data.Database
-	(*durationpb.Duration)(nil), // 7: google.protobuf.Duration
+	(*Auth_SocialProvider)(nil), // 7: eagle.platform.config.Auth.SocialProvider
+	(*durationpb.Duration)(nil), // 8: google.protobuf.Duration
 }
 var file_config_proto_depIdxs = []int32{
-	1, // 0: eagle.platform.config.Bootstrap.server:type_name -> eagle.platform.config.Server
-	2, // 1: eagle.platform.config.Bootstrap.data:type_name -> eagle.platform.config.Data
-	3, // 2: eagle.platform.config.Bootstrap.auth:type_name -> eagle.platform.config.Auth
-	4, // 3: eagle.platform.config.Bootstrap.observability:type_name -> eagle.platform.config.Observability
-	5, // 4: eagle.platform.config.Server.http:type_name -> eagle.platform.config.Server.HTTP
-	6, // 5: eagle.platform.config.Data.database:type_name -> eagle.platform.config.Data.Database
-	7, // 6: eagle.platform.config.Server.HTTP.timeout:type_name -> google.protobuf.Duration
-	7, // 7: eagle.platform.config.Data.Database.max_conn_lifetime:type_name -> google.protobuf.Duration
-	7, // 8: eagle.platform.config.Data.Database.max_conn_idle_time:type_name -> google.protobuf.Duration
-	9, // [9:9] is the sub-list for method output_type
-	9, // [9:9] is the sub-list for method input_type
-	9, // [9:9] is the sub-list for extension type_name
-	9, // [9:9] is the sub-list for extension extendee
-	0, // [0:9] is the sub-list for field type_name
+	1,  // 0: eagle.platform.config.Bootstrap.server:type_name -> eagle.platform.config.Server
+	2,  // 1: eagle.platform.config.Bootstrap.data:type_name -> eagle.platform.config.Data
+	3,  // 2: eagle.platform.config.Bootstrap.auth:type_name -> eagle.platform.config.Auth
+	4,  // 3: eagle.platform.config.Bootstrap.observability:type_name -> eagle.platform.config.Observability
+	5,  // 4: eagle.platform.config.Server.http:type_name -> eagle.platform.config.Server.HTTP
+	6,  // 5: eagle.platform.config.Data.database:type_name -> eagle.platform.config.Data.Database
+	8,  // 6: eagle.platform.config.Auth.access_token_ttl:type_name -> google.protobuf.Duration
+	8,  // 7: eagle.platform.config.Auth.refresh_token_ttl:type_name -> google.protobuf.Duration
+	7,  // 8: eagle.platform.config.Auth.google:type_name -> eagle.platform.config.Auth.SocialProvider
+	7,  // 9: eagle.platform.config.Auth.apple:type_name -> eagle.platform.config.Auth.SocialProvider
+	8,  // 10: eagle.platform.config.Server.HTTP.timeout:type_name -> google.protobuf.Duration
+	8,  // 11: eagle.platform.config.Data.Database.max_conn_lifetime:type_name -> google.protobuf.Duration
+	8,  // 12: eagle.platform.config.Data.Database.max_conn_idle_time:type_name -> google.protobuf.Duration
+	13, // [13:13] is the sub-list for method output_type
+	13, // [13:13] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_config_proto_init() }
@@ -624,7 +729,7 @@ func file_config_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_config_proto_rawDesc), len(file_config_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

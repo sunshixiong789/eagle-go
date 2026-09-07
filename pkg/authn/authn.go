@@ -1,4 +1,4 @@
-// Package authn 是 OAuth2 资源服务器侧的认证中间件。
+// Package authn verifies bearer access tokens and installs the current principal.
 //
 // 它验证 access token 的签名（经认证中心的 JWKS）、时间与 issuer 声明，
 // 再把 identity.Principal 放进 context 交给 authz 判定授权。
@@ -11,8 +11,11 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	jose "github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/jwt"
 	kratoserrors "github.com/go-kratos/kratos/v3/errors"
 	"github.com/go-kratos/kratos/v3/middleware"
 	"github.com/go-kratos/kratos/v3/transport"
@@ -52,13 +55,18 @@ type Config struct {
 	Audience string
 	// Claims 指定角色在 token 载荷里的位置。
 	Claims ClaimPaths
+	// SigningSecret 启用 Eagle 自签发的 HS256 token；为空时保留外部 OIDC/JWKS 模式。
+	SigningSecret string
 }
 
 // Verifier 验证 access token。
 type Verifier struct {
-	verifier *oidc.IDTokenVerifier
-	clientID string
-	claims   ClaimPaths
+	verifier      *oidc.IDTokenVerifier
+	issuer        string
+	audience      string
+	signingSecret []byte
+	clientID      string
+	claims        ClaimPaths
 }
 
 // NewVerifier 构造验证器。
@@ -67,6 +75,12 @@ type Verifier struct {
 // 使得认证中心未就绪时资源服务器起不来。RemoteKeySet 是惰性的，
 // 首个请求到达时才拉 JWKS，两个服务的启动顺序因此互不依赖。
 func NewVerifier(ctx context.Context, cfg Config) *Verifier {
+	if cfg.SigningSecret != "" {
+		return &Verifier{
+			issuer: cfg.Issuer, audience: cfg.Audience, signingSecret: []byte(cfg.SigningSecret),
+			clientID: cfg.ClientID, claims: cfg.Claims,
+		}
+	}
 	jwksURL := cfg.JWKSURL
 	if jwksURL == "" {
 		jwksURL = strings.TrimSuffix(cfg.Issuer, "/") + cfg.JWKSPath
@@ -84,6 +98,9 @@ func NewVerifier(ctx context.Context, cfg Config) *Verifier {
 
 // Verify 校验 token 并返回其载荷。
 func (v *Verifier) Verify(ctx context.Context, rawToken string) (*Claims, error) {
+	if len(v.signingSecret) > 0 {
+		return v.verifyLocal(rawToken)
+	}
 	token, err := v.verifier.Verify(ctx, rawToken)
 	if err != nil {
 		var expired *oidc.TokenExpiredError
@@ -98,6 +115,29 @@ func (v *Verifier) Verify(ctx context.Context, rawToken string) (*Claims, error)
 		return nil, fmt.Errorf("%w: 载荷解析失败: %w", ErrInvalidToken, err)
 	}
 
+	return &claims, nil
+}
+
+func (v *Verifier) verifyLocal(rawToken string) (*Claims, error) {
+	token, err := jwt.ParseSigned(rawToken, []jose.SignatureAlgorithm{jose.HS256})
+	if err != nil {
+		return nil, fmt.Errorf("%w: token 格式无效", ErrInvalidToken)
+	}
+	var standard jwt.Claims
+	var claims Claims
+	if err := token.Claims(v.signingSecret, &standard, &claims); err != nil {
+		return nil, fmt.Errorf("%w: 签名校验失败", ErrInvalidToken)
+	}
+	if err := standard.Validate(jwt.Expected{
+		Issuer:      v.issuer,
+		AnyAudience: jwt.Audience{v.audience},
+		Time:        time.Now(),
+	}); err != nil {
+		if errors.Is(err, jwt.ErrExpired) {
+			return nil, ErrTokenExpired
+		}
+		return nil, fmt.Errorf("%w: 标准声明校验失败", ErrInvalidToken)
+	}
 	return &claims, nil
 }
 

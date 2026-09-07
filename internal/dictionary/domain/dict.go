@@ -64,6 +64,14 @@ type ListDictDataQuery struct {
 	PageSize int32
 }
 
+// UpdateDictType 只暴露字典类型允许修改的字段。
+type UpdateDictType struct {
+	ID     int64
+	Name   string
+	Status Status
+	Remark string
+}
+
 // UpdateDictData 只暴露字典项允许修改的字段。
 // DictType 创建后不可变，因此不出现在更新参数中。
 type UpdateDictData struct {
@@ -82,7 +90,7 @@ type DictRepo interface {
 	CreateType(ctx context.Context, t *DictType) (*DictType, error)
 	GetTypeByID(ctx context.Context, id int64) (*DictType, error)
 	ListTypes(ctx context.Context, q ListDictTypesQuery) ([]*DictType, int64, error)
-	UpdateType(ctx context.Context, t *DictType) (*DictType, error)
+	UpdateType(ctx context.Context, t UpdateDictType) (*DictType, error)
 	DeleteType(ctx context.Context, id int64) error
 
 	CreateData(ctx context.Context, d *DictData) (*DictData, error)

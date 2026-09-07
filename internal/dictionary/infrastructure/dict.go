@@ -118,7 +118,7 @@ func (r *dictRepo) ListTypes(ctx context.Context, q domain.ListDictTypesQuery) (
 	return out, int64(total), nil
 }
 
-func (r *dictRepo) UpdateType(ctx context.Context, t *domain.DictType) (*domain.DictType, error) {
+func (r *dictRepo) UpdateType(ctx context.Context, t domain.UpdateDictType) (*domain.DictType, error) {
 	updated, err := r.db.Client().DictType.UpdateOneID(t.ID).
 		SetName(t.Name).
 		SetStatus(int32(t.Status)).
