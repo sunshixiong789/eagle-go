@@ -74,8 +74,9 @@ Google/Apple 只负责证明第三方身份；Eagle 保存最小身份资料与�
 - `auth` 模块通过官方 JWKS 验证 Google/Apple ID Token 的签名、issuer、audience、有效期与 nonce。
 - Eagle access token 短期有效；refresh token 使用密码学随机值、数据库只保存 SHA-256 哈希，并在每次刷新时轮换。
 - 权限要求声明在 proto 的 `access` / `perm` 上，handler 不写鉴权分支。可选级别只有 `PUBLIC` / `AUTHENTICATED` / `PERMISSION_REQUIRED`。
-- 角色分两级命名空间：realm 角色 `admin` → `realm:admin`，本 client 的角色 `admin` → `client:eagle-api:admin`。`auth.super_admin_role` 的短路**只认 client 角色**，否则任何 realm 级的 `admin` 都会顺带拿到本服务全部权限。
-- 新社会化身份默认获得 `realm:user`。管理员身份需在 `social_identity.role` 中显式提升，不从客户端请求或第三方资料推断。
+- Eagle token 只携带普通稳定角色键，如 `user`、`admin`；角色能做什么一律由 Casbin 策略决定，不存在管理员代码短路。
+- 新社会化身份默认获得 `user`。管理员身份需在 `social_identity.role` 中显式提升，不从客户端请求或第三方资料推断。
+- 手机登录是未来可增加的 `auth` 入站适配器，必须复用现有本地身份、会话和 Eagle token，不预埋第二套认证体系。
 
 ### 为什么单体还保留策略版本对账
 
@@ -85,9 +86,9 @@ Google/Apple 只负责证明第三方身份；Eagle 保存最小身份资料与�
 
 本地：
 
-    Browser / curl → eagle:8000 → PostgreSQL
-           ↓
-      外部 OIDC IdP
+    Browser / App → Google / Apple ID Token → eagle:8000 → PostgreSQL
+                                                ↓
+                                  Eagle JWT → authn → Casbin
 
 `make up` 会先跑一次性迁移任务，成功后再启动应用。远端部署不启动数据库，只连接环境侧独立
 管理的 PostgreSQL；生产入口需要的 TLS 终止、请求限制和真实客户端 IP 由环境侧的 LB 或网关提供，
@@ -99,7 +100,7 @@ Google/Apple 只负责证明第三方身份；Eagle 保存最小身份资料与�
 
 `pkg/` 只放无业务语义的技术原语：JWT 验签、授权中间件、健康检查、配置、进程生命周期和传输运行时。业务模型不能进 `pkg/`，`pkg/` 也不得 import `internal/`——一旦依赖方向反过来，技术设施开始依赖业务，两边就再也拆不开。
 
-这些约束由 `tests/architecture/dependencies_test.go` 持续检查，包括分层依赖、模块边界、`pkg/` 方向、Ent Client 不出 infrastructure、禁止重新引入 Wire，以及一份明确拒绝的第三方库清单。
+这些约束由 `tests/architecture/dependencies_test.go` 持续检查，包括分层依赖、模块边界、`pkg/` 方向、Ent Client 不出 infrastructure、禁止引入 DI 容器，以及一份明确拒绝的第三方库清单。
 
 ## 一致性与发布约束
 

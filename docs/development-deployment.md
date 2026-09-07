@@ -73,7 +73,7 @@ make down
 | 应用 metrics / health | `http://127.0.0.1:9101` |
 
 容器内通过 Compose DNS `postgres:5432` 访问数据库；宿主机进程使用 `127.0.0.1:5432`。
-OIDC IdP 是仓库外部依赖，容器和宿主机都通过 `EAGLE_AUTH_*` 配置访问。
+Google/Apple 是登录时的外部身份提供方；Eagle 验证其 ID Token 后维护本地会话并签发自己的 JWT。
 
 ## 宿主机断点调试
 
@@ -168,10 +168,9 @@ docker compose -f deploy/docker-compose.yml down -v
 
 ### 接口返回 401
 
-`EAGLE_AUTH_ISSUER` 必须与 token 里的 `iss` 逐字一致。若公开 issuer 与服务读取 JWKS 的地址
-不同，用 `EAGLE_AUTH_JWKS_URL` 配置后者；不要为迁就网络地址修改 issuer。
+`EAGLE_AUTH_ISSUER` 与 `EAGLE_AUTH_AUDIENCE` 必须和 Eagle 自己签发的 token 完全一致，所有副本也必须共享同一个签名 Secret。
 
 ### 接口返回 403
 
-先确认角色加在 `eagle-api` client 上而不是 realm 上。其次，权限策略每 5 秒对账一次，
-刚改完可能需要等一个周期。
+确认 Eagle token 中包含预期的普通角色键，并检查该角色是否通过 Casbin 绑定了接口声明的权限码。
+权限策略每 5 秒对账一次，刚改完可能需要等一个周期。

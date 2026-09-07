@@ -10,7 +10,7 @@ ECS 上只运行一次性迁移任务和 `eagle` 应用。若后续迁移到 ACK
 |---|---|---|
 | 计算 | 开发 ECS 主机组 | 测试 ECS 主机组 |
 | 数据库 | 独立 RDS 数据库与账号 | 独立 RDS 数据库与账号 |
-| IdP | 独立 client / audience | 独立 client / audience |
+| 认证 | 独立 JWT audience / 第三方登录客户端 | 独立 JWT audience / 第三方登录客户端 |
 | 云效变量组 | `eagle-development` | `eagle-testing` |
 | 发布 | `develop` 分支自动 | 人工卡点后提升同一镜像 |
 
@@ -50,12 +50,10 @@ ECS 上只运行一次性迁移任务和 `eagle` 应用。若后续迁移到 ACK
 | `EAGLE_IMAGE` | 上游输出 | ACR 完整镜像地址，使用提交 SHA/digest |
 | `EAGLE_DATABASE_DSN` | 私密 | 当前环境独立 RDS DSN |
 | `EAGLE_AUTH_ISSUER` | 普通 | 必须与 token 的 `iss` 完全一致 |
-| `EAGLE_AUTH_CLIENT_ID` | 普通 | 当前环境 IdP client |
-| `EAGLE_AUTH_AUDIENCE` | 普通 | 当前环境 audience |
+| `EAGLE_AUTH_AUDIENCE` | 普通 | 当前环境 Eagle JWT audience |
 | `EAGLE_AUTH_SIGNING_SECRET` | 私密 | 至少 32 字节的随机 Eagle token 签名密钥 |
 | `EAGLE_AUTH_GOOGLE_ENABLED` / `EAGLE_AUTH_GOOGLE_CLIENT_ID` | 普通 | 启用 Google 登录及 Client ID |
 | `EAGLE_AUTH_APPLE_ENABLED` / `EAGLE_AUTH_APPLE_CLIENT_ID` | 普通 | 启用 Apple 登录及 Services ID / Bundle ID |
-| `EAGLE_AUTH_JWKS_URL` | 普通 | 可选，推荐填写可从 ECS 访问的地址 |
 | `EAGLE_OBSERVABILITY_OTLP_ENDPOINT` | 普通 | 可选，环境自己的 collector |
 | `EAGLE_BIND_ADDRESS` | 普通 | 默认 `127.0.0.1`，由同机网关反代；直连时按网络设计调整 |
 | `EAGLE_HTTP_PORT` / `EAGLE_METRICS_PORT` | 普通 | 默认 `8000` / `9101` |
@@ -95,7 +93,7 @@ deploy/scripts/deploy.sh
 
 - RDS 数据库和最小权限账号已按环境分别创建，ECS 到 RDS 的私网连通性正常。
 - ACR 凭据通过云效服务连接或主机凭据助手管理，部署日志不打印口令。
-- 开发与测试使用不同主机组、变量组、数据库、IdP client 和观测标签。
+- 开发与测试使用不同主机组、变量组、数据库、JWT audience、第三方登录客户端和观测标签。
 - 入口网关完成 TLS、请求限制和真实客户端 IP 传递，只暴露业务端口；metrics 端口仅监控网络可达。
 - Flow 测试部署阶段配置人工卡点，且复用开发环境已验证的镜像地址。
 - 为 RDS 启用自动备份，并对 `/readyz`、错误率、延迟和数据库连接池设置告警。

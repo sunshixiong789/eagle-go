@@ -23,8 +23,6 @@ import (
 	"github.com/eagle-go/eagle/pkg/healthx"
 	"github.com/eagle-go/eagle/pkg/otelx"
 	"github.com/eagle-go/eagle/pkg/platform/config"
-
-	_ "go.uber.org/automaxprocs"
 )
 
 type Components struct {

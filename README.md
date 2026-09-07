@@ -4,7 +4,7 @@
 集中式 RBAC 和结构化日志 / 指标 / trace 埋点。适合作为新项目的起点，而不是一套需要先拆分才能用的微服务底座。
 
 技术栈：Go 1.27、Kratos v3、Protobuf、buf、Ent、PostgreSQL 17、Casbin、
-OIDC 资源服务器、OpenTelemetry、Docker Compose。
+go-oidc / go-jose、OpenTelemetry、Docker Compose。
 
 ## 项目现状
 
@@ -14,6 +14,7 @@ OIDC 资源服务器、OpenTelemetry、Docker Compose。
 | 模块 | 职责 | 分层 |
 |---|---|---|
 | `access` | 权限码目录、导航节点、角色权限绑定（Casbin） | `service → application → domain ← infrastructure` |
+| `auth` | Google/Apple 身份验证、本地会话与 Eagle token | `service → application → domain ← infrastructure` |
 | `dictionary` | 字典 CRUD，作为简单业务的样板 | `service → domain ← infrastructure` |
 
 ```mermaid
@@ -26,20 +27,23 @@ flowchart TB
         subgraph modules [业务模块]
             direction LR
             access["access<br/>权限 · 角色绑定"]
+            auth["auth<br/>登录 · 会话 · Eagle token"]
             dictionary["dictionary<br/>字典"]
         end
     end
 
-    idp["外部 OIDC IdP"]
+    idp["Google / Apple"]
     db[(PostgreSQL)]
 
     client -->|HTTP| middleware
     middleware --> modules
-    idp -.->|JWKS 验签| middleware
+    client -->|ID Token 登录| auth
+    idp -.->|公开密钥验签| auth
     modules --> db
 ```
 
-进程只做本地 JWT 验签，不保存用户；用户、角色和登录方式都归 IdP。模块边界、数据所有权和
+Google/Apple 只证明第三方身份；Eagle 保存最小身份资料与可撤销会话，签发自己的 JWT，并通过
+Casbin 判定角色权限。模块边界、数据所有权和
 分层规则见[架构说明](docs/architecture.md)；启动与调试见[开发环境部署](docs/development-deployment.md)。
 
 ## 目录结构
@@ -303,15 +307,15 @@ rpc CreatePermission(CreatePermissionRequest) returns (CreatePermissionResponse)
 - `permission_definition` 是后端契约目录；proto 使用的新权限码必须先进入这里。
 - 导航节点用于菜单和按钮展示，只能引用已有权限码，不能创造权限。
 
-角色来自 IdP，本库只保存“角色可以做什么”。角色键必须保留来源：`realm:<role>` 或
-`client:<client-id>:<role>`。全量覆盖角色权限的示例：
+角色由 Eagle token 携带，本库保存“角色可以做什么”。角色键是以字母开头、最多 64 字节的稳定键，
+如 `user`、`admin`、`support-agent`。全量覆盖角色权限的示例：
 
 ```bash
 curl -X PUT \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"permission_codes":["system:dict:list"]}' \
-  http://127.0.0.1:8000/v1/system/role-bindings/realm:user
+  http://127.0.0.1:8000/v1/system/role-bindings/user
 ```
 
 ### 获取当前登录主体
@@ -325,8 +329,8 @@ principal, ok := identity.FromContext(ctx)
 subject := identity.Subject(ctx)
 ```
 
-`Subject` 是 token 的 `sub`，是字符串而非本地自增用户 ID。不要在本项目新建用户表，也不要根据
-`principal.Roles` 在业务代码里重复鉴权。
+`Subject` 是 Eagle token 的 `sub`，是稳定字符串而非本地自增 ID。业务模块不要自行解析 JWT、
+创建第二套 Principal，或根据 `principal.Roles` 重复鉴权。
 
 ### 新增业务模块或 CRUD
 
@@ -350,15 +354,14 @@ subject := identity.Subject(ctx)
 
 Google/Apple 负责证明“第三方账号是谁”，Eagle 将其映射为本地身份、维护可撤销会话并签发
 自己的 access/refresh token；Casbin 继续负责“这个身份的角色能不能调用接口”。新身份默认是
-`realm:user`，不会根据客户端提交内容获得管理员权限。
+`user`，不会根据客户端提交内容获得管理员权限。未来接入手机号登录时，实现 `auth` 的身份验证端口并复用同一会话和 token 流程。
 
 权限策略存在数据库里，每个实例本地持有一份 Casbin 模型，靠版本号每 5 秒对账一次。
 多副本部署时，改完角色绑定最坏要等一个对账周期才会全部生效。进程启动时会校验 proto 声明的
 权限码与数据库 catalog 一致，不一致直接 fail closed——这要求**先跑迁移再发服务**。
 
 授权失败遵循关闭原则：未认证返回 401，无权限返回 403，判定异常不会自动放行。
-`realm` 角色和 `client` 角色具有独立命名空间，同名也不会串权；`super_admin_role` 短路只认
-本服务 client 上的角色。
+包括 `admin` 在内的所有角色都必须经过 Casbin；管理员的全量权限来自种子策略 `system:*`，没有代码短路。
 
 不要使用 Casbin `keyMatch2` 匹配权限码：冒号分隔的权限会被误当成 URL 参数。项目使用受限的
 末段通配，并由领域层与 Casbin 一致性测试锁定行为。
@@ -372,13 +375,11 @@ Google/Apple 负责证明“第三方账号是谁”，Eagle 将其映射为本�
 |---|---|
 | `EAGLE_DATABASE_DSN` | 数据库连接，生产必须 `sslmode=require` 或更强 |
 | `EAGLE_AUTH_ISSUER` | 必须与 token 的 `iss` 完全一致 |
-| `EAGLE_AUTH_CLIENT_ID` / `EAGLE_AUTH_AUDIENCE` | 本资源服务的 client 与必填 audience |
+| `EAGLE_AUTH_AUDIENCE` | Eagle access token 的必填 audience |
 | `EAGLE_AUTH_SIGNING_SECRET` | Eagle token 的 HS256 密钥，生产必须是至少 32 字节的随机 Secret |
+| `EAGLE_AUTH_ACCESS_TOKEN_TTL` / `EAGLE_AUTH_REFRESH_TOKEN_TTL` | access/refresh token 有效期 |
 | `EAGLE_AUTH_GOOGLE_ENABLED` / `EAGLE_AUTH_GOOGLE_CLIENT_ID` | 启用 Google 登录及其 OAuth Client ID |
 | `EAGLE_AUTH_APPLE_ENABLED` / `EAGLE_AUTH_APPLE_CLIENT_ID` | 启用 Apple 登录及其 Services ID / Bundle ID |
-| `EAGLE_AUTH_JWKS_URL` | issuer 外网地址与服务访问地址不同时指定 JWKS 内网地址 |
-| `EAGLE_AUTH_JWKS_PATH` | JWKS 相对 issuer 的路径；未设置 `JWKS_URL` 时必填 |
-| `EAGLE_AUTH_REALM_ROLES_CLAIM` / `EAGLE_AUTH_CLIENT_ROLES_CLAIM` | 角色 claim 路径；realm 可省略，client 必填 |
 | `EAGLE_OBSERVABILITY_OTLP_ENDPOINT` | trace 上报地址，留空则不上报 |
 
 所有 `google.protobuf.Duration` 只接受秒格式，例如 `3600s`、`0.5s`。`1h`、`30m`、`500ms` 会导致配置解析失败。
@@ -429,14 +430,13 @@ closed，所以**必须先跑迁移再发服务**。
 
 ### 接口始终返回 401
 
-检查 `EAGLE_AUTH_ISSUER` 是否与 token 的 `iss` 完全一致，包括协议、端口和尾部斜杠；再检查
-audience 和 JWKS 地址。若 IdP 的公开 issuer 与服务访问 JWKS 的内网地址不同，使用
-`EAGLE_AUTH_JWKS_URL` 单独配置后者，不要修改 issuer 绕过校验。
+检查 `EAGLE_AUTH_ISSUER` 和 `EAGLE_AUTH_AUDIENCE` 是否与 Eagle token 完全一致，再确认签发端与
+验证端使用同一个 `EAGLE_AUTH_SIGNING_SECRET`。
 
 ### 接口始终返回 403
 
-确认 token 中确实包含预期的 realm/client role，并检查该带命名空间的角色键是否绑定了 RPC
-声明的权限码；刚改完绑定还需要等一个 5 秒对账周期。不要在 handler 临时绕过鉴权。
+确认 Eagle token 中包含预期的普通角色键，并检查该角色是否绑定了 RPC 声明的权限码；刚改完
+绑定还需要等一个 5 秒对账周期。不要在 handler 临时绕过鉴权。
 
 ### 修改 proto 或 Ent schema 后行为不一致
 

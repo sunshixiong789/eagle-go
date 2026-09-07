@@ -66,7 +66,7 @@ message Auth {
   string issuer = 1;
   // Eagle API 的 audience。
   string audience = 3;
-  // 已删除的外部 OIDC resource server 与角色绕过配置，不再复用编号。
+  // 已删除的历史认证兼容与角色绕过配置，不再复用编号。
   reserved 2, 4, 5, 6, 7, 8, 9, 10;
 
   // Eagle 使用 HS256 签发和验证 access token。至少 32 字节；

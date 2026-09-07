@@ -2,7 +2,8 @@
 
 Eagle 不接收第三方密码。Web 或原生客户端先使用 Google Identity Services、Sign in with Apple JS
 或系统 SDK 完成授权，再把 ID Token、登录前生成的原始 nonce 发送给 Eagle。后端会验证第三方
-签名、issuer、audience、有效期和 nonce，然后签发 Eagle 自己的 token。
+签名、issuer、audience、有效期和 nonce，建立本地可撤销会话，再签发 Eagle 自己的 token。
+未来接入手机号登录时，应实现 `auth` 模块的身份验证端口并复用同一会话与签发流程，不另建 token 体系。
 
 ## 配置
 
@@ -25,14 +26,16 @@ POST /v1/auth/social/login
 Content-Type: application/json
 
 {
-  "provider": "SOCIAL_PROVIDER_GOOGLE",
-  "idToken": "<provider-id-token>",
+  "provider": 1,
+  "id_token": "<provider-id-token>",
   "nonce": "<original-nonce>",
-  "displayName": "<optional-first-login-name>"
+  "display_name": "<optional-first-login-name>"
 }
 ```
 
-Apple 只在首次授权时返回姓名，客户端应在首次请求的 `displayName` 中一并提交。服务不会根据邮箱
+`provider` 使用契约枚举值：Google 为 `1`，Apple 为 `2`。
+
+Apple 只在首次授权时返回姓名，客户端应在首次请求的 `display_name` 中一并提交。服务不会根据邮箱
 自动合并 Google 与 Apple 身份，避免 Apple 隐藏邮箱或共享邮箱导致错误接管。
 
 ## 刷新与退出
@@ -41,7 +44,7 @@ Apple 只在首次授权时返回姓名，客户端应在首次请求的 `displa
 POST /v1/auth/token/refresh
 Content-Type: application/json
 
-{"refreshToken":"<refresh-token>"}
+{"refresh_token":"<refresh-token>"}
 ```
 
 每次刷新都会返回新的 refresh token，旧值立即失效。客户端必须原子替换本地保存的 token。
@@ -50,7 +53,7 @@ Content-Type: application/json
 POST /v1/auth/logout
 Content-Type: application/json
 
-{"refreshToken":"<refresh-token>"}
+{"refresh_token":"<refresh-token>"}
 ```
 
 数据库只保存 refresh token 的 SHA-256 哈希，不保存其明文。access token 是短期 JWT，退出后可能
