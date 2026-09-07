@@ -9,8 +9,6 @@ import (
 	"time"
 
 	jose "github.com/go-jose/go-jose/v4"
-
-	"github.com/eagle-go/eagle/pkg/identity"
 )
 
 // get 带可选 token 发起请求，返回状态码与响应体。
@@ -68,25 +66,25 @@ func TestUnauthenticatedIsRejected(t *testing.T) {
 		token string
 	}{
 		{"无 token", ""},
-		{"伪造签名", env.idp.mint(t, tokenOpts{
+		{"伪造签名", mintEagleToken(t, tokenOpts{
 			subject: "s1", username: "mallory",
-			realmRole: []string{adminRole}, wrongKey: true,
+			roles: []string{"realm:admin"}, wrongKey: true,
 		})},
-		{"已过期", env.idp.mint(t, tokenOpts{
+		{"已过期", mintEagleToken(t, tokenOpts{
 			subject: "s2", username: "alice",
-			realmRole: []string{adminRole}, expiresIn: -time.Hour,
+			roles: []string{"realm:admin"}, expiresIn: -time.Hour,
 		})},
-		{"aud 不匹配", env.idp.mint(t, tokenOpts{
+		{"aud 不匹配", mintEagleToken(t, tokenOpts{
 			subject: "subject-3", username: "alice",
-			realmRole: []string{adminRole}, audience: []string{"another-service"},
+			roles: []string{"realm:admin"}, audience: []string{"another-service"},
 		})},
-		{"尚未生效", env.idp.mint(t, tokenOpts{
+		{"尚未生效", mintEagleToken(t, tokenOpts{
 			subject: "s4", username: "alice",
-			realmRole: []string{adminRole}, notBefore: 10 * time.Minute,
+			roles: []string{"realm:admin"}, notBefore: 10 * time.Minute,
 		})},
-		{"非白名单签名算法", env.idp.mint(t, tokenOpts{
+		{"非白名单签名算法", mintEagleToken(t, tokenOpts{
 			subject: "s5", username: "alice",
-			realmRole: []string{adminRole}, algorithm: jose.PS256,
+			roles: []string{"realm:admin"}, algorithm: jose.HS512,
 		})},
 	}
 
@@ -110,7 +108,7 @@ func TestAuthorizationByRole(t *testing.T) {
 	env.grantRole(t, "editor", "system:permission:list", "system:permission:add")
 
 	t.Run("有权限则放行", func(t *testing.T) {
-		token := env.idp.userToken(t, "vera", "viewer")
+		token := userToken(t, "vera", "viewer")
 		code, body := env.get(t, "/v1/system/permissions", token)
 		if code != http.StatusOK {
 			t.Errorf("viewer 读权限列表 = %d (%s), want 200", code, body)
@@ -118,7 +116,7 @@ func TestAuthorizationByRole(t *testing.T) {
 	})
 
 	t.Run("缺权限则 403", func(t *testing.T) {
-		token := env.idp.userToken(t, "vera", "viewer")
+		token := userToken(t, "vera", "viewer")
 		code, body := env.do(t, http.MethodPost, "/v1/system/permissions", token,
 			`{"name":"测试","type":1}`)
 		if code != http.StatusForbidden {
@@ -127,7 +125,7 @@ func TestAuthorizationByRole(t *testing.T) {
 	})
 
 	t.Run("换个有权限的角色就通过", func(t *testing.T) {
-		token := env.idp.userToken(t, "eddie", "editor")
+		token := userToken(t, "eddie", "editor")
 		code, body := env.do(t, http.MethodPost, "/v1/system/permissions", token,
 			`{"name":"E2E 测试节点","type":1}`)
 		if code != http.StatusOK {
@@ -136,7 +134,7 @@ func TestAuthorizationByRole(t *testing.T) {
 	})
 
 	t.Run("无任何角色一律 403", func(t *testing.T) {
-		token := env.idp.userToken(t, "nobody")
+		token := userToken(t, "nobody")
 		code, body := env.get(t, "/v1/system/permissions", token)
 		if code != http.StatusForbidden {
 			t.Errorf("无角色用户 = %d (%s), want 403", code, body)
@@ -144,92 +142,12 @@ func TestAuthorizationByRole(t *testing.T) {
 	})
 }
 
-// 超管走短路分支，不查 Casbin。这条路径独立于策略表，
-// 必须单独验证——策略表为空时它仍应放行。
-func TestSuperAdminBypassesPolicy(t *testing.T) {
-	env := newTestEnv(t)
-
-	// 刻意不给 admin 配任何策略
-	env.grantRole(t, adminRole)
-
-	token := env.idp.mint(t, tokenOpts{
-		subject:  "sub-root",
-		username: "root",
-		clientRoles: map[string][]string{
-			clientID: {adminRole},
-		},
-	})
-	code, body := env.get(t, "/v1/system/permissions", token)
-	if code != http.StatusOK {
-		t.Errorf("超管读取 = %d (%s), want 200", code, body)
-	}
-}
-
-// 测试 IdP 把 client 级角色放在 resource_access.<clientId>.roles。
-// 只读 realm_access 会让按 client 授权的角色静默失效——
-// 这类错误不会报错，只会表现为「配了权限却还是 403」。
-func TestClientRolesFromResourceAccess(t *testing.T) {
-	env := newTestEnv(t)
-	env.grantRole(t, identity.ClientRoleKey(clientID, "client-viewer"), "system:permission:list")
-
-	token := env.idp.mint(t, tokenOpts{
-		subject:  "sub-crv",
-		username: "crv",
-		// realm 角色为空，权限只来自 client 角色
-		clientRoles: map[string][]string{
-			clientID: {"client-viewer"},
-		},
-	})
-
-	code, body := env.get(t, "/v1/system/permissions", token)
-	if code != http.StatusOK {
-		t.Errorf("client 角色应生效 = %d (%s), want 200", code, body)
-	}
-}
-
-// 别的客户端的角色不该被本服务采纳，否则同一 IdP 下任何 client 的同名角色都能越权。
-func TestOtherClientRolesAreIgnored(t *testing.T) {
-	env := newTestEnv(t)
-	env.grantRole(t, "foreign-role", "system:permission:list")
-
-	token := env.idp.mint(t, tokenOpts{
-		subject:  "sub-foreign",
-		username: "foreign",
-		clientRoles: map[string][]string{
-			"some-other-service": {"foreign-role"},
-		},
-	})
-
-	code, body := env.get(t, "/v1/system/permissions", token)
-	if code != http.StatusForbidden {
-		t.Errorf("其他客户端的角色不应生效 = %d (%s), want 403", code, body)
-	}
-}
-
-func TestRealmAndClientRoleNamesDoNotCollide(t *testing.T) {
-	env := newTestEnv(t)
-	env.grantRole(t, identity.ClientRoleKey(clientID, "operator"), "system:permission:list")
-
-	realmToken := env.idp.userToken(t, "realm-operator", "operator")
-	if code, body := env.get(t, "/v1/system/permissions", realmToken); code != http.StatusForbidden {
-		t.Fatalf("同名 realm role = %d (%s), want 403", code, body)
-	}
-
-	clientToken := env.idp.mint(t, tokenOpts{
-		subject: "sub-client-operator", username: "client-operator",
-		clientRoles: map[string][]string{clientID: {"operator"}},
-	})
-	if code, body := env.get(t, "/v1/system/permissions", clientToken); code != http.StatusOK {
-		t.Fatalf("目标 client role = %d (%s), want 200", code, body)
-	}
-}
-
 // 权限变更后重载策略应立即生效，不必重启服务。
 func TestPolicyReloadTakesEffect(t *testing.T) {
 	env := newTestEnv(t)
 	env.grantRole(t, "dynamic", "system:permission:list")
 
-	token := env.idp.userToken(t, "dyn", "dynamic")
+	token := userToken(t, "dyn", "dynamic")
 	if code, _ := env.get(t, "/v1/system/permissions", token); code != http.StatusOK {
 		t.Fatal("初始应有权限")
 	}
@@ -247,7 +165,7 @@ func TestErrorResponseShape(t *testing.T) {
 	env := newTestEnv(t)
 	env.grantRole(t, "viewer", "system:permission:list")
 
-	token := env.idp.userToken(t, "vera", "viewer")
+	token := userToken(t, "vera", "viewer")
 	code, body := env.do(t, http.MethodPost, "/v1/system/permissions", token,
 		`{"name":"x","type":3,"code":"a:b:c"}`)
 	if code != http.StatusForbidden {

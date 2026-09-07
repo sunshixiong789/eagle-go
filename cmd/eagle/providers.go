@@ -45,7 +45,7 @@ func composeApp(bc *config.Bootstrap, logger *slog.Logger) (platformruntime.Comp
 	if err != nil {
 		return platformruntime.Components{}, err
 	}
-	issuer, err := authinfra.NewTokenIssuer(auth.GetSigningSecret(), auth.GetIssuer(), auth.GetAudience(), auth.GetClientId(), auth.GetAccessTokenTtl().AsDuration())
+	issuer, err := authinfra.NewTokenIssuer(auth.GetSigningSecret(), auth.GetIssuer(), auth.GetAudience(), auth.GetAccessTokenTtl().AsDuration())
 	if err != nil {
 		return platformruntime.Components{}, err
 	}

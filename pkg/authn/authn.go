@@ -1,19 +1,14 @@
-// Package authn verifies bearer access tokens and installs the current principal.
-//
-// 它验证 access token 的签名（经认证中心的 JWKS）、时间与 issuer 声明，
-// 再把 identity.Principal 放进 context 交给 authz 判定授权。
-//
-// 签名验证在本地完成，不需要为每个请求回调认证中心；
+// Package authn verifies Eagle bearer access tokens and installs the current principal.
 package authn
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
-	"github.com/coreos/go-oidc/v3/oidc"
 	jose "github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
 	kratoserrors "github.com/go-kratos/kratos/v3/errors"
@@ -38,84 +33,32 @@ const (
 	ReasonTokenExpired    = "TOKEN_EXPIRED"
 )
 
-// Config 是资源服务器的验证参数。
+// Config 是 Eagle access token 的验证参数。
 type Config struct {
-	// Issuer 必须与 IdP 签发的 iss 完全一致，
-	// 形如 https://idp.example.com/realms/eagle
-	Issuer string
-	// JWKSURL 为空时拼接为 <issuer><JWKSPath>。
-	JWKSURL string
-	// JWKSPath 是 JWKS 相对 issuer 的路径。
-	// JWKSURL 非空时本字段被忽略。
-	JWKSPath string
-	// ClientID 是本服务在 IdP 中的 client id，
-	// 用于从 client 角色 claim 中取出本服务的角色
-	ClientID string
-	// Audience 非空时校验 aud 声明。
-	Audience string
-	// Claims 指定角色在 token 载荷里的位置。
-	Claims ClaimPaths
-	// SigningSecret 启用 Eagle 自签发的 HS256 token；为空时保留外部 OIDC/JWKS 模式。
+	Issuer        string
+	Audience      string
 	SigningSecret string
 }
 
 // Verifier 验证 access token。
 type Verifier struct {
-	verifier      *oidc.IDTokenVerifier
 	issuer        string
 	audience      string
 	signingSecret []byte
-	clientID      string
-	claims        ClaimPaths
 }
 
 // NewVerifier 构造验证器。
-//
-// 这里刻意不做 OIDC discovery：discovery 会在构造时发起网络请求，
-// 使得认证中心未就绪时资源服务器起不来。RemoteKeySet 是惰性的，
-// 首个请求到达时才拉 JWKS，两个服务的启动顺序因此互不依赖。
-func NewVerifier(ctx context.Context, cfg Config) *Verifier {
-	if cfg.SigningSecret != "" {
-		return &Verifier{
-			issuer: cfg.Issuer, audience: cfg.Audience, signingSecret: []byte(cfg.SigningSecret),
-			clientID: cfg.ClientID, claims: cfg.Claims,
-		}
-	}
-	jwksURL := cfg.JWKSURL
-	if jwksURL == "" {
-		jwksURL = strings.TrimSuffix(cfg.Issuer, "/") + cfg.JWKSPath
-	}
+func NewVerifier(cfg Config) *Verifier {
 	return &Verifier{
-		verifier: oidc.NewVerifier(cfg.Issuer, oidc.NewRemoteKeySet(ctx, jwksURL), &oidc.Config{
-			ClientID:             cfg.Audience,
-			SkipClientIDCheck:    cfg.Audience == "",
-			SupportedSigningAlgs: []string{"RS256"},
-		}),
-		clientID: cfg.ClientID,
-		claims:   cfg.Claims,
+		issuer:        cfg.Issuer,
+		audience:      cfg.Audience,
+		signingSecret: []byte(cfg.SigningSecret),
 	}
 }
 
 // Verify 校验 token 并返回其载荷。
-func (v *Verifier) Verify(ctx context.Context, rawToken string) (*Claims, error) {
-	if len(v.signingSecret) > 0 {
-		return v.verifyLocal(rawToken)
-	}
-	token, err := v.verifier.Verify(ctx, rawToken)
-	if err != nil {
-		var expired *oidc.TokenExpiredError
-		if errors.As(err, &expired) {
-			return nil, ErrTokenExpired
-		}
-		return nil, fmt.Errorf("%w: 签名校验失败: %w", ErrInvalidToken, err)
-	}
-
-	var claims Claims
-	if err := token.Claims(&claims); err != nil {
-		return nil, fmt.Errorf("%w: 载荷解析失败: %w", ErrInvalidToken, err)
-	}
-
-	return &claims, nil
+func (v *Verifier) Verify(_ context.Context, rawToken string) (*Claims, error) {
+	return v.verifyLocal(rawToken)
 }
 
 func (v *Verifier) verifyLocal(rawToken string) (*Claims, error) {
@@ -190,11 +133,7 @@ func (v *Verifier) toPrincipal(c *Claims) *identity.Principal {
 		Subject:  c.Subject,
 		Username: c.Username,
 		Email:    c.Email,
-		ClientID: c.AuthorizedParty,
-		Scopes:   c.Scopes(),
-		// realm 角色 + 本服务的 client 角色一并取出。
-		Roles:       c.Roles(v.claims, v.clientID),
-		ClientRoles: c.ClientRoles(v.claims, v.clientID),
+		Roles:    slices.Clone(c.Roles),
 	}
 }
 

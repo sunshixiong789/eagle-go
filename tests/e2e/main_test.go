@@ -5,8 +5,7 @@
 // 这里验证的是「服务作为一个整体能不能起来并正确响应」——
 // 配置解析、依赖装配、中间件顺序、认证与授权判定、错误码映射。
 //
-// 不依赖 Docker：PostgreSQL 由 embedded-postgres 在进程内拉起，
-// OIDC 提供方用一个签发真实 RS256 token 的替身。
+// 不依赖 Docker：PostgreSQL 由 embedded-postgres 在进程内拉起。
 package e2e
 
 import (
@@ -24,11 +23,16 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	accessv1 "github.com/eagle-go/eagle/api/eagle/access/v1"
+	authv1 "github.com/eagle-go/eagle/api/eagle/auth/v1"
 	dictionaryv1 "github.com/eagle-go/eagle/api/eagle/dictionary/v1"
 	accessapp "github.com/eagle-go/eagle/internal/access/application"
 	accessdomain "github.com/eagle-go/eagle/internal/access/domain"
 	accessinfra "github.com/eagle-go/eagle/internal/access/infrastructure"
 	accessservice "github.com/eagle-go/eagle/internal/access/service"
+	authapp "github.com/eagle-go/eagle/internal/auth/application"
+	authdomain "github.com/eagle-go/eagle/internal/auth/domain"
+	authinfra "github.com/eagle-go/eagle/internal/auth/infrastructure"
+	authservice "github.com/eagle-go/eagle/internal/auth/service"
 	dictionarydomain "github.com/eagle-go/eagle/internal/dictionary/domain"
 	dictionaryinfra "github.com/eagle-go/eagle/internal/dictionary/infrastructure"
 	dictionaryservice "github.com/eagle-go/eagle/internal/dictionary/service"
@@ -41,8 +45,11 @@ import (
 )
 
 const (
-	clientID  = "eagle-system"
-	adminRole = "admin"
+	clientID       = "eagle-system"
+	adminRole      = "admin"
+	testIssuer     = "https://eagle.test"
+	testAudience   = "eagle-api"
+	testAuthSecret = "test-signing-secret-at-least-32-bytes"
 )
 
 var testDSN string
@@ -66,7 +73,6 @@ func TestMain(m *testing.M) {
 // testEnv 是一次测试用的完整服务实例。
 type testEnv struct {
 	http     *httptest.Server
-	idp      *fakeOIDCProvider
 	enforcer *authz.Enforcer
 	policy   accessdomain.PolicyRepo
 }
@@ -82,16 +88,14 @@ func newTestEnv(t *testing.T) *testEnv {
 		t.Skip("需要真实数据库")
 	}
 
-	idp := newFakeOIDCProvider(t)
-
 	authConf := &config.Auth{
-		Issuer:           idp.issuer(),
-		ClientId:         clientID,
-		Audience:         clientID,
-		SuperAdminRole:   adminRole,
-		JwksUrl:          idp.jwksURL(),
-		RealmRolesClaim:  "realm_access.roles",
-		ClientRolesClaim: "resource_access",
+		Issuer:          testIssuer,
+		ClientId:        clientID,
+		Audience:        testAudience,
+		SuperAdminRole:  adminRole,
+		SigningSecret:   testAuthSecret,
+		AccessTokenTtl:  durationpb.New(15 * time.Minute),
+		RefreshTokenTtl: durationpb.New(30 * 24 * time.Hour),
 	}
 
 	adminDB, cleanup, err := platformdb.Open(&config.Data{Database: &config.Data_Database{
@@ -121,10 +125,18 @@ func newTestEnv(t *testing.T) *testEnv {
 	permRepo := accessinfra.NewPermissionRepo(adminDB)
 	policyRepo := accessinfra.NewPolicyRepo(enforcer, store)
 	dictRepo := dictionaryinfra.NewDictRepo(adminDB)
+	issuer, err := authinfra.NewTokenIssuer(testAuthSecret, testIssuer, testAudience, 15*time.Minute)
+	if err != nil {
+		t.Fatalf("构造 token issuer: %v", err)
+	}
+	sessions := authinfra.NewSessionRepository(adminDB, issuer)
 
 	permSvc := accessservice.NewPermissionService(accessapp.NewPermissionUsecase(permRepo, policyRepo))
 	dictSvc := dictionaryservice.NewDictService(dictRepo)
 	bindingSvc := accessservice.NewRoleBindingService(accessapp.NewRoleBindingUsecase(policyRepo))
+	authSvc := authservice.NewAuthService(authapp.NewUsecase(
+		providerVerifierStub{}, sessions, 15*time.Minute, 30*24*time.Hour,
+	))
 
 	// addr 留空：不监听真实端口，只把 Server 当 http.Handler 用
 	srv := server.NewHTTPServer(&config.Server{
@@ -133,12 +145,33 @@ func newTestEnv(t *testing.T) *testEnv {
 		accessv1.RegisterPermissionServiceHTTPServer(s, permSvc)
 		accessv1.RegisterRoleBindingServiceHTTPServer(s, bindingSvc)
 		dictionaryv1.RegisterDictServiceHTTPServer(s, dictSvc)
+		authv1.RegisterAuthServiceHTTPServer(s, authSvc)
 	})
 
 	ts := httptest.NewServer(srv)
 	t.Cleanup(ts.Close)
 
-	return &testEnv{http: ts, idp: idp, enforcer: enforcer, policy: policyRepo}
+	return &testEnv{http: ts, enforcer: enforcer, policy: policyRepo}
+}
+
+type providerVerifierStub struct{}
+
+func (providerVerifierStub) Verify(
+	_ context.Context,
+	provider authdomain.Provider,
+	token string,
+	nonce string,
+) (*authdomain.ExternalIdentity, error) {
+	if provider != authdomain.ProviderGoogle || token != "valid-provider-token" || nonce != "valid-provider-nonce" {
+		return nil, authdomain.ErrInvalidIDToken
+	}
+	return &authdomain.ExternalIdentity{
+		Provider:      provider,
+		ProviderID:    "provider-user-1",
+		Email:         "user@example.com",
+		EmailVerified: true,
+		DisplayName:   "Test User",
+	}, nil
 }
 
 func e2eErrorMappings() []server.ErrorMappingRule {
@@ -157,6 +190,10 @@ func e2eErrorMappings() []server.ErrorMappingRule {
 		server.BadRequest(accessdomain.ErrEmptyRole, accessv1.ErrorReason_ERROR_REASON_EMPTY_ROLE),
 		server.BadRequest(accessdomain.ErrSelfInheritance, accessv1.ErrorReason_ERROR_REASON_ROLE_INHERITANCE_CYCLE),
 		server.BadRequest(accessdomain.ErrRoleInheritanceCycle, accessv1.ErrorReason_ERROR_REASON_ROLE_INHERITANCE_CYCLE),
+		server.BadRequest(authdomain.ErrProviderDisabled, authv1.ErrorReason_ERROR_REASON_PROVIDER_DISABLED),
+		server.Unauthorized(authdomain.ErrInvalidIDToken, authv1.ErrorReason_ERROR_REASON_INVALID_ID_TOKEN),
+		server.Unauthorized(authdomain.ErrInvalidNonce, authv1.ErrorReason_ERROR_REASON_INVALID_NONCE),
+		server.Unauthorized(authdomain.ErrInvalidRefreshToken, authv1.ErrorReason_ERROR_REASON_INVALID_REFRESH_TOKEN),
 		server.NotFound(dictionarydomain.ErrDictTypeNotFound, dictionaryv1.ErrorReason_ERROR_REASON_DICT_TYPE_NOT_FOUND),
 		server.Conflict(dictionarydomain.ErrDictTypeDuplicated, dictionaryv1.ErrorReason_ERROR_REASON_DICT_TYPE_DUPLICATED),
 		server.NotFound(dictionarydomain.ErrDictDataNotFound, dictionaryv1.ErrorReason_ERROR_REASON_DICT_DATA_NOT_FOUND),

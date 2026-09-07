@@ -23,7 +23,7 @@ import (
 
 func TestIssuedTokenPassesRuntimeVerifier(t *testing.T) {
 	const secret = "test-signing-secret-at-least-32-bytes"
-	issuer, err := NewTokenIssuer(secret, "https://eagle.test", "eagle-api", "eagle-api", 15*time.Minute)
+	issuer, err := NewTokenIssuer(secret, "https://eagle.test", "eagle-api", 15*time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,15 +34,14 @@ func TestIssuedTokenPassesRuntimeVerifier(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	verifier := authn.NewVerifier(context.Background(), authn.Config{
-		Issuer: "https://eagle.test", Audience: "eagle-api", ClientID: "eagle-api", SigningSecret: secret,
-		Claims: authn.ClaimPaths{RealmRoles: "realm_access.roles", ClientRoles: "resource_access"},
+	verifier := authn.NewVerifier(authn.Config{
+		Issuer: "https://eagle.test", Audience: "eagle-api", SigningSecret: secret,
 	})
 	claims, err := verifier.Verify(context.Background(), raw)
 	if err != nil {
 		t.Fatalf("verify issued token: %v", err)
 	}
-	if claims.Subject != "google:123" || !slices.Equal(claims.Roles(authn.ClaimPaths{RealmRoles: "realm_access.roles", ClientRoles: "resource_access"}, "eagle-api"), []string{"realm:user"}) {
+	if claims.Subject != "google:123" || !slices.Equal(claims.Roles, []string{"user"}) {
 		t.Fatalf("unexpected claims: %+v", claims)
 	}
 }

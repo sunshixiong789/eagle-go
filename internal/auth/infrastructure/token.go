@@ -14,11 +14,10 @@ type TokenIssuer struct {
 	signer   jose.Signer
 	issuer   string
 	audience string
-	clientID string
 	ttl      time.Duration
 }
 
-func NewTokenIssuer(secret, issuer, audience, clientID string, ttl time.Duration) (domain.AccessTokenIssuer, error) {
+func NewTokenIssuer(secret, issuer, audience string, ttl time.Duration) (domain.AccessTokenIssuer, error) {
 	signer, err := jose.NewSigner(
 		jose.SigningKey{Algorithm: jose.HS256, Key: []byte(secret)},
 		(&jose.SignerOptions{}).WithType("JWT"),
@@ -26,7 +25,7 @@ func NewTokenIssuer(secret, issuer, audience, clientID string, ttl time.Duration
 	if err != nil {
 		return nil, fmt.Errorf("create access token signer: %w", err)
 	}
-	return &TokenIssuer{signer: signer, issuer: issuer, audience: audience, clientID: clientID, ttl: ttl}, nil
+	return &TokenIssuer{signer: signer, issuer: issuer, audience: audience, ttl: ttl}, nil
 }
 
 func (i *TokenIssuer) Issue(identity *domain.Identity, now time.Time) (string, error) {
@@ -35,9 +34,9 @@ func (i *TokenIssuer) Issue(identity *domain.Identity, now time.Time) (string, e
 		IssuedAt: jwt.NewNumericDate(now), Expiry: jwt.NewNumericDate(now.Add(i.ttl)),
 	}
 	private := map[string]any{
-		"azp": i.clientID, "preferred_username": identity.DisplayName, "email": identity.Email,
-		"realm_access":    map[string]any{"roles": []string{identity.Role}},
-		"resource_access": map[string]any{i.clientID: map[string]any{"roles": []string{}}},
+		"preferred_username": identity.DisplayName,
+		"email":              identity.Email,
+		"roles":              []string{identity.Role},
 	}
 	token, err := jwt.Signed(i.signer).Claims(claims).Claims(private).Serialize()
 	if err != nil {

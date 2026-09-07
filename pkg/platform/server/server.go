@@ -2,7 +2,6 @@
 package server
 
 import (
-	"context"
 	"fmt"
 	"log/slog"
 
@@ -25,24 +24,11 @@ const meterName = "github.com/eagle-go/eagle/pkg/platform/server"
 
 // NewVerifier 构造 access token 验证器。
 func NewVerifier(c *config.Auth) *authn.Verifier {
-	return authn.NewVerifier(
-		context.Background(),
-		authn.Config{
-			Issuer:        c.GetIssuer(),
-			ClientID:      c.GetClientId(),
-			Audience:      c.GetAudience(),
-			SigningSecret: c.GetSigningSecret(),
-			// 容器/K8s 里可以显式指定：token 里的公开 issuer
-			// 与本服务可达的集群内地址往往不是同一个。
-			JWKSURL:  c.GetJwksUrl(),
-			JWKSPath: c.GetJwksPath(),
-			// 角色 claim 路径可配置，换 IdP 不必改代码。
-			Claims: authn.ClaimPaths{
-				RealmRoles:  c.GetRealmRolesClaim(),
-				ClientRoles: c.GetClientRolesClaim(),
-			},
-		},
-	)
+	return authn.NewVerifier(authn.Config{
+		Issuer:        c.GetIssuer(),
+		Audience:      c.GetAudience(),
+		SigningSecret: c.GetSigningSecret(),
+	})
 }
 
 // NewMiddlewares 构造 HTTP 服务端中间件链。
