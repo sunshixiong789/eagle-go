@@ -9,6 +9,9 @@ services:
       - "${EAGLE_ENV_FILE:?EAGLE_ENV_FILE is required}"
     restart: "no"
     profiles: ["migration"]
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
     security_opt:
       - no-new-privileges:true
     cap_drop: ["ALL"]
@@ -25,6 +28,13 @@ services:
       - "${EAGLE_BIND_ADDRESS:-127.0.0.1}:${EAGLE_HTTP_PORT:-8000}:8000"
       - "${EAGLE_BIND_ADDRESS:-127.0.0.1}:${EAGLE_METRICS_PORT:-9101}:9100"
     restart: unless-stopped
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "/app/healthcheck", "-url", "http://127.0.0.1:9100/readyz"]
+      interval: 5s
+      timeout: 3s
+      start_period: 10s
+      retries: 12
     init: true
     read_only: true
     tmpfs:

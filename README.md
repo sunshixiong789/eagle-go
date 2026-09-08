@@ -421,8 +421,17 @@ make push-image VERSION=v1.2.0 REGISTRY=registry.example.com/eagle
 
 仓库提供本地 Docker Compose，以及不包含数据库的 ECS 应用部署清单。远端按
 「独立数据库 → 一次性迁移任务 → 服务更新 → readiness 观察」推进，应用容器启动时不自动迁移。
-使用云效 Flow 部署开发、测试环境时，参见
-[云效 Flow 开发与测试环境部署](docs/aliyun-flow-deployment.md)。
+CI/CD 使用云效 Flow，仓库中的脚本可直接配置到流水线：
+
+```bash
+sh deploy/scripts/ci.sh all          # 契约、生成代码、lint、测试和两种数据库迁移检查
+sh deploy/scripts/build-release.sh  # 构建并推送 ACR，生成 dist/eagle-release.tgz
+sh deploy/scripts/cd.sh             # ECS 解压发布包后执行
+sh deploy/scripts/cd.sh rollback    # 恢复上一成功版本，不回退数据库
+```
+
+镜像通过 digest 固定，环境提升复用同一发布包。所需变量、构建环境、云效任务配置与回滚步骤见
+[云效 Flow CI/CD 与部署](docs/aliyun-flow-deployment.md)。GitHub Actions 仅保留手动检查入口。
 
 多副本部署时有两点要知道：权限策略每 5 秒按版本号对账，正常情况下改完角色绑定约一个周期后在
 所有副本生效；进程启动时校验 proto 声明的权限码与数据库 catalog 一致，不一致直接 fail

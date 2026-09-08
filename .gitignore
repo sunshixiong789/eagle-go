@@ -1,5 +1,6 @@
 bin/
 dist/
+deploy/tests/__pycache__/
 *.exe
 *.test
 *.out

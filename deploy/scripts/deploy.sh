@@ -1,79 +1,135 @@
 #!/bin/sh
-
-# 云效主机部署入口。数据库不在这里创建，只连接环境侧预先准备好的 RDS。
-# 使用方式见 docs/aliyun-flow-deployment.md。
+# 云效 ECS 单机部署。快照保存镜像、配置、Compose；数据库只向前迁移。
 set -eu
+set +x
 
-required_variables="EAGLE_IMAGE DEPLOY_ENV EAGLE_DATABASE_DSN EAGLE_AUTH_ISSUER EAGLE_AUTH_AUDIENCE EAGLE_AUTH_SIGNING_KEY_HOST_DIRECTORY EAGLE_AUTH_ACTIVE_SIGNING_KEY_ID"
-for variable_name in ${required_variables}; do
-  eval "variable_value=\${${variable_name}:-}"
-  if [ -z "${variable_value}" ]; then
-    echo "deploy: ${variable_name} is required" >&2
-    exit 1
-  fi
-done
-
-case "${DEPLOY_ENV}" in
-  development|testing) ;;
-  *)
-    echo "deploy: DEPLOY_ENV must be development or testing" >&2
-    exit 1
-    ;;
-esac
-
-case "${EAGLE_IMAGE}" in
-  *:latest|latest)
-    echo "deploy: mutable latest image is not allowed" >&2
-    exit 1
-    ;;
-esac
-
+fail() { echo "deploy: $*" >&2; exit 1; }
+action=${1:-deploy}
+case "${action}" in deploy|rollback) ;; *) fail 'usage: deploy.sh [deploy|rollback]' ;; esac
+case "${DEPLOY_ENV:-}" in development|testing) ;; *) fail 'DEPLOY_ENV must be development or testing' ;; esac
+deploy_root=${EAGLE_DEPLOY_ROOT:-/opt/eagle}
+case "${deploy_root}" in /*) ;; *) fail 'EAGLE_DEPLOY_ROOT must be absolute' ;; esac
+timeout=${EAGLE_DEPLOY_TIMEOUT:-90}
+case "${timeout}" in ''|0|*[!0-9]*) fail 'EAGLE_DEPLOY_TIMEOUT must be a positive integer' ;; esac
+for command in docker flock install mktemp; do command -v "${command}" >/dev/null || fail "${command} is required"; done
+docker compose version >/dev/null
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-source_compose="${script_dir}/../compose.app.yml"
-deploy_root="${EAGLE_DEPLOY_ROOT:-/opt/eagle}"
 deploy_dir="${deploy_root}/${DEPLOY_ENV}"
-compose_file="${deploy_dir}/compose.yml"
-runtime_env="${deploy_dir}/runtime.env"
-next_env="${deploy_dir}/runtime.env.next"
-previous_env="${deploy_dir}/runtime.env.previous"
 project_name="eagle-${DEPLOY_ENV}"
-
-install -d -m 0750 "${deploy_dir}"
-install -m 0644 "${source_compose}" "${compose_file}"
 umask 077
+install -d -m 0750 "${deploy_dir}" "${deploy_dir}/releases"
 exec 9>"${deploy_dir}/deploy.lock"
-if ! flock -n 9; then
-  echo "deploy: another ${DEPLOY_ENV} deployment is still running" >&2
-  exit 1
+flock -n 9 || fail "another ${DEPLOY_ENV} deployment is still running"
+
+read_pointer() {
+  pointer=$1
+  [ -f "${deploy_dir}/${pointer}" ] || return 0
+  release_name=$(cat "${deploy_dir}/${pointer}")
+  case "${release_name}" in release.*) ;; *) fail "invalid ${pointer} release pointer" ;; esac
+  case "${release_name}" in *[!a-zA-Z0-9.-]*) fail "invalid ${pointer} release pointer" ;; esac
+  [ -d "${deploy_dir}/releases/${release_name}" ] || fail "missing ${pointer} release snapshot"
+  printf '%s\n' "${deploy_dir}/releases/${release_name}"
+}
+
+save_pointer() {
+  printf '%s\n' "${2##*/}" >"${deploy_dir}/$1.next"
+  mv -f "${deploy_dir}/$1.next" "${deploy_dir}/$1"
+}
+
+compose() (
+  snapshot=$1
+  shift
+  # Shell 环境优先于 --env-file。必须清掉清单插值变量，否则回滚仍会发布新镜像。
+  unset EAGLE_IMAGE EAGLE_BIND_ADDRESS EAGLE_HTTP_PORT EAGLE_METRICS_PORT EAGLE_AUTH_SIGNING_KEY_HOST_DIRECTORY
+  export EAGLE_ENV_FILE="${snapshot}/runtime.env"
+  docker compose --project-name "${project_name}" --env-file "${snapshot}/compose.env" \
+    -f "${snapshot}/compose.yml" "$@"
+)
+
+start() {
+  compose "$1" up -d --no-deps --pull never --wait --wait-timeout "${timeout}" eagle
+}
+
+# 接管旧版脚本留下的运行文件，首次升级也能回滚。
+if [ ! -f "${deploy_dir}/current" ] && [ -f "${deploy_dir}/runtime.env" ]; then
+  [ -f "${deploy_dir}/compose.yml" ] || fail 'legacy runtime.env has no compose.yml'
+  legacy=$(mktemp -d "${deploy_dir}/releases/release.XXXXXXXX")
+  cp "${deploy_dir}/runtime.env" "${legacy}/runtime.env"
+  cp "${deploy_dir}/runtime.env" "${legacy}/compose.env"
+  cp "${deploy_dir}/compose.yml" "${legacy}/compose.yml"
+  chmod 0600 "${legacy}"/*.env
+  save_pointer current "${legacy}"
 fi
+current=$(read_pointer current)
+candidate=
+application_touched=false
+committed=false
+cleanup() {
+  result=$?
+  trap - EXIT INT TERM
+  if [ "${committed}" = false ] && [ "${application_touched}" = true ]; then
+    if [ -n "${current}" ]; then
+      echo 'deploy: restoring the previous application snapshot' >&2
+      if start "${current}"; then
+        echo 'deploy: previous application is healthy; this deployment still failed' >&2
+      else
+        echo 'deploy: rollback failed; operator intervention required' >&2
+      fi
+    else
+      echo 'deploy: first release failed; removing the failed application' >&2
+      compose "${candidate}" rm --stop --force eagle || true
+    fi
+  fi
+  if [ "${result}" -ne 0 ] && [ -n "${candidate}" ]; then
+    echo "deploy: failed snapshot retained at ${candidate}" >&2
+  fi
+  exit "${result}"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 write_env_value() {
   key=$1
   value=$2
   case "${value}" in
     *"
-"*|*"'"*)
-      echo "deploy: ${key} contains an unsupported quote or newline" >&2
-      exit 1
-      ;;
+"*|*"'"*|*"$(printf '\r')"*) fail "${key} contains an unsupported quote or newline" ;;
   esac
-  # 单引号阻止 Compose 把 DSN 密码中的 $ 当作二次变量插值。
+  # Compose 单引号字面量保留密码中的 $、# 和反斜杠；不 source 配置。
   printf "%s='%s'\n" "${key}" "${value}"
 }
 
-write_env() {
-  target=$1
+if [ "${action}" = rollback ]; then
+  candidate=$(read_pointer previous)
+  [ -n "${current}" ] && [ -n "${candidate}" ] || fail 'no previous successful release to roll back to'
+else
+  required_variables='EAGLE_IMAGE EAGLE_DATABASE_DSN EAGLE_AUTH_ISSUER EAGLE_AUTH_AUDIENCE EAGLE_AUTH_SIGNING_KEY_HOST_DIRECTORY EAGLE_AUTH_ACTIVE_SIGNING_KEY_ID'
+  for variable_name in ${required_variables}; do
+    eval "variable_value=\${${variable_name}:-}"
+    [ -n "${variable_value}" ] || fail "${variable_name} is required"
+  done
+  # 仅接收 digest，标签即使是提交 SHA 也可能被仓库覆盖。
+  printf '%s\n' "${EAGLE_IMAGE}" | LC_ALL=C grep -Eq '^[a-z0-9][a-z0-9._:/-]*@sha256:[0-9a-f]{64}$' || fail 'EAGLE_IMAGE must be a full repository@sha256:digest'
+  case "${EAGLE_DATABASE_DRIVER:-postgres}" in postgres|mysql) ;; *) fail 'unsupported database driver' ;; esac
+  case "${EAGLE_AUTH_SIGNING_KEY_HOST_DIRECTORY}" in /*) ;; *) fail 'signing key directory must be absolute' ;; esac
+  case "${EAGLE_AUTH_ACTIVE_SIGNING_KEY_ID}" in *[!a-zA-Z0-9_.-]*) fail 'invalid signing key ID' ;; esac
+  [ -r "${EAGLE_AUTH_SIGNING_KEY_HOST_DIRECTORY}/${EAGLE_AUTH_ACTIVE_SIGNING_KEY_ID}.pem" ] || fail 'active signing key file is missing or unreadable'
+  candidate=$(mktemp -d "${deploy_dir}/releases/release.XXXXXXXX")
+  install -m 0644 "${script_dir}/../compose.app.yml" "${candidate}/compose.yml"
+  # 不把私密变量写进部署元数据，也不把主机路径传入应用配置。
   {
     write_env_value EAGLE_IMAGE "${EAGLE_IMAGE}"
-    write_env_value EAGLE_ENV_FILE "${runtime_env}"
     write_env_value EAGLE_BIND_ADDRESS "${EAGLE_BIND_ADDRESS:-127.0.0.1}"
     write_env_value EAGLE_HTTP_PORT "${EAGLE_HTTP_PORT:-8000}"
     write_env_value EAGLE_METRICS_PORT "${EAGLE_METRICS_PORT:-9101}"
+    write_env_value EAGLE_AUTH_SIGNING_KEY_HOST_DIRECTORY "${EAGLE_AUTH_SIGNING_KEY_HOST_DIRECTORY}"
+  } >"${candidate}/compose.env"
+  {
     write_env_value EAGLE_DATABASE_DRIVER "${EAGLE_DATABASE_DRIVER:-postgres}"
     write_env_value EAGLE_DATABASE_DSN "${EAGLE_DATABASE_DSN}"
     write_env_value EAGLE_AUTH_ISSUER "${EAGLE_AUTH_ISSUER}"
     write_env_value EAGLE_AUTH_AUDIENCE "${EAGLE_AUTH_AUDIENCE}"
-    write_env_value EAGLE_AUTH_SIGNING_KEY_HOST_DIRECTORY "${EAGLE_AUTH_SIGNING_KEY_HOST_DIRECTORY}"
     write_env_value EAGLE_AUTH_ACTIVE_SIGNING_KEY_ID "${EAGLE_AUTH_ACTIVE_SIGNING_KEY_ID}"
     write_env_value EAGLE_AUTH_ACCESS_TOKEN_TTL "${EAGLE_AUTH_ACCESS_TOKEN_TTL:-900s}"
     write_env_value EAGLE_AUTH_REFRESH_TOKEN_TTL "${EAGLE_AUTH_REFRESH_TOKEN_TTL:-2592000s}"
@@ -85,39 +141,19 @@ write_env() {
     write_env_value EAGLE_OBSERVABILITY_OTLP_INSECURE "${EAGLE_OBSERVABILITY_OTLP_INSECURE:-true}"
     write_env_value EAGLE_OBSERVABILITY_TRACE_SAMPLE_RATIO "${EAGLE_OBSERVABILITY_TRACE_SAMPLE_RATIO:-0.1}"
     write_env_value EAGLE_OBSERVABILITY_LOG_LEVEL "${EAGLE_OBSERVABILITY_LOG_LEVEL:-info}"
-  } >"${target}"
-}
-
-compose() {
-  compose_env=$1
-  shift
-  docker compose --project-name "${project_name}" --env-file "${compose_env}" -f "${compose_file}" "$@"
-}
-
-# 同一环境由文件锁串行发布。先拉镜像、执行同版本迁移，再替换服务；
-# 迁移失败不会触碰当前运行实例。
-if [ -f "${runtime_env}" ]; then
-  cp "${runtime_env}" "${previous_env}"
-fi
-write_env "${next_env}"
-mv "${next_env}" "${runtime_env}"
-
-if ! compose "${runtime_env}" pull || ! compose "${runtime_env}" --profile migration run --rm migrate; then
-  echo "deploy: image pull or migration failed; the running application was not changed" >&2
-  if [ -f "${previous_env}" ]; then
-    mv "${previous_env}" "${runtime_env}"
-  fi
-  exit 1
+  } >"${candidate}/runtime.env"
 fi
 
-if ! compose "${runtime_env}" up -d --remove-orphans --wait --wait-timeout "${EAGLE_DEPLOY_TIMEOUT:-90}" eagle; then
-  echo "deploy: readiness failed, restoring the previous application image" >&2
-  if [ -f "${previous_env}" ]; then
-    mv "${previous_env}" "${runtime_env}"
-    compose "${runtime_env}" up -d --remove-orphans --wait --wait-timeout "${EAGLE_DEPLOY_TIMEOUT:-90}" eagle
-  fi
-  exit 1
+compose "${candidate}" config --quiet
+if [ "${action}" = deploy ]; then
+  # 拉取同一 digest，一次性迁移成功前不修改运行实例及 current/previous 指针。
+  compose "${candidate}" --profile migration pull eagle migrate
+  compose "${candidate}" --profile migration run --rm --no-deps migrate
 fi
-
-rm -f "${previous_env}"
-compose "${runtime_env}" ps
+application_touched=true
+start "${candidate}"
+if [ -n "${current}" ]; then save_pointer previous "${current}"; fi
+save_pointer current "${candidate}"
+committed=true
+echo "deploy: ${action} succeeded (${candidate##*/})"
+compose "${candidate}" ps

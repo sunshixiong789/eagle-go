@@ -1,9 +1,8 @@
-name: CI
+name: Manual GitHub checks
 
 on:
-  push:
-    branches: [master, main]
-  pull_request:
+  # 主 CI/CD 在云效 Flow，GitHub 仅保留手动诊断入口，避免重复自动执行。
+  workflow_dispatch:
 
 # 同一分支上新的推送会取消尚未完成的旧任务，避免排队浪费
 concurrency:

@@ -169,7 +169,7 @@ test-unit:
 .PHONY: test-coverage
 # 核心手写代码单元测试覆盖率门禁；可用 COVERAGE_MIN=85 临时提高阈值
 test-coverage:
-	@profile="$$(mktemp)"; \
+	@set -eu; profile="$$(mktemp)"; \
 		trap 'rm -f "$$profile"' EXIT; \
 		go test -covermode=atomic -coverprofile="$$profile" $(UNIT_PACKAGES); \
 		coverage="$$(go tool cover -func="$$profile" | awk '/^total:/ { gsub(/%/, "", $$3); print $$3 }')"; \
@@ -198,7 +198,12 @@ validate-deploy:
 	EAGLE_ENV_FILE=$(CURDIR)/deploy/environments/development.env.example \
 	EAGLE_AUTH_SIGNING_KEY_HOST_DIRECTORY=$(CURDIR)/configs/keys \
 		docker compose -f deploy/compose.app.yml config --quiet
-	sh -n deploy/scripts/deploy.sh
+	@for script in deploy/scripts/*.sh; do sh -n "$$script" || exit 1; done
+
+.PHONY: test-deploy
+# 发布脚本故障回归，不连接 Docker 或云资源
+test-deploy:
+	python3 -m unittest discover -s deploy/tests -p 'test_*.py'
 
 .PHONY: down
 down:
