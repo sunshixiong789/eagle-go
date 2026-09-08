@@ -49,6 +49,20 @@ func (_u *AuthSessionUpdate) AddIdentityID(v int64) *AuthSessionUpdate {
 	return _u
 }
 
+// SetAudience sets the "audience" field.
+func (_u *AuthSessionUpdate) SetAudience(v string) *AuthSessionUpdate {
+	_u.mutation.SetAudience(v)
+	return _u
+}
+
+// SetNillableAudience sets the "audience" field if the given value is not nil.
+func (_u *AuthSessionUpdate) SetNillableAudience(v *string) *AuthSessionUpdate {
+	if v != nil {
+		_u.SetAudience(*v)
+	}
+	return _u
+}
+
 // SetRefreshTokenHash sets the "refresh_token_hash" field.
 func (_u *AuthSessionUpdate) SetRefreshTokenHash(v string) *AuthSessionUpdate {
 	_u.mutation.SetRefreshTokenHash(v)
@@ -146,6 +160,11 @@ func (_u *AuthSessionUpdate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *AuthSessionUpdate) check() error {
+	if v, ok := _u.mutation.Audience(); ok {
+		if err := authsession.AudienceValidator(v); err != nil {
+			return &ValidationError{Name: "audience", err: fmt.Errorf(`ent: validator failed for field "AuthSession.audience": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.RefreshTokenHash(); ok {
 		if err := authsession.RefreshTokenHashValidator(v); err != nil {
 			return &ValidationError{Name: "refresh_token_hash", err: fmt.Errorf(`ent: validator failed for field "AuthSession.refresh_token_hash": %w`, err)}
@@ -171,6 +190,9 @@ func (_u *AuthSessionUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	}
 	if value, ok := _u.mutation.AddedIdentityID(); ok {
 		_spec.AddField(authsession.FieldIdentityID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.Audience(); ok {
+		_spec.SetField(authsession.FieldAudience, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.RefreshTokenHash(); ok {
 		_spec.SetField(authsession.FieldRefreshTokenHash, field.TypeString, value)
@@ -225,6 +247,20 @@ func (_u *AuthSessionUpdateOne) SetNillableIdentityID(v *int64) *AuthSessionUpda
 // AddIdentityID adds value to the "identity_id" field.
 func (_u *AuthSessionUpdateOne) AddIdentityID(v int64) *AuthSessionUpdateOne {
 	_u.mutation.AddIdentityID(v)
+	return _u
+}
+
+// SetAudience sets the "audience" field.
+func (_u *AuthSessionUpdateOne) SetAudience(v string) *AuthSessionUpdateOne {
+	_u.mutation.SetAudience(v)
+	return _u
+}
+
+// SetNillableAudience sets the "audience" field if the given value is not nil.
+func (_u *AuthSessionUpdateOne) SetNillableAudience(v *string) *AuthSessionUpdateOne {
+	if v != nil {
+		_u.SetAudience(*v)
+	}
 	return _u
 }
 
@@ -338,6 +374,11 @@ func (_u *AuthSessionUpdateOne) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *AuthSessionUpdateOne) check() error {
+	if v, ok := _u.mutation.Audience(); ok {
+		if err := authsession.AudienceValidator(v); err != nil {
+			return &ValidationError{Name: "audience", err: fmt.Errorf(`ent: validator failed for field "AuthSession.audience": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.RefreshTokenHash(); ok {
 		if err := authsession.RefreshTokenHashValidator(v); err != nil {
 			return &ValidationError{Name: "refresh_token_hash", err: fmt.Errorf(`ent: validator failed for field "AuthSession.refresh_token_hash": %w`, err)}
@@ -380,6 +421,9 @@ func (_u *AuthSessionUpdateOne) sqlSave(ctx context.Context) (_node *AuthSession
 	}
 	if value, ok := _u.mutation.AddedIdentityID(); ok {
 		_spec.AddField(authsession.FieldIdentityID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.Audience(); ok {
+		_spec.SetField(authsession.FieldAudience, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.RefreshTokenHash(); ok {
 		_spec.SetField(authsession.FieldRefreshTokenHash, field.TypeString, value)

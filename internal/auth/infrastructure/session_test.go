@@ -8,27 +8,28 @@ import (
 	"time"
 
 	"github.com/eagle-go/eagle/internal/auth/domain"
+	"github.com/eagle-go/eagle/internal/platform/database/ent/authsession"
 )
 
 func TestSessionLifecycle(t *testing.T) {
 	if testing.Short() {
 		t.Skip("需要真实数据库")
 	}
-	repo := NewSessionRepository(authTestDB, &testIssuer{})
+	repo := NewSessionRepository(authTestDB, &testIssuer{}, "eagle-api")
 	identity, err := repo.Create(context.Background(), &domain.ExternalIdentity{
 		Provider: domain.ProviderGoogle, ProviderID: "provider-user-1", Email: "user@example.com",
 		EmailVerified: true, DisplayName: "User",
-	}, domain.Session{ID: "session0000000000000000000000001", RefreshTokenHash: "old-hash", ExpiresAt: time.Now().Add(time.Hour)})
+	}, "11111111111111111111111111111111", domain.Session{ID: "session0000000000000000000000001", RefreshTokenHash: "old-hash", ExpiresAt: time.Now().Add(time.Hour)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if identity.Identity.Subject != "google:provider-user-1" || identity.Identity.Role != "user" {
+	if identity.Identity.Subject != "11111111111111111111111111111111" || len(identity.Identity.Roles) != 1 || identity.Identity.Roles[0] != "user" {
 		t.Fatalf("unexpected identity: %+v", identity)
 	}
 	updated, err := repo.Create(context.Background(), &domain.ExternalIdentity{
 		Provider: domain.ProviderGoogle, ProviderID: "provider-user-1", Email: "updated@example.com",
 		EmailVerified: true,
-	}, domain.Session{ID: "session0000000000000000000000002", RefreshTokenHash: "other-session", ExpiresAt: time.Now().Add(time.Hour)})
+	}, "22222222222222222222222222222222", domain.Session{ID: "session0000000000000000000000002", RefreshTokenHash: "other-session", ExpiresAt: time.Now().Add(time.Hour)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,12 +56,12 @@ func TestProviderSubjectsRemainCaseSensitive(t *testing.T) {
 	if testing.Short() {
 		t.Skip("需要真实数据库")
 	}
-	repo := NewSessionRepository(authTestDB, &testIssuer{})
+	repo := NewSessionRepository(authTestDB, &testIssuer{}, "eagle-api")
 	var identities []*domain.Identity
 	for i, providerID := range []string{"CaseSensitive", "casesensitive"} {
 		grant, err := repo.Create(context.Background(), &domain.ExternalIdentity{
 			Provider: domain.ProviderGoogle, ProviderID: providerID,
-		}, domain.Session{
+		}, fmt.Sprintf("%032d", i+10), domain.Session{
 			ID: fmt.Sprintf("case-sensitive-session-%08d", i), RefreshTokenHash: fmt.Sprintf("case-sensitive-hash-%d", i),
 			ExpiresAt: time.Now().Add(time.Hour),
 		})
@@ -74,9 +75,82 @@ func TestProviderSubjectsRemainCaseSensitive(t *testing.T) {
 	}
 }
 
+func TestRolesAreScopedByAudience(t *testing.T) {
+	if testing.Short() {
+		t.Skip("需要真实数据库")
+	}
+	ctx := context.Background()
+	consumerRepo := NewSessionRepository(authTestDB, &testIssuer{}, "consumer-api")
+	external := &domain.ExternalIdentity{Provider: domain.ProviderGoogle, ProviderID: "audience-scoped-user"}
+	consumer, err := consumerRepo.Create(ctx, external, "55555555555555555555555555555555", domain.Session{
+		ID: "audience-consumer-session-0001", RefreshTokenHash: "audience-consumer-old", ExpiresAt: time.Now().Add(time.Hour),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(consumer.Identity.Roles) != 1 || consumer.Identity.Roles[0] != "user" {
+		t.Fatalf("consumer roles = %v", consumer.Identity.Roles)
+	}
+	if _, err := authTestDB.Client().UserRoleBinding.Create().
+		SetAccountSubject(consumer.Identity.Subject).
+		SetAudience("backoffice-api").
+		SetRole("admin").
+		Save(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	backofficeRepo := NewSessionRepository(authTestDB, &testIssuer{}, "backoffice-api")
+	backoffice, err := backofficeRepo.Create(ctx, external, "66666666666666666666666666666666", domain.Session{
+		ID: "audience-backoffice-session-01", RefreshTokenHash: "audience-backoffice-old", ExpiresAt: time.Now().Add(time.Hour),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(backoffice.Identity.Roles) != 1 || backoffice.Identity.Roles[0] != "admin" {
+		t.Fatalf("backoffice roles = %v", backoffice.Identity.Roles)
+	}
+	storedSession, err := authTestDB.Client().AuthSession.Query().Where(
+		authsession.RefreshTokenHashEQ("audience-backoffice-old"),
+	).Only(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if storedSession.Audience != "backoffice-api" {
+		t.Fatalf("session audience = %q", storedSession.Audience)
+	}
+}
+
+func TestDisabledAccountCannotRefreshAndRotationRollsBack(t *testing.T) {
+	if testing.Short() {
+		t.Skip("需要真实数据库")
+	}
+	ctx := context.Background()
+	repo := NewSessionRepository(authTestDB, &testIssuer{}, "eagle-api")
+	grant, err := repo.Create(ctx,
+		&domain.ExternalIdentity{Provider: domain.ProviderGoogle, ProviderID: "disabled-account"},
+		"77777777777777777777777777777777",
+		domain.Session{ID: "disabled-account-session-000001", RefreshTokenHash: "disabled-account-old", ExpiresAt: time.Now().Add(time.Hour)},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := authTestDB.Client().UserAccount.UpdateOneID(grant.Identity.Subject).SetStatus(0).Save(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.Rotate(ctx, "disabled-account-old", "disabled-account-rejected", time.Now().Add(time.Hour)); !errors.Is(err, domain.ErrAccountDisabled) {
+		t.Fatalf("disabled account refresh error = %v", err)
+	}
+	if _, err := authTestDB.Client().UserAccount.UpdateOneID(grant.Identity.Subject).SetStatus(1).Save(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.Rotate(ctx, "disabled-account-old", "disabled-account-new", time.Now().Add(time.Hour)); err != nil {
+		t.Fatalf("old token must survive disabled-account rollback: %v", err)
+	}
+}
+
 type testIssuer struct{ err error }
 
-func (i *testIssuer) Issue(_ *domain.Identity, _ time.Time) (string, error) {
+func (i *testIssuer) Issue(_ *domain.Identity, _ string, _ time.Time) (string, error) {
 	if i.err != nil {
 		return "", i.err
 	}
@@ -90,21 +164,21 @@ func TestSigningFailureRollsBackSession(t *testing.T) {
 	ctx := context.Background()
 	signingErr := errors.New("signing unavailable")
 	issuer := &testIssuer{err: signingErr}
-	repo := NewSessionRepository(authTestDB, issuer)
+	repo := NewSessionRepository(authTestDB, issuer, "eagle-api")
 	external := &domain.ExternalIdentity{Provider: domain.ProviderGoogle, ProviderID: "signing-failure"}
 	session := domain.Session{ID: "signing-failure", RefreshTokenHash: "signing-old", ExpiresAt: time.Now().Add(time.Hour)}
-	if _, err := repo.Create(ctx, external, session); !errors.Is(err, signingErr) {
+	if _, err := repo.Create(ctx, external, "33333333333333333333333333333333", session); !errors.Is(err, signingErr) {
 		t.Fatalf("create = %v", err)
 	}
 	var count int
-	if err := authTestDB.SQL().QueryRowContext(ctx, `SELECT count(*) FROM social_identity WHERE provider_subject = 'signing-failure'`).Scan(&count); err != nil {
+	if err := authTestDB.SQL().QueryRowContext(ctx, `SELECT count(*) FROM user_identity WHERE provider_subject = 'signing-failure'`).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 0 {
 		t.Fatal("failed signing committed identity")
 	}
 	issuer.err = nil
-	if _, err := repo.Create(ctx, external, session); err != nil {
+	if _, err := repo.Create(ctx, external, "33333333333333333333333333333333", session); err != nil {
 		t.Fatal(err)
 	}
 	issuer.err = signingErr
@@ -129,8 +203,8 @@ func TestConcurrentRefreshHasOneWinner(t *testing.T) {
 		t.Skip("需要真实数据库")
 	}
 	ctx := context.Background()
-	repo := NewSessionRepository(authTestDB, &testIssuer{})
-	_, err := repo.Create(ctx, &domain.ExternalIdentity{Provider: domain.ProviderGoogle, ProviderID: "concurrent-refresh"}, domain.Session{ID: "concurrent-refresh", RefreshTokenHash: "concurrent-old", ExpiresAt: time.Now().Add(time.Hour)})
+	repo := NewSessionRepository(authTestDB, &testIssuer{}, "eagle-api")
+	_, err := repo.Create(ctx, &domain.ExternalIdentity{Provider: domain.ProviderGoogle, ProviderID: "concurrent-refresh"}, "44444444444444444444444444444444", domain.Session{ID: "concurrent-refresh", RefreshTokenHash: "concurrent-old", ExpiresAt: time.Now().Add(time.Hour)})
 	if err != nil {
 		t.Fatal(err)
 	}

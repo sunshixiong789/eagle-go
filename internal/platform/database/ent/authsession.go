@@ -19,6 +19,8 @@ type AuthSession struct {
 	ID string `json:"id,omitempty"`
 	// IdentityID holds the value of the "identity_id" field.
 	IdentityID int64 `json:"identity_id,omitempty"`
+	// Audience holds the value of the "audience" field.
+	Audience string `json:"audience,omitempty"`
 	// RefreshTokenHash holds the value of the "refresh_token_hash" field.
 	RefreshTokenHash string `json:"refresh_token_hash,omitempty"`
 	// ExpiresAt holds the value of the "expires_at" field.
@@ -39,7 +41,7 @@ func (*AuthSession) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case authsession.FieldIdentityID:
 			values[i] = new(sql.NullInt64)
-		case authsession.FieldID, authsession.FieldRefreshTokenHash:
+		case authsession.FieldID, authsession.FieldAudience, authsession.FieldRefreshTokenHash:
 			values[i] = new(sql.NullString)
 		case authsession.FieldExpiresAt, authsession.FieldRevokedAt, authsession.FieldCreatedAt, authsession.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -69,6 +71,12 @@ func (_m *AuthSession) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field identity_id", values[i])
 			} else if value.Valid {
 				_m.IdentityID = value.Int64
+			}
+		case authsession.FieldAudience:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field audience", values[i])
+			} else if value.Valid {
+				_m.Audience = value.String
 			}
 		case authsession.FieldRefreshTokenHash:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -139,6 +147,9 @@ func (_m *AuthSession) String() string {
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("identity_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.IdentityID))
+	builder.WriteString(", ")
+	builder.WriteString("audience=")
+	builder.WriteString(_m.Audience)
 	builder.WriteString(", ")
 	builder.WriteString("refresh_token_hash=")
 	builder.WriteString(_m.RefreshTokenHash)

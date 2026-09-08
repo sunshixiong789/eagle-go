@@ -11,7 +11,7 @@ func TestPrincipalContext(t *testing.T) {
 		t.Fatalf("anonymous context = %+v, %v, %q", principal, ok, Subject(ctx))
 	}
 
-	want := &Principal{Subject: "user-1", Username: "Eagle", Roles: []string{"viewer"}}
+	want := &Principal{Subject: "user-1", SessionID: "session-1", Roles: []string{"viewer"}}
 	ctx = NewContext(ctx, want)
 	got, ok := FromContext(ctx)
 	if !ok || got != want || Subject(ctx) != "user-1" {

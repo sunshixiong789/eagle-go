@@ -27,14 +27,16 @@ auth:
   # Eagle token 的 issuer，必须与 token 里的 iss 完全一致
   # （含协议、端口、是否带尾斜杠）。不一致时所有 token 都会因
   # iss 校验失败被拒，而报错信息不易定位到这里。
-  # 它只作为 token 标识，不要求该地址实际提供 OIDC 服务。
+  # 同一地址会公开 /.well-known/jwks.json，资源服务按此 issuer 建立信任。
   issuer: "${AUTH_ISSUER:https://eagle.local}"
 
   # Eagle access token 的 audience。
   audience: "${AUTH_AUDIENCE:eagle-api}"
 
-  # 仅供本地开箱调试；部署环境必须用随机 Secret 覆盖。
-  signing_secret: "${AUTH_SIGNING_SECRET:development-only-signing-secret-change-me}"
+  # 本地目录只用于开发。生产必须把独立 Secret 目录挂载到容器，并覆盖路径；
+  # 轮换时先同时放入新旧公钥，再切 active key，等待旧 token 过期后移除旧钥。
+  signing_key_directory: "${AUTH_SIGNING_KEY_DIRECTORY:configs/keys}"
+  active_signing_key_id: "${AUTH_ACTIVE_SIGNING_KEY_ID:development-es256}"
   access_token_ttl: "${AUTH_ACCESS_TOKEN_TTL:900s}"
   refresh_token_ttl: "${AUTH_REFRESH_TOKEN_TTL:2592000s}"
 

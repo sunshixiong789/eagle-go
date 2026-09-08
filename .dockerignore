@@ -11,6 +11,8 @@ coverage.out
 *.local.yaml
 .env
 .env.*
+**/*.pem
+**/*.key
 docs
 README.md
 AGENTS.md

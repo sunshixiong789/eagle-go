@@ -15,7 +15,9 @@ import (
 	"github.com/eagle-go/eagle/internal/platform/database/ent/policyaudit"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/policystate"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/schema"
-	"github.com/eagle-go/eagle/internal/platform/database/ent/socialidentity"
+	"github.com/eagle-go/eagle/internal/platform/database/ent/useraccount"
+	"github.com/eagle-go/eagle/internal/platform/database/ent/useridentity"
+	"github.com/eagle-go/eagle/internal/platform/database/ent/userrolebinding"
 )
 
 // The init function reads all schema descriptors with runtime code
@@ -24,16 +26,20 @@ import (
 func init() {
 	authsessionFields := schema.AuthSession{}.Fields()
 	_ = authsessionFields
+	// authsessionDescAudience is the schema descriptor for audience field.
+	authsessionDescAudience := authsessionFields[2].Descriptor()
+	// authsession.AudienceValidator is a validator for the "audience" field. It is called by the builders before save.
+	authsession.AudienceValidator = authsessionDescAudience.Validators[0].(func(string) error)
 	// authsessionDescRefreshTokenHash is the schema descriptor for refresh_token_hash field.
-	authsessionDescRefreshTokenHash := authsessionFields[2].Descriptor()
+	authsessionDescRefreshTokenHash := authsessionFields[3].Descriptor()
 	// authsession.RefreshTokenHashValidator is a validator for the "refresh_token_hash" field. It is called by the builders before save.
 	authsession.RefreshTokenHashValidator = authsessionDescRefreshTokenHash.Validators[0].(func(string) error)
 	// authsessionDescCreatedAt is the schema descriptor for created_at field.
-	authsessionDescCreatedAt := authsessionFields[5].Descriptor()
+	authsessionDescCreatedAt := authsessionFields[6].Descriptor()
 	// authsession.DefaultCreatedAt holds the default value on creation for the created_at field.
 	authsession.DefaultCreatedAt = authsessionDescCreatedAt.Default.(func() time.Time)
 	// authsessionDescUpdatedAt is the schema descriptor for updated_at field.
-	authsessionDescUpdatedAt := authsessionFields[6].Descriptor()
+	authsessionDescUpdatedAt := authsessionFields[7].Descriptor()
 	// authsession.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	authsession.DefaultUpdatedAt = authsessionDescUpdatedAt.Default.(func() time.Time)
 	// authsession.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -342,56 +348,94 @@ func init() {
 	policystate.DefaultUpdatedAt = policystateDescUpdatedAt.Default.(func() time.Time)
 	// policystate.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	policystate.UpdateDefaultUpdatedAt = policystateDescUpdatedAt.UpdateDefault.(func() time.Time)
-	socialidentityFields := schema.SocialIdentity{}.Fields()
-	_ = socialidentityFields
-	// socialidentityDescSubject is the schema descriptor for subject field.
-	socialidentityDescSubject := socialidentityFields[1].Descriptor()
-	// socialidentity.SubjectValidator is a validator for the "subject" field. It is called by the builders before save.
-	socialidentity.SubjectValidator = socialidentityDescSubject.Validators[0].(func(string) error)
-	// socialidentityDescProvider is the schema descriptor for provider field.
-	socialidentityDescProvider := socialidentityFields[2].Descriptor()
-	// socialidentity.ProviderValidator is a validator for the "provider" field. It is called by the builders before save.
-	socialidentity.ProviderValidator = socialidentityDescProvider.Validators[0].(func(string) error)
-	// socialidentityDescProviderSubject is the schema descriptor for provider_subject field.
-	socialidentityDescProviderSubject := socialidentityFields[3].Descriptor()
-	// socialidentity.ProviderSubjectValidator is a validator for the "provider_subject" field. It is called by the builders before save.
-	socialidentity.ProviderSubjectValidator = socialidentityDescProviderSubject.Validators[0].(func(string) error)
-	// socialidentityDescEmail is the schema descriptor for email field.
-	socialidentityDescEmail := socialidentityFields[4].Descriptor()
-	// socialidentity.DefaultEmail holds the default value on creation for the email field.
-	socialidentity.DefaultEmail = socialidentityDescEmail.Default.(string)
-	// socialidentity.EmailValidator is a validator for the "email" field. It is called by the builders before save.
-	socialidentity.EmailValidator = socialidentityDescEmail.Validators[0].(func(string) error)
-	// socialidentityDescEmailVerified is the schema descriptor for email_verified field.
-	socialidentityDescEmailVerified := socialidentityFields[5].Descriptor()
-	// socialidentity.DefaultEmailVerified holds the default value on creation for the email_verified field.
-	socialidentity.DefaultEmailVerified = socialidentityDescEmailVerified.Default.(bool)
-	// socialidentityDescDisplayName is the schema descriptor for display_name field.
-	socialidentityDescDisplayName := socialidentityFields[6].Descriptor()
-	// socialidentity.DefaultDisplayName holds the default value on creation for the display_name field.
-	socialidentity.DefaultDisplayName = socialidentityDescDisplayName.Default.(string)
-	// socialidentity.DisplayNameValidator is a validator for the "display_name" field. It is called by the builders before save.
-	socialidentity.DisplayNameValidator = socialidentityDescDisplayName.Validators[0].(func(string) error)
-	// socialidentityDescAvatarURL is the schema descriptor for avatar_url field.
-	socialidentityDescAvatarURL := socialidentityFields[7].Descriptor()
-	// socialidentity.DefaultAvatarURL holds the default value on creation for the avatar_url field.
-	socialidentity.DefaultAvatarURL = socialidentityDescAvatarURL.Default.(string)
-	// socialidentity.AvatarURLValidator is a validator for the "avatar_url" field. It is called by the builders before save.
-	socialidentity.AvatarURLValidator = socialidentityDescAvatarURL.Validators[0].(func(string) error)
-	// socialidentityDescRole is the schema descriptor for role field.
-	socialidentityDescRole := socialidentityFields[8].Descriptor()
-	// socialidentity.DefaultRole holds the default value on creation for the role field.
-	socialidentity.DefaultRole = socialidentityDescRole.Default.(string)
-	// socialidentity.RoleValidator is a validator for the "role" field. It is called by the builders before save.
-	socialidentity.RoleValidator = socialidentityDescRole.Validators[0].(func(string) error)
-	// socialidentityDescCreatedAt is the schema descriptor for created_at field.
-	socialidentityDescCreatedAt := socialidentityFields[10].Descriptor()
-	// socialidentity.DefaultCreatedAt holds the default value on creation for the created_at field.
-	socialidentity.DefaultCreatedAt = socialidentityDescCreatedAt.Default.(func() time.Time)
-	// socialidentityDescUpdatedAt is the schema descriptor for updated_at field.
-	socialidentityDescUpdatedAt := socialidentityFields[11].Descriptor()
-	// socialidentity.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	socialidentity.DefaultUpdatedAt = socialidentityDescUpdatedAt.Default.(func() time.Time)
-	// socialidentity.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	socialidentity.UpdateDefaultUpdatedAt = socialidentityDescUpdatedAt.UpdateDefault.(func() time.Time)
+	useraccountFields := schema.UserAccount{}.Fields()
+	_ = useraccountFields
+	// useraccountDescDisplayName is the schema descriptor for display_name field.
+	useraccountDescDisplayName := useraccountFields[1].Descriptor()
+	// useraccount.DefaultDisplayName holds the default value on creation for the display_name field.
+	useraccount.DefaultDisplayName = useraccountDescDisplayName.Default.(string)
+	// useraccount.DisplayNameValidator is a validator for the "display_name" field. It is called by the builders before save.
+	useraccount.DisplayNameValidator = useraccountDescDisplayName.Validators[0].(func(string) error)
+	// useraccountDescAvatarURL is the schema descriptor for avatar_url field.
+	useraccountDescAvatarURL := useraccountFields[2].Descriptor()
+	// useraccount.DefaultAvatarURL holds the default value on creation for the avatar_url field.
+	useraccount.DefaultAvatarURL = useraccountDescAvatarURL.Default.(string)
+	// useraccount.AvatarURLValidator is a validator for the "avatar_url" field. It is called by the builders before save.
+	useraccount.AvatarURLValidator = useraccountDescAvatarURL.Validators[0].(func(string) error)
+	// useraccountDescStatus is the schema descriptor for status field.
+	useraccountDescStatus := useraccountFields[3].Descriptor()
+	// useraccount.DefaultStatus holds the default value on creation for the status field.
+	useraccount.DefaultStatus = useraccountDescStatus.Default.(int32)
+	// useraccountDescCreatedAt is the schema descriptor for created_at field.
+	useraccountDescCreatedAt := useraccountFields[4].Descriptor()
+	// useraccount.DefaultCreatedAt holds the default value on creation for the created_at field.
+	useraccount.DefaultCreatedAt = useraccountDescCreatedAt.Default.(func() time.Time)
+	// useraccountDescUpdatedAt is the schema descriptor for updated_at field.
+	useraccountDescUpdatedAt := useraccountFields[5].Descriptor()
+	// useraccount.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	useraccount.DefaultUpdatedAt = useraccountDescUpdatedAt.Default.(func() time.Time)
+	// useraccount.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	useraccount.UpdateDefaultUpdatedAt = useraccountDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// useraccountDescID is the schema descriptor for id field.
+	useraccountDescID := useraccountFields[0].Descriptor()
+	// useraccount.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	useraccount.IDValidator = useraccountDescID.Validators[0].(func(string) error)
+	useridentityFields := schema.UserIdentity{}.Fields()
+	_ = useridentityFields
+	// useridentityDescAccountSubject is the schema descriptor for account_subject field.
+	useridentityDescAccountSubject := useridentityFields[1].Descriptor()
+	// useridentity.AccountSubjectValidator is a validator for the "account_subject" field. It is called by the builders before save.
+	useridentity.AccountSubjectValidator = useridentityDescAccountSubject.Validators[0].(func(string) error)
+	// useridentityDescProvider is the schema descriptor for provider field.
+	useridentityDescProvider := useridentityFields[2].Descriptor()
+	// useridentity.ProviderValidator is a validator for the "provider" field. It is called by the builders before save.
+	useridentity.ProviderValidator = useridentityDescProvider.Validators[0].(func(string) error)
+	// useridentityDescProviderSubject is the schema descriptor for provider_subject field.
+	useridentityDescProviderSubject := useridentityFields[3].Descriptor()
+	// useridentity.ProviderSubjectValidator is a validator for the "provider_subject" field. It is called by the builders before save.
+	useridentity.ProviderSubjectValidator = useridentityDescProviderSubject.Validators[0].(func(string) error)
+	// useridentityDescEmail is the schema descriptor for email field.
+	useridentityDescEmail := useridentityFields[4].Descriptor()
+	// useridentity.DefaultEmail holds the default value on creation for the email field.
+	useridentity.DefaultEmail = useridentityDescEmail.Default.(string)
+	// useridentity.EmailValidator is a validator for the "email" field. It is called by the builders before save.
+	useridentity.EmailValidator = useridentityDescEmail.Validators[0].(func(string) error)
+	// useridentityDescEmailVerified is the schema descriptor for email_verified field.
+	useridentityDescEmailVerified := useridentityFields[5].Descriptor()
+	// useridentity.DefaultEmailVerified holds the default value on creation for the email_verified field.
+	useridentity.DefaultEmailVerified = useridentityDescEmailVerified.Default.(bool)
+	// useridentityDescCreatedAt is the schema descriptor for created_at field.
+	useridentityDescCreatedAt := useridentityFields[7].Descriptor()
+	// useridentity.DefaultCreatedAt holds the default value on creation for the created_at field.
+	useridentity.DefaultCreatedAt = useridentityDescCreatedAt.Default.(func() time.Time)
+	// useridentityDescUpdatedAt is the schema descriptor for updated_at field.
+	useridentityDescUpdatedAt := useridentityFields[8].Descriptor()
+	// useridentity.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	useridentity.DefaultUpdatedAt = useridentityDescUpdatedAt.Default.(func() time.Time)
+	// useridentity.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	useridentity.UpdateDefaultUpdatedAt = useridentityDescUpdatedAt.UpdateDefault.(func() time.Time)
+	userrolebindingFields := schema.UserRoleBinding{}.Fields()
+	_ = userrolebindingFields
+	// userrolebindingDescAccountSubject is the schema descriptor for account_subject field.
+	userrolebindingDescAccountSubject := userrolebindingFields[1].Descriptor()
+	// userrolebinding.AccountSubjectValidator is a validator for the "account_subject" field. It is called by the builders before save.
+	userrolebinding.AccountSubjectValidator = userrolebindingDescAccountSubject.Validators[0].(func(string) error)
+	// userrolebindingDescAudience is the schema descriptor for audience field.
+	userrolebindingDescAudience := userrolebindingFields[2].Descriptor()
+	// userrolebinding.AudienceValidator is a validator for the "audience" field. It is called by the builders before save.
+	userrolebinding.AudienceValidator = userrolebindingDescAudience.Validators[0].(func(string) error)
+	// userrolebindingDescRole is the schema descriptor for role field.
+	userrolebindingDescRole := userrolebindingFields[3].Descriptor()
+	// userrolebinding.RoleValidator is a validator for the "role" field. It is called by the builders before save.
+	userrolebinding.RoleValidator = userrolebindingDescRole.Validators[0].(func(string) error)
+	// userrolebindingDescCreatedAt is the schema descriptor for created_at field.
+	userrolebindingDescCreatedAt := userrolebindingFields[4].Descriptor()
+	// userrolebinding.DefaultCreatedAt holds the default value on creation for the created_at field.
+	userrolebinding.DefaultCreatedAt = userrolebindingDescCreatedAt.Default.(func() time.Time)
+	// userrolebindingDescUpdatedAt is the schema descriptor for updated_at field.
+	userrolebindingDescUpdatedAt := userrolebindingFields[5].Descriptor()
+	// userrolebinding.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	userrolebinding.DefaultUpdatedAt = userrolebindingDescUpdatedAt.Default.(func() time.Time)
+	// userrolebinding.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	userrolebinding.UpdateDefaultUpdatedAt = userrolebindingDescUpdatedAt.UpdateDefault.(func() time.Time)
 }

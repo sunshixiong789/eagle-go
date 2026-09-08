@@ -15,6 +15,8 @@ const (
 	FieldID = "id"
 	// FieldIdentityID holds the string denoting the identity_id field in the database.
 	FieldIdentityID = "identity_id"
+	// FieldAudience holds the string denoting the audience field in the database.
+	FieldAudience = "audience"
 	// FieldRefreshTokenHash holds the string denoting the refresh_token_hash field in the database.
 	FieldRefreshTokenHash = "refresh_token_hash"
 	// FieldExpiresAt holds the string denoting the expires_at field in the database.
@@ -33,6 +35,7 @@ const (
 var Columns = []string{
 	FieldID,
 	FieldIdentityID,
+	FieldAudience,
 	FieldRefreshTokenHash,
 	FieldExpiresAt,
 	FieldRevokedAt,
@@ -51,6 +54,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// AudienceValidator is a validator for the "audience" field. It is called by the builders before save.
+	AudienceValidator func(string) error
 	// RefreshTokenHashValidator is a validator for the "refresh_token_hash" field. It is called by the builders before save.
 	RefreshTokenHashValidator func(string) error
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
@@ -74,6 +79,11 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 // ByIdentityID orders the results by the identity_id field.
 func ByIdentityID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldIdentityID, opts...).ToFunc()
+}
+
+// ByAudience orders the results by the audience field.
+func ByAudience(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAudience, opts...).ToFunc()
 }
 
 // ByRefreshTokenHash orders the results by the refresh_token_hash field.

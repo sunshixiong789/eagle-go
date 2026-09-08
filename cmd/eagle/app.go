@@ -26,6 +26,7 @@ func errorMappings() []server.ErrorMappingRule {
 		server.Unauthorized(authdomain.ErrInvalidIDToken, authv1.ErrorReason_ERROR_REASON_INVALID_ID_TOKEN),
 		server.Unauthorized(authdomain.ErrInvalidNonce, authv1.ErrorReason_ERROR_REASON_INVALID_NONCE),
 		server.Unauthorized(authdomain.ErrInvalidRefreshToken, authv1.ErrorReason_ERROR_REASON_INVALID_REFRESH_TOKEN),
+		server.Forbidden(authdomain.ErrAccountDisabled, authv1.ErrorReason_ERROR_REASON_ACCOUNT_DISABLED),
 		server.BadRequest(accessdomain.ErrUnknownPermissionCode, accessv1.ErrorReason_ERROR_REASON_UNKNOWN_PERMISSION_CODE),
 		server.BadRequest(accessdomain.ErrEmptyRole, accessv1.ErrorReason_ERROR_REASON_EMPTY_ROLE),
 		server.BadRequest(accessdomain.ErrSelfInheritance, accessv1.ErrorReason_ERROR_REASON_ROLE_INHERITANCE_CYCLE),

@@ -9,29 +9,29 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/predicate"
-	"github.com/eagle-go/eagle/internal/platform/database/ent/socialidentity"
+	"github.com/eagle-go/eagle/internal/platform/database/ent/useridentity"
 )
 
-// SocialIdentityDelete is the builder for deleting a SocialIdentity entity.
-type SocialIdentityDelete struct {
+// UserIdentityDelete is the builder for deleting a UserIdentity entity.
+type UserIdentityDelete struct {
 	config
 	hooks    []Hook
-	mutation *SocialIdentityMutation
+	mutation *UserIdentityMutation
 }
 
-// Where appends a list predicates to the SocialIdentityDelete builder.
-func (_d *SocialIdentityDelete) Where(ps ...predicate.SocialIdentity) *SocialIdentityDelete {
+// Where appends a list predicates to the UserIdentityDelete builder.
+func (_d *UserIdentityDelete) Where(ps ...predicate.UserIdentity) *UserIdentityDelete {
 	_d.mutation.Where(ps...)
 	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (_d *SocialIdentityDelete) Exec(ctx context.Context) (int, error) {
+func (_d *UserIdentityDelete) Exec(ctx context.Context) (int, error) {
 	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_d *SocialIdentityDelete) ExecX(ctx context.Context) int {
+func (_d *UserIdentityDelete) ExecX(ctx context.Context) int {
 	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
@@ -39,8 +39,8 @@ func (_d *SocialIdentityDelete) ExecX(ctx context.Context) int {
 	return n
 }
 
-func (_d *SocialIdentityDelete) sqlExec(ctx context.Context) (int, error) {
-	_spec := sqlgraph.NewDeleteSpec(socialidentity.Table, sqlgraph.NewFieldSpec(socialidentity.FieldID, field.TypeInt64))
+func (_d *UserIdentityDelete) sqlExec(ctx context.Context) (int, error) {
+	_spec := sqlgraph.NewDeleteSpec(useridentity.Table, sqlgraph.NewFieldSpec(useridentity.FieldID, field.TypeInt64))
 	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
@@ -56,32 +56,32 @@ func (_d *SocialIdentityDelete) sqlExec(ctx context.Context) (int, error) {
 	return affected, err
 }
 
-// SocialIdentityDeleteOne is the builder for deleting a single SocialIdentity entity.
-type SocialIdentityDeleteOne struct {
-	_d *SocialIdentityDelete
+// UserIdentityDeleteOne is the builder for deleting a single UserIdentity entity.
+type UserIdentityDeleteOne struct {
+	_d *UserIdentityDelete
 }
 
-// Where appends a list predicates to the SocialIdentityDelete builder.
-func (_d *SocialIdentityDeleteOne) Where(ps ...predicate.SocialIdentity) *SocialIdentityDeleteOne {
+// Where appends a list predicates to the UserIdentityDelete builder.
+func (_d *UserIdentityDeleteOne) Where(ps ...predicate.UserIdentity) *UserIdentityDeleteOne {
 	_d._d.mutation.Where(ps...)
 	return _d
 }
 
 // Exec executes the deletion query.
-func (_d *SocialIdentityDeleteOne) Exec(ctx context.Context) error {
+func (_d *UserIdentityDeleteOne) Exec(ctx context.Context) error {
 	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
 	case n == 0:
-		return &NotFoundError{socialidentity.Label}
+		return &NotFoundError{useridentity.Label}
 	default:
 		return nil
 	}
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_d *SocialIdentityDeleteOne) ExecX(ctx context.Context) {
+func (_d *UserIdentityDeleteOne) ExecX(ctx context.Context) {
 	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}

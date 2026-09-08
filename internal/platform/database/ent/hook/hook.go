@@ -117,16 +117,40 @@ func (f PolicyStateFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value,
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PolicyStateMutation", m)
 }
 
-// The SocialIdentityFunc type is an adapter to allow the use of ordinary
-// function as SocialIdentity mutator.
-type SocialIdentityFunc func(context.Context, *ent.SocialIdentityMutation) (ent.Value, error)
+// The UserAccountFunc type is an adapter to allow the use of ordinary
+// function as UserAccount mutator.
+type UserAccountFunc func(context.Context, *ent.UserAccountMutation) (ent.Value, error)
 
 // Mutate calls f(ctx, m).
-func (f SocialIdentityFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.SocialIdentityMutation); ok {
+func (f UserAccountFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.UserAccountMutation); ok {
 		return f(ctx, mv)
 	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SocialIdentityMutation", m)
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.UserAccountMutation", m)
+}
+
+// The UserIdentityFunc type is an adapter to allow the use of ordinary
+// function as UserIdentity mutator.
+type UserIdentityFunc func(context.Context, *ent.UserIdentityMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f UserIdentityFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.UserIdentityMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.UserIdentityMutation", m)
+}
+
+// The UserRoleBindingFunc type is an adapter to allow the use of ordinary
+// function as UserRoleBinding mutator.
+type UserRoleBindingFunc func(context.Context, *ent.UserRoleBindingMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f UserRoleBindingFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.UserRoleBindingMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.UserRoleBindingMutation", m)
 }
 
 // Condition is a hook condition function.

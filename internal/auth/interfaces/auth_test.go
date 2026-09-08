@@ -2,9 +2,14 @@ package interfaces
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"errors"
 	"testing"
 	"time"
+
+	jose "github.com/go-jose/go-jose/v4"
 
 	v1 "github.com/eagle-go/eagle/api/eagle/auth/v1"
 	"github.com/eagle-go/eagle/internal/auth/application"
@@ -39,7 +44,7 @@ func (s *sessionStub) grant() (*domain.SessionGrant, error) {
 	}
 	return &domain.SessionGrant{Identity: s.identity, AccessToken: "access-token"}, nil
 }
-func (s *sessionStub) Create(_ context.Context, _ *domain.ExternalIdentity, session domain.Session) (*domain.SessionGrant, error) {
+func (s *sessionStub) Create(_ context.Context, _ *domain.ExternalIdentity, _ string, session domain.Session) (*domain.SessionGrant, error) {
 	s.createHash = session.RefreshTokenHash
 	return s.grant()
 }
@@ -52,8 +57,12 @@ func (s *sessionStub) Revoke(_ context.Context, hash string) error {
 	return s.err
 }
 
+type keySetStub struct{ set jose.JSONWebKeySet }
+
+func (s keySetStub) PublicKeySet() jose.JSONWebKeySet { return s.set }
+
 func newAuthService(provider *providerStub, sessions *sessionStub) *AuthService {
-	return NewAuthService(application.NewUsecase(provider, sessions, 15*time.Minute, 30*24*time.Hour))
+	return NewAuthService(application.NewUsecase(provider, sessions, 15*time.Minute, 30*24*time.Hour), keySetStub{})
 }
 
 func TestSocialLoginMapsProvidersAndTokens(t *testing.T) {
@@ -69,7 +78,7 @@ func TestSocialLoginMapsProvidersAndTokens(t *testing.T) {
 			provider := &providerStub{}
 			sessions := &sessionStub{identity: &domain.Identity{
 				Subject: "user-1", Provider: tc.domainProvider, Email: "user@example.com",
-				EmailVerified: true, DisplayName: "Eagle", AvatarURL: "https://example.com/avatar", Role: "user",
+				EmailVerified: true, DisplayName: "Eagle", AvatarURL: "https://example.com/avatar", Roles: []string{"user"},
 			}}
 			got, err := newAuthService(provider, sessions).SocialLogin(context.Background(), &v1.SocialLoginRequest{
 				Provider: tc.protoProvider, IdToken: "id-token", Nonce: "nonce", DisplayName: "Request Name",
@@ -100,7 +109,7 @@ func TestSocialLoginRejectsUnsupportedProvider(t *testing.T) {
 
 func TestAuthServiceRefreshAndLogout(t *testing.T) {
 	provider := &providerStub{}
-	sessions := &sessionStub{identity: &domain.Identity{Subject: "user-1", Provider: domain.ProviderGoogle, Role: "user"}}
+	sessions := &sessionStub{identity: &domain.Identity{Subject: "user-1", Provider: domain.ProviderGoogle, Roles: []string{"user"}}}
 	service := newAuthService(provider, sessions)
 	refreshed, err := service.RefreshToken(context.Background(), &v1.RefreshTokenRequest{RefreshToken: "old-refresh"})
 	if err != nil || refreshed.GetAccessToken() != "access-token" || refreshed.GetRefreshToken() == "" || sessions.rotateHash == "" {
@@ -109,6 +118,25 @@ func TestAuthServiceRefreshAndLogout(t *testing.T) {
 	loggedOut, err := service.Logout(context.Background(), &v1.LogoutRequest{RefreshToken: "old-refresh"})
 	if err != nil || loggedOut == nil || sessions.revokeHash != sessions.rotateHash {
 		t.Fatalf("logout = %+v, hash=%q, err=%v", loggedOut, sessions.revokeHash, err)
+	}
+}
+
+func TestGetJSONWebKeySet(t *testing.T) {
+	private, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := NewAuthService(nil, keySetStub{set: jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{
+		Key: &private.PublicKey, KeyID: "current", Algorithm: string(jose.ES256), Use: "sig",
+	}}}})
+	got, err := service.GetJSONWebKeySet(context.Background(), &v1.GetJSONWebKeySetRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.GetKeys()) != 1 || got.GetKeys()[0].GetKid() != "current" ||
+		got.GetKeys()[0].GetKty() != "EC" || got.GetKeys()[0].GetCrv() != "P-256" ||
+		got.GetKeys()[0].GetX() == "" || got.GetKeys()[0].GetY() == "" {
+		t.Fatalf("JWKS = %+v", got)
 	}
 }
 

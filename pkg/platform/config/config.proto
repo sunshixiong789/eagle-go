@@ -68,12 +68,9 @@ message Auth {
   string issuer = 1;
   // Eagle API 的 audience。
   string audience = 3;
-  // 已删除的历史认证兼容与角色绕过配置，不再复用编号。
-  reserved 2, 4, 5, 6, 7, 8, 9, 10;
+  // 已删除的历史认证兼容、角色绕过和 HS256 共享密钥配置，不再复用编号。
+  reserved 2, 4, 5, 6, 7, 8, 9, 10, 11;
 
-  // Eagle 使用 HS256 签发和验证 access token。至少 32 字节；
-  // 生产环境必须通过 Secret 注入随机值。
-  string signing_secret = 11;
   google.protobuf.Duration access_token_ttl = 12;
   google.protobuf.Duration refresh_token_ttl = 13;
 
@@ -84,6 +81,11 @@ message Auth {
   }
   SocialProvider google = 14;
   SocialProvider apple = 15;
+
+  // 目录内每个 <kid>.pem 是一把 ES256/RS256 私钥或公钥；只有 active
+  // 对应的文件必须包含私钥。保留旧公钥即可让轮换期间的存量 token 继续验签。
+  string signing_key_directory = 16;
+  string active_signing_key_id = 17;
 }
 
 message Observability {

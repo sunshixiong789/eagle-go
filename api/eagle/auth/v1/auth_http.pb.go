@@ -17,22 +17,49 @@ var _ = new(context.Context)
 
 const _ = http.SupportPackageIsVersion3
 
+const OperationAuthServiceGetJSONWebKeySet = "/eagle.auth.v1.AuthService/GetJSONWebKeySet"
 const OperationAuthServiceLogout = "/eagle.auth.v1.AuthService/Logout"
 const OperationAuthServiceRefreshToken = "/eagle.auth.v1.AuthService/RefreshToken"
 const OperationAuthServiceSocialLogin = "/eagle.auth.v1.AuthService/SocialLogin"
 
 type AuthServiceHTTPServer interface {
+	// GetJSONWebKeySet GetJSONWebKeySet 公开 access token 验签公钥，供网关和资源服务缓存。
+	GetJSONWebKeySet(context.Context, *GetJSONWebKeySetRequest) (*GetJSONWebKeySetResponse, error)
 	Logout(context.Context, *LogoutRequest) (*LogoutResponse, error)
+	// RefreshToken buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
+	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 预生产既有响应契约，保持客户端 wire/source 兼容。
 	RefreshToken(context.Context, *RefreshTokenRequest) (*TokenResponse, error)
 	// SocialLogin SocialLogin 接收客户端从 Google/Apple SDK 获得的 ID Token。
+	// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
+	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 预生产既有响应契约，保持客户端 wire/source 兼容。
 	SocialLogin(context.Context, *SocialLoginRequest) (*TokenResponse, error)
 }
 
 func RegisterAuthServiceHTTPServer(s *http.Server, srv AuthServiceHTTPServer) {
 	r := s.Route("/")
+	r.Handle("GET", "/.well-known/jwks.json", _AuthService_GetJSONWebKeySet0_HTTP_Handler(srv))
 	r.Handle("POST", "/v1/auth/social/login", _AuthService_SocialLogin0_HTTP_Handler(srv))
 	r.Handle("POST", "/v1/auth/token/refresh", _AuthService_RefreshToken0_HTTP_Handler(srv))
 	r.Handle("POST", "/v1/auth/logout", _AuthService_Logout0_HTTP_Handler(srv))
+}
+
+func _AuthService_GetJSONWebKeySet0_HTTP_Handler(srv AuthServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetJSONWebKeySetRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationAuthServiceGetJSONWebKeySet)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetJSONWebKeySet(ctx, req.(*GetJSONWebKeySetRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*GetJSONWebKeySetResponse)
+		return ctx.Result(200, reply)
+	}
 }
 
 func _AuthService_SocialLogin0_HTTP_Handler(srv AuthServiceHTTPServer) func(ctx http.Context) error {
@@ -93,9 +120,15 @@ func _AuthService_Logout0_HTTP_Handler(srv AuthServiceHTTPServer) func(ctx http.
 }
 
 type AuthServiceHTTPClient interface {
+	// GetJSONWebKeySet GetJSONWebKeySet 公开 access token 验签公钥，供网关和资源服务缓存。
+	GetJSONWebKeySet(ctx context.Context, req *GetJSONWebKeySetRequest, opts ...http.CallOption) (rsp *GetJSONWebKeySetResponse, err error)
 	Logout(ctx context.Context, req *LogoutRequest, opts ...http.CallOption) (rsp *LogoutResponse, err error)
+	// RefreshToken buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
+	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 预生产既有响应契约，保持客户端 wire/source 兼容。
 	RefreshToken(ctx context.Context, req *RefreshTokenRequest, opts ...http.CallOption) (rsp *TokenResponse, err error)
 	// SocialLogin SocialLogin 接收客户端从 Google/Apple SDK 获得的 ID Token。
+	// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
+	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 预生产既有响应契约，保持客户端 wire/source 兼容。
 	SocialLogin(ctx context.Context, req *SocialLoginRequest, opts ...http.CallOption) (rsp *TokenResponse, err error)
 }
 
@@ -105,6 +138,23 @@ type AuthServiceHTTPClientImpl struct {
 
 func NewAuthServiceHTTPClient(client *http.Client) AuthServiceHTTPClient {
 	return &AuthServiceHTTPClientImpl{client}
+}
+
+// GetJSONWebKeySet GetJSONWebKeySet 公开 access token 验签公钥，供网关和资源服务缓存。
+func (c *AuthServiceHTTPClientImpl) GetJSONWebKeySet(ctx context.Context, in *GetJSONWebKeySetRequest, opts ...http.CallOption) (*GetJSONWebKeySetResponse, error) {
+	var out GetJSONWebKeySetResponse
+	pattern := "/.well-known/jwks.json"
+	path := http.BuildPath(pattern, in, http.WithQueryParams())
+	opts = append([]http.CallOption{
+		http.Accept("application/protojson"),
+		http.Operation(OperationAuthServiceGetJSONWebKeySet),
+		http.PathTemplate(pattern),
+	}, opts...)
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 func (c *AuthServiceHTTPClientImpl) Logout(ctx context.Context, in *LogoutRequest, opts ...http.CallOption) (*LogoutResponse, error) {
@@ -124,6 +174,8 @@ func (c *AuthServiceHTTPClientImpl) Logout(ctx context.Context, in *LogoutReques
 	return &out, nil
 }
 
+// RefreshToken buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
+// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 预生产既有响应契约，保持客户端 wire/source 兼容。
 func (c *AuthServiceHTTPClientImpl) RefreshToken(ctx context.Context, in *RefreshTokenRequest, opts ...http.CallOption) (*TokenResponse, error) {
 	var out TokenResponse
 	pattern := "/v1/auth/token/refresh"
@@ -142,6 +194,8 @@ func (c *AuthServiceHTTPClientImpl) RefreshToken(ctx context.Context, in *Refres
 }
 
 // SocialLogin SocialLogin 接收客户端从 Google/Apple SDK 获得的 ID Token。
+// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
+// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 预生产既有响应契约，保持客户端 wire/source 兼容。
 func (c *AuthServiceHTTPClientImpl) SocialLogin(ctx context.Context, in *SocialLoginRequest, opts ...http.CallOption) (*TokenResponse, error) {
 	var out TokenResponse
 	pattern := "/v1/auth/social/login"

@@ -16,20 +16,10 @@ import (
 
 	"github.com/eagle-go/eagle/pkg/authn"
 	"github.com/eagle-go/eagle/pkg/authz"
-	"github.com/eagle-go/eagle/pkg/platform/config"
 )
 
 // meterName 是本服务所有自定义指标的 instrumentation scope。
 const meterName = "github.com/eagle-go/eagle/pkg/platform/server"
-
-// NewVerifier 构造 access token 验证器。
-func NewVerifier(c *config.Auth) *authn.Verifier {
-	return authn.NewVerifier(authn.Config{
-		Issuer:        c.GetIssuer(),
-		Audience:      c.GetAudience(),
-		SigningSecret: c.GetSigningSecret(),
-	})
-}
 
 // NewMiddlewares 构造 HTTP 服务端中间件链。
 //

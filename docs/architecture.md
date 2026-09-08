@@ -9,10 +9,11 @@
 | 模块 | 职责 | 拥有的数据 | 外部依赖 |
 |---|---|---|---|
 | `access` | 权限码目录、导航树、角色绑定、Casbin 策略 | `permission_definition`、`casbin_rule`、策略版本 | 无 |
-| `auth` | Google/Apple 身份验证、Eagle token 与会话 | `social_identity`、`auth_session` | Google/Apple JWKS |
+| `auth` | 账号、Google/Apple 登录身份、Eagle token 与会话 | `user_account`、`user_identity`、`user_role_binding`、`auth_session` | Google/Apple JWKS |
 | `dictionary` | 字典的简单 CRUD，作为新模块的样板 | `dict_type`、`dict_data` | 无 |
 
-Google/Apple 只负责证明第三方身份；Eagle 保存最小身份资料与可撤销会话，并签发自己的 access token。
+Google/Apple 只负责证明第三方身份；Eagle 用不透明 `subject` 表示统一账号，一个账号可以显式绑定多个
+登录身份。Eagle 保存最小身份资料与可撤销会话，并签发自己的 access token。
 
 ## 目录表达什么
 
@@ -63,8 +64,8 @@ Google/Apple 只负责证明第三方身份；Eagle 保存最小身份资料与�
 
 ## 认证与授权
 
-    Google/Apple ID Token → auth 验签并创建会话 → Eagle access token
-                                                  ↓ 本地 HS256 验签
+    Google/Apple ID Token → auth 验签并创建会话 → Eagle access token（ES256/RS256）
+                                                  ↓ 本地公钥/JWKS 验签
     pkg/authn → pkg/identity.Principal
        ↓
     pkg/authz 中间件读 proto 的 access / perm
@@ -74,9 +75,21 @@ Google/Apple 只负责证明第三方身份；Eagle 保存最小身份资料与�
 - `auth` 模块通过官方 JWKS 验证 Google/Apple ID Token 的签名、issuer、audience、有效期与 nonce。
 - Eagle access token 短期有效；refresh token 使用密码学随机值、数据库只保存 SHA-256 哈希，并在每次刷新时轮换。
 - 权限要求声明在 proto 的 `access` / `perm` 上，handler 不写鉴权分支。可选级别只有 `PUBLIC` / `AUTHENTICATED` / `PERMISSION_REQUIRED`。
-- Eagle token 只携带普通稳定角色键，如 `user`、`admin`；角色能做什么一律由 Casbin 策略决定，不存在管理员代码短路。
-- 新社会化身份默认获得 `user`。管理员身份需在 `social_identity.role` 中显式提升，不从客户端请求或第三方资料推断。
-- 手机登录是未来可增加的 `auth` 入站适配器，必须复用现有本地身份、会话和 Eagle token，不预埋第二套认证体系。
+- Eagle token 使用带 `kid` 的非对称签名；认证服务独占私钥，通过 `/.well-known/jwks.json` 发布公钥。资源服务本地缓存公钥，不逐请求远程 introspection。
+- token 只携带 `sub`、`sid`、`jti`、时间、audience 与角色，不携带邮箱、昵称等资料。角色按 audience 归属，角色能做什么一律由 Casbin 策略决定。
+- 新账号在当前 audience 默认获得 `user`。管理员角色需在 `user_role_binding` 中显式分配，不从客户端请求或第三方资料推断。
+- 手机号、微信等国内登录是未来可增加的独立验证用例；验证成功后必须复用 `user_account`、`user_identity`、会话和 Eagle token，不把短信验证码或 OAuth code 硬塞进 ID Token 接口。
+
+### 统一认证中心的拆分路径
+
+当多个应用需要共享账号、认证需要独立发布或区域合规要求出现时，先把 `auth` 及其四张自有表迁到独立
+进程和数据库。网关继续把登录、刷新和 JWKS 路由到认证中心；业务服务保留 `pkg/authn`，通过
+`RemoteKeySet` 缓存认证中心公钥并在本地构造 `Principal`，不逐请求同步调用认证中心。
+
+`access` 可以继续留在业务单体；需要独立治理时再作为策略源拆出，通过版本化快照或事件更新各资源服务
+的本地判定器。`ReplacePolicySnapshot` 保证切换原子性。服务间工作负载身份与 C 端用户会话是两类凭证，
+不得复用用户 refresh token。国内与海外需要独立数据域时使用不同 issuer、密钥和账号存储，由网关按区域
+路由；是否允许跨域绑定账号必须经过明确的合规与产品设计。
 
 ### 为什么单体还保留策略版本对账
 
@@ -110,7 +123,7 @@ Google/Apple 只负责证明第三方身份；Eagle 保存最小身份资料与�
 本地 Compose 仅标记容器健康状态，不自动停止向该容器发送请求。
 
 退出登录立即撤销该 refresh token 的刷新能力，已签发 access token 仍可使用到到期（默认 15 分钟）。
-身份角色降级也在重新签发 token 后反映；修改角色的权限绑定则走策略对账。
+账号停用或 audience 范围内的角色降级也在重新签发 token 后反映；修改角色的权限绑定则走策略对账。
 会话创建/轮换与本地 access token 签发由一个原子端口完成：签发失败回滚事务，不消耗旧 refresh token。
 事务提交后若网络响应丢失，客户端可能需要重新登录；当前不提供刷新响应重放或幂等恢复。
 

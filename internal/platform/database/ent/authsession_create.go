@@ -29,6 +29,12 @@ func (_c *AuthSessionCreate) SetIdentityID(v int64) *AuthSessionCreate {
 	return _c
 }
 
+// SetAudience sets the "audience" field.
+func (_c *AuthSessionCreate) SetAudience(v string) *AuthSessionCreate {
+	_c.mutation.SetAudience(v)
+	return _c
+}
+
 // SetRefreshTokenHash sets the "refresh_token_hash" field.
 func (_c *AuthSessionCreate) SetRefreshTokenHash(v string) *AuthSessionCreate {
 	_c.mutation.SetRefreshTokenHash(v)
@@ -139,6 +145,14 @@ func (_c *AuthSessionCreate) check() error {
 	if _, ok := _c.mutation.IdentityID(); !ok {
 		return &ValidationError{Name: "identity_id", err: errors.New(`ent: missing required field "AuthSession.identity_id"`)}
 	}
+	if _, ok := _c.mutation.Audience(); !ok {
+		return &ValidationError{Name: "audience", err: errors.New(`ent: missing required field "AuthSession.audience"`)}
+	}
+	if v, ok := _c.mutation.Audience(); ok {
+		if err := authsession.AudienceValidator(v); err != nil {
+			return &ValidationError{Name: "audience", err: fmt.Errorf(`ent: validator failed for field "AuthSession.audience": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.RefreshTokenHash(); !ok {
 		return &ValidationError{Name: "refresh_token_hash", err: errors.New(`ent: missing required field "AuthSession.refresh_token_hash"`)}
 	}
@@ -200,6 +214,10 @@ func (_c *AuthSessionCreate) createSpec() (*AuthSession, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.IdentityID(); ok {
 		_spec.SetField(authsession.FieldIdentityID, field.TypeInt64, value)
 		_node.IdentityID = value
+	}
+	if value, ok := _c.mutation.Audience(); ok {
+		_spec.SetField(authsession.FieldAudience, field.TypeString, value)
+		_node.Audience = value
 	}
 	if value, ok := _c.mutation.RefreshTokenHash(); ok {
 		_spec.SetField(authsession.FieldRefreshTokenHash, field.TypeString, value)
@@ -288,6 +306,18 @@ func (u *AuthSessionUpsert) UpdateIdentityID() *AuthSessionUpsert {
 // AddIdentityID adds v to the "identity_id" field.
 func (u *AuthSessionUpsert) AddIdentityID(v int64) *AuthSessionUpsert {
 	u.Add(authsession.FieldIdentityID, v)
+	return u
+}
+
+// SetAudience sets the "audience" field.
+func (u *AuthSessionUpsert) SetAudience(v string) *AuthSessionUpsert {
+	u.Set(authsession.FieldAudience, v)
+	return u
+}
+
+// UpdateAudience sets the "audience" field to the value that was provided on create.
+func (u *AuthSessionUpsert) UpdateAudience() *AuthSessionUpsert {
+	u.SetExcluded(authsession.FieldAudience)
 	return u
 }
 
@@ -414,6 +444,20 @@ func (u *AuthSessionUpsertOne) AddIdentityID(v int64) *AuthSessionUpsertOne {
 func (u *AuthSessionUpsertOne) UpdateIdentityID() *AuthSessionUpsertOne {
 	return u.Update(func(s *AuthSessionUpsert) {
 		s.UpdateIdentityID()
+	})
+}
+
+// SetAudience sets the "audience" field.
+func (u *AuthSessionUpsertOne) SetAudience(v string) *AuthSessionUpsertOne {
+	return u.Update(func(s *AuthSessionUpsert) {
+		s.SetAudience(v)
+	})
+}
+
+// UpdateAudience sets the "audience" field to the value that was provided on create.
+func (u *AuthSessionUpsertOne) UpdateAudience() *AuthSessionUpsertOne {
+	return u.Update(func(s *AuthSessionUpsert) {
+		s.UpdateAudience()
 	})
 }
 
@@ -716,6 +760,20 @@ func (u *AuthSessionUpsertBulk) AddIdentityID(v int64) *AuthSessionUpsertBulk {
 func (u *AuthSessionUpsertBulk) UpdateIdentityID() *AuthSessionUpsertBulk {
 	return u.Update(func(s *AuthSessionUpsert) {
 		s.UpdateIdentityID()
+	})
+}
+
+// SetAudience sets the "audience" field.
+func (u *AuthSessionUpsertBulk) SetAudience(v string) *AuthSessionUpsertBulk {
+	return u.Update(func(s *AuthSessionUpsert) {
+		s.SetAudience(v)
+	})
+}
+
+// UpdateAudience sets the "audience" field to the value that was provided on create.
+func (u *AuthSessionUpsertBulk) UpdateAudience() *AuthSessionUpsertBulk {
+	return u.Update(func(s *AuthSessionUpsert) {
+		s.UpdateAudience()
 	})
 }
 

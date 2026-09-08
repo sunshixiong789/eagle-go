@@ -61,11 +61,14 @@ services:
     environment:
       EAGLE_DATABASE_DRIVER: postgres
       EAGLE_DATABASE_DSN: postgres://eagle:eagle@postgres:5432/eagle?sslmode=disable
-      EAGLE_AUTH_SIGNING_SECRET: "${EAGLE_AUTH_SIGNING_SECRET:-development-only-signing-secret-change-me}"
+      EAGLE_AUTH_SIGNING_KEY_DIRECTORY: /run/secrets/eagle-jwt
+      EAGLE_AUTH_ACTIVE_SIGNING_KEY_ID: "${EAGLE_AUTH_ACTIVE_SIGNING_KEY_ID:-development-es256}"
       EAGLE_AUTH_GOOGLE_ENABLED: "${EAGLE_AUTH_GOOGLE_ENABLED:-false}"
       EAGLE_AUTH_GOOGLE_CLIENT_ID: "${EAGLE_AUTH_GOOGLE_CLIENT_ID:-}"
       EAGLE_AUTH_APPLE_ENABLED: "${EAGLE_AUTH_APPLE_ENABLED:-false}"
       EAGLE_AUTH_APPLE_CLIENT_ID: "${EAGLE_AUTH_APPLE_CLIENT_ID:-}"
+    volumes:
+      - ../configs/keys:/run/secrets/eagle-jwt:ro
     ports:
       - "${EAGLE_HTTP_PORT:-8000}:8000"
       - "${EAGLE_METRICS_PORT:-9101}:9100"

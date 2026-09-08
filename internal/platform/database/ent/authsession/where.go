@@ -69,6 +69,11 @@ func IdentityID(v int64) predicate.AuthSession {
 	return predicate.AuthSession(sql.FieldEQ(FieldIdentityID, v))
 }
 
+// Audience applies equality check predicate on the "audience" field. It's identical to AudienceEQ.
+func Audience(v string) predicate.AuthSession {
+	return predicate.AuthSession(sql.FieldEQ(FieldAudience, v))
+}
+
 // RefreshTokenHash applies equality check predicate on the "refresh_token_hash" field. It's identical to RefreshTokenHashEQ.
 func RefreshTokenHash(v string) predicate.AuthSession {
 	return predicate.AuthSession(sql.FieldEQ(FieldRefreshTokenHash, v))
@@ -132,6 +137,71 @@ func IdentityIDLT(v int64) predicate.AuthSession {
 // IdentityIDLTE applies the LTE predicate on the "identity_id" field.
 func IdentityIDLTE(v int64) predicate.AuthSession {
 	return predicate.AuthSession(sql.FieldLTE(FieldIdentityID, v))
+}
+
+// AudienceEQ applies the EQ predicate on the "audience" field.
+func AudienceEQ(v string) predicate.AuthSession {
+	return predicate.AuthSession(sql.FieldEQ(FieldAudience, v))
+}
+
+// AudienceNEQ applies the NEQ predicate on the "audience" field.
+func AudienceNEQ(v string) predicate.AuthSession {
+	return predicate.AuthSession(sql.FieldNEQ(FieldAudience, v))
+}
+
+// AudienceIn applies the In predicate on the "audience" field.
+func AudienceIn(vs ...string) predicate.AuthSession {
+	return predicate.AuthSession(sql.FieldIn(FieldAudience, vs...))
+}
+
+// AudienceNotIn applies the NotIn predicate on the "audience" field.
+func AudienceNotIn(vs ...string) predicate.AuthSession {
+	return predicate.AuthSession(sql.FieldNotIn(FieldAudience, vs...))
+}
+
+// AudienceGT applies the GT predicate on the "audience" field.
+func AudienceGT(v string) predicate.AuthSession {
+	return predicate.AuthSession(sql.FieldGT(FieldAudience, v))
+}
+
+// AudienceGTE applies the GTE predicate on the "audience" field.
+func AudienceGTE(v string) predicate.AuthSession {
+	return predicate.AuthSession(sql.FieldGTE(FieldAudience, v))
+}
+
+// AudienceLT applies the LT predicate on the "audience" field.
+func AudienceLT(v string) predicate.AuthSession {
+	return predicate.AuthSession(sql.FieldLT(FieldAudience, v))
+}
+
+// AudienceLTE applies the LTE predicate on the "audience" field.
+func AudienceLTE(v string) predicate.AuthSession {
+	return predicate.AuthSession(sql.FieldLTE(FieldAudience, v))
+}
+
+// AudienceContains applies the Contains predicate on the "audience" field.
+func AudienceContains(v string) predicate.AuthSession {
+	return predicate.AuthSession(sql.FieldContains(FieldAudience, v))
+}
+
+// AudienceHasPrefix applies the HasPrefix predicate on the "audience" field.
+func AudienceHasPrefix(v string) predicate.AuthSession {
+	return predicate.AuthSession(sql.FieldHasPrefix(FieldAudience, v))
+}
+
+// AudienceHasSuffix applies the HasSuffix predicate on the "audience" field.
+func AudienceHasSuffix(v string) predicate.AuthSession {
+	return predicate.AuthSession(sql.FieldHasSuffix(FieldAudience, v))
+}
+
+// AudienceEqualFold applies the EqualFold predicate on the "audience" field.
+func AudienceEqualFold(v string) predicate.AuthSession {
+	return predicate.AuthSession(sql.FieldEqualFold(FieldAudience, v))
+}
+
+// AudienceContainsFold applies the ContainsFold predicate on the "audience" field.
+func AudienceContainsFold(v string) predicate.AuthSession {
+	return predicate.AuthSession(sql.FieldContainsFold(FieldAudience, v))
 }
 
 // RefreshTokenHashEQ applies the EQ predicate on the "refresh_token_hash" field.

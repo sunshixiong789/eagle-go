@@ -2,12 +2,18 @@ package infrastructure
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -22,28 +28,76 @@ import (
 )
 
 func TestIssuedTokenPassesRuntimeVerifier(t *testing.T) {
-	const secret = "test-signing-secret-at-least-32-bytes"
-	issuer, err := NewTokenIssuer(secret, "https://eagle.test", "eagle-api", 15*time.Minute)
+	keyDirectory := testTokenKeyDirectory(t, "current")
+	issuer, err := NewTokenIssuer(
+		keyDirectory, "current",
+		"https://eagle.test", "eagle-api", 15*time.Minute,
+	)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if keys := issuer.PublicKeySet().Keys; len(keys) != 1 || keys[0].KeyID != "current" || !keys[0].IsPublic() {
+		t.Fatalf("public key set = %+v", keys)
 	}
 	now := time.Now()
 	raw, err := issuer.Issue(&domain.Identity{
-		Subject: "google:123", Email: "user@example.com", DisplayName: "User", Role: "user",
-	}, now)
+		Subject: "account-subject", Email: "user@example.com", DisplayName: "User", Roles: []string{"user"},
+	}, "session-id", now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	verifier := authn.NewVerifier(authn.Config{
-		Issuer: "https://eagle.test", Audience: "eagle-api", SigningSecret: secret,
+	verifier, err := authn.NewVerifier(authn.Config{
+		Issuer: "https://eagle.test", Audience: "eagle-api", Keys: authn.NewStaticKeySet(issuer.PublicKeySet()),
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	claims, err := verifier.Verify(context.Background(), raw)
 	if err != nil {
 		t.Fatalf("verify issued token: %v", err)
 	}
-	if claims.Subject != "google:123" || !slices.Equal(claims.Roles, []string{"user"}) {
+	if claims.Subject != "account-subject" || claims.SessionID != "session-id" || claims.TokenID == "" ||
+		!slices.Equal(claims.Roles, []string{"user"}) {
 		t.Fatalf("unexpected claims: %+v", claims)
 	}
+	parsed, err := jwt.ParseSigned(raw, []jose.SignatureAlgorithm{jose.ES256})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]any
+	if err := parsed.UnsafeClaimsWithoutVerification(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["email"] != nil || payload["preferred_username"] != nil {
+		t.Fatalf("token leaked profile PII: %v", payload)
+	}
+}
+
+func TestTokenIssuerRejectsMissingKeyMaterial(t *testing.T) {
+	if _, err := NewTokenIssuer(filepath.Join(t.TempDir(), "missing"), "current", "https://eagle.test", "eagle-api", time.Minute); err == nil {
+		t.Fatal("missing key directory accepted")
+	}
+	if _, err := NewTokenIssuer(t.TempDir(), "current", "https://eagle.test", "eagle-api", time.Minute); err == nil {
+		t.Fatal("missing active key accepted")
+	}
+}
+
+func testTokenKeyDirectory(t *testing.T, kid string) string {
+	t.Helper()
+	private, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	der, err := x509.MarshalPKCS8PrivateKey(private)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, kid+".pem")
+	if err := os.WriteFile(path, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return dir
 }
 
 func TestValidNonce(t *testing.T) {

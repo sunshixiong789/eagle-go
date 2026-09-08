@@ -60,7 +60,7 @@ DDD 用来保护边界和不变量，不用来增加代码量：
 ## API、身份与数据
 
 - API 先改 `api/**/*.proto`，只生成 HTTP。每个 RPC 必须显式声明 `access`；需要权限时同时声明 `perm`。鉴权由中间件完成，handler 不写重复鉴权分支。
-- Google/Apple 负责证明第三方身份；`auth` 模块保存社会化身份与会话并签发 Eagle token。当前主体统一从 `pkg/identity` 获取，业务 handler 不自行解析 JWT 或创建第二套 Principal。
+- Google/Apple 负责证明第三方身份；`auth` 模块把登录身份映射到 provider-independent 账号、维护会话，并使用带 `kid` 的 ES256/RS256 私钥签发 Eagle token。资源服务只持有 JWKS 公钥；当前主体统一从 `pkg/identity` 获取，业务 handler 不自行解析 JWT 或创建第二套 Principal。
 - 表结构通过 `internal/platform/database/ent/schema` 表达，生产迁移通过 `migrations/` 的 goose SQL 表达；两者必须同步维护。
 - 只修改源文件。禁止手改 `*.pb.go`、`internal/platform/database/ent/` 等生成文件；分别通过 `make api`、`make ent` 或 `make generate` 生成。
 

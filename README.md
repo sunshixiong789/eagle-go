@@ -185,6 +185,9 @@ curl --fail -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8000/v1/system/pe
 刷新与退出分别使用 `/v1/auth/token/refresh` 和 `/v1/auth/logout`。详细接入见
 [Google/Apple 登录](docs/social-login.md)。
 
+Eagle access token 使用非对称签名，验签公钥发布在 `/.well-known/jwks.json`。业务服务只需要
+issuer、audience 和 JWKS，不应获得认证中心私钥。
+
 ## 常用命令
 
 下面每个代码块只包含一个动作，IDEA/GoLand 启用 Markdown 和 Shell Script 插件后，可以点击
@@ -387,7 +390,8 @@ Google/Apple 负责证明“第三方账号是谁”，Eagle 将其映射为本�
 | `EAGLE_DATABASE_DSN` | 数据库连接；PostgreSQL 生产启用 TLS，MySQL 必须包含 `parseTime=true` 并配置 TLS |
 | `EAGLE_AUTH_ISSUER` | 必须与 token 的 `iss` 完全一致 |
 | `EAGLE_AUTH_AUDIENCE` | Eagle access token 的必填 audience |
-| `EAGLE_AUTH_SIGNING_SECRET` | Eagle token 的 HS256 密钥，生产必须是至少 32 字节的随机 Secret |
+| `EAGLE_AUTH_SIGNING_KEY_DIRECTORY` | 容器内 JWT 密钥环目录；文件名 `<kid>.pem`，生产从 Secret 只读挂载 |
+| `EAGLE_AUTH_ACTIVE_SIGNING_KEY_ID` | 当前签发密钥 ID，对应密钥环中的文件名（不含 `.pem`） |
 | `EAGLE_AUTH_ACCESS_TOKEN_TTL` / `EAGLE_AUTH_REFRESH_TOKEN_TTL` | access/refresh token 有效期 |
 | `EAGLE_AUTH_GOOGLE_ENABLED` / `EAGLE_AUTH_GOOGLE_CLIENT_ID` | 启用 Google 登录及其 OAuth Client ID |
 | `EAGLE_AUTH_APPLE_ENABLED` / `EAGLE_AUTH_APPLE_CLIENT_ID` | 启用 Apple 登录及其 Services ID / Bundle ID |
@@ -442,7 +446,8 @@ closed，所以**必须先跑迁移再发服务**。
 ### 接口始终返回 401
 
 检查 `EAGLE_AUTH_ISSUER` 和 `EAGLE_AUTH_AUDIENCE` 是否与 Eagle token 完全一致，再确认签发端与
-验证端使用同一个 `EAGLE_AUTH_SIGNING_SECRET`。
+验证端能从 issuer 的 `/.well-known/jwks.json` 取得 token `kid` 对应的公钥。认证中心私钥不能复制到
+业务服务。
 
 ### 接口始终返回 403
 

@@ -6,6 +6,19 @@ info:
     title: ""
     version: 0.0.1
 paths:
+    /.well-known/jwks.json:
+        get:
+            tags:
+                - AuthService
+            description: GetJSONWebKeySet 公开 access token 验签公钥，供网关和资源服务缓存。
+            operationId: AuthService_GetJSONWebKeySet
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.auth.v1.GetJSONWebKeySetResponse'
     /v1/auth/logout:
         post:
             tags:
@@ -28,7 +41,10 @@ paths:
         post:
             tags:
                 - AuthService
-            description: SocialLogin 接收客户端从 Google/Apple SDK 获得的 ID Token。
+            description: |-
+                SocialLogin 接收客户端从 Google/Apple SDK 获得的 ID Token。
+                 buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
+                 buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 预生产既有响应契约，保持客户端 wire/source 兼容。
             operationId: AuthService_SocialLogin
             requestBody:
                 content:
@@ -47,6 +63,9 @@ paths:
         post:
             tags:
                 - AuthService
+            description: |-
+                buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
+                 buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 预生产既有响应契约，保持客户端 wire/source 兼容。
             operationId: AuthService_RefreshToken
             requestBody:
                 content:
@@ -739,6 +758,34 @@ components:
             properties:
                 permission:
                     $ref: '#/components/schemas/eagle.access.v1.Permission'
+        eagle.auth.v1.GetJSONWebKeySetResponse:
+            type: object
+            properties:
+                keys:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/eagle.auth.v1.JSONWebKey'
+        eagle.auth.v1.JSONWebKey:
+            type: object
+            properties:
+                kty:
+                    type: string
+                use:
+                    type: string
+                alg:
+                    type: string
+                kid:
+                    type: string
+                crv:
+                    type: string
+                x:
+                    type: string
+                y:
+                    type: string
+                n:
+                    type: string
+                e:
+                    type: string
         eagle.auth.v1.LogoutRequest:
             type: object
             properties:

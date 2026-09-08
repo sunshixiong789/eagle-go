@@ -13,6 +13,7 @@ var (
 	AuthSessionColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 32},
 		{Name: "identity_id", Type: field.TypeInt64},
+		{Name: "audience", Type: field.TypeString, Size: 255},
 		{Name: "refresh_token_hash", Type: field.TypeString, Unique: true, Size: 64},
 		{Name: "expires_at", Type: field.TypeTime},
 		{Name: "revoked_at", Type: field.TypeTime, Nullable: true},
@@ -33,7 +34,7 @@ var (
 			{
 				Name:    "authsession_expires_at",
 				Unique:  false,
-				Columns: []*schema.Column{AuthSessionColumns[3]},
+				Columns: []*schema.Column{AuthSessionColumns[4]},
 			},
 		},
 	}
@@ -229,31 +230,75 @@ var (
 		Columns:    AuthzPolicyStateColumns,
 		PrimaryKey: []*schema.Column{AuthzPolicyStateColumns[0]},
 	}
-	// SocialIdentityColumns holds the columns for the "social_identity" table.
-	SocialIdentityColumns = []*schema.Column{
+	// UserAccountColumns holds the columns for the "user_account" table.
+	UserAccountColumns = []*schema.Column{
+		{Name: "subject", Type: field.TypeString, Size: 32},
+		{Name: "display_name", Type: field.TypeString, Size: 128, Default: ""},
+		{Name: "avatar_url", Type: field.TypeString, Size: 2048, Default: ""},
+		{Name: "status", Type: field.TypeInt32, Default: 1},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// UserAccountTable holds the schema information for the "user_account" table.
+	UserAccountTable = &schema.Table{
+		Name:       "user_account",
+		Columns:    UserAccountColumns,
+		PrimaryKey: []*schema.Column{UserAccountColumns[0]},
+	}
+	// UserIdentityColumns holds the columns for the "user_identity" table.
+	UserIdentityColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
-		{Name: "subject", Type: field.TypeString, Unique: true, Size: 384},
-		{Name: "provider", Type: field.TypeString, Size: 16},
+		{Name: "account_subject", Type: field.TypeString, Size: 32},
+		{Name: "provider", Type: field.TypeString, Size: 32},
 		{Name: "provider_subject", Type: field.TypeString, Size: 255},
 		{Name: "email", Type: field.TypeString, Size: 320, Default: ""},
 		{Name: "email_verified", Type: field.TypeBool, Default: false},
-		{Name: "display_name", Type: field.TypeString, Size: 128, Default: ""},
-		{Name: "avatar_url", Type: field.TypeString, Size: 2048, Default: ""},
-		{Name: "role", Type: field.TypeString, Size: 32, Default: "user"},
 		{Name: "last_login_at", Type: field.TypeTime},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 	}
-	// SocialIdentityTable holds the schema information for the "social_identity" table.
-	SocialIdentityTable = &schema.Table{
-		Name:       "social_identity",
-		Columns:    SocialIdentityColumns,
-		PrimaryKey: []*schema.Column{SocialIdentityColumns[0]},
+	// UserIdentityTable holds the schema information for the "user_identity" table.
+	UserIdentityTable = &schema.Table{
+		Name:       "user_identity",
+		Columns:    UserIdentityColumns,
+		PrimaryKey: []*schema.Column{UserIdentityColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "socialidentity_provider_provider_subject",
+				Name:    "useridentity_provider_provider_subject",
 				Unique:  true,
-				Columns: []*schema.Column{SocialIdentityColumns[2], SocialIdentityColumns[3]},
+				Columns: []*schema.Column{UserIdentityColumns[2], UserIdentityColumns[3]},
+			},
+			{
+				Name:    "useridentity_account_subject",
+				Unique:  false,
+				Columns: []*schema.Column{UserIdentityColumns[1]},
+			},
+		},
+	}
+	// UserRoleBindingColumns holds the columns for the "user_role_binding" table.
+	UserRoleBindingColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "account_subject", Type: field.TypeString, Size: 32},
+		{Name: "audience", Type: field.TypeString, Size: 255},
+		{Name: "role", Type: field.TypeString, Size: 64},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// UserRoleBindingTable holds the schema information for the "user_role_binding" table.
+	UserRoleBindingTable = &schema.Table{
+		Name:       "user_role_binding",
+		Columns:    UserRoleBindingColumns,
+		PrimaryKey: []*schema.Column{UserRoleBindingColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "userrolebinding_account_subject_audience_role",
+				Unique:  true,
+				Columns: []*schema.Column{UserRoleBindingColumns[1], UserRoleBindingColumns[2], UserRoleBindingColumns[3]},
+			},
+			{
+				Name:    "userrolebinding_account_subject_audience",
+				Unique:  false,
+				Columns: []*schema.Column{UserRoleBindingColumns[1], UserRoleBindingColumns[2]},
 			},
 		},
 	}
@@ -268,7 +313,9 @@ var (
 		PermissionTreeStateTable,
 		AuthzPolicyAuditTable,
 		AuthzPolicyStateTable,
-		SocialIdentityTable,
+		UserAccountTable,
+		UserIdentityTable,
+		UserRoleBindingTable,
 	}
 )
 
@@ -300,7 +347,13 @@ func init() {
 	AuthzPolicyStateTable.Annotation = &entsql.Annotation{
 		Table: "authz_policy_state",
 	}
-	SocialIdentityTable.Annotation = &entsql.Annotation{
-		Table: "social_identity",
+	UserAccountTable.Annotation = &entsql.Annotation{
+		Table: "user_account",
+	}
+	UserIdentityTable.Annotation = &entsql.Annotation{
+		Table: "user_identity",
+	}
+	UserRoleBindingTable.Annotation = &entsql.Annotation{
+		Table: "user_role_binding",
 	}
 }

@@ -16,7 +16,8 @@ import (
 
 // Keep storage ownership explicit. Every generated table must have one owner.
 var storageOwners = map[string]struct{ module, model string }{
-	"auth_session": {"auth", "AuthSession"}, "social_identity": {"auth", "SocialIdentity"},
+	"auth_session": {"auth", "AuthSession"}, "user_account": {"auth", "UserAccount"},
+	"user_identity": {"auth", "UserIdentity"}, "user_role_binding": {"auth", "UserRoleBinding"},
 	"sys_dict_type": {"dictionary", "DictType"}, "sys_dict_data": {"dictionary", "DictData"},
 	"permission_definition": {"access", "PermissionDefinition"}, "navigation_node": {"access", "Permission"},
 	"permission_tree_state": {"access", "PermissionTreeState"}, "casbin_rule": {"access", "CasbinRule"},

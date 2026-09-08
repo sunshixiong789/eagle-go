@@ -51,7 +51,8 @@ func TestEnvironmentOverridesSensitiveDefaults(t *testing.T) {
 	t.Setenv("EAGLE_DATABASE_DRIVER", "mysql")
 	t.Setenv("EAGLE_DATABASE_DSN", "runtime:secret@tcp(db.internal:3306)/eagle?parseTime=true&loc=UTC")
 	t.Setenv("EAGLE_SERVER_HTTP_ADDR", "0.0.0.0:18000")
-	t.Setenv("EAGLE_AUTH_SIGNING_SECRET", "runtime-signing-secret-at-least-32-bytes")
+	t.Setenv("EAGLE_AUTH_SIGNING_KEY_DIRECTORY", "/run/secrets/eagle-jwt-keys")
+	t.Setenv("EAGLE_AUTH_ACTIVE_SIGNING_KEY_ID", "runtime-2026-09")
 	t.Setenv("EAGLE_OBSERVABILITY_TRACE_SAMPLE_RATIO", "0.05")
 
 	c := kratosconfig.New(
@@ -75,8 +76,11 @@ func TestEnvironmentOverridesSensitiveDefaults(t *testing.T) {
 	if got := bc.GetServer().GetHttp().GetAddr(); got != "0.0.0.0:18000" {
 		t.Fatalf("SERVER_HTTP_ADDR override not applied: %q", got)
 	}
-	if got := bc.GetAuth().GetSigningSecret(); got != "runtime-signing-secret-at-least-32-bytes" {
-		t.Fatalf("AUTH_SIGNING_SECRET override not applied: %q", got)
+	if got := bc.GetAuth().GetSigningKeyDirectory(); got != "/run/secrets/eagle-jwt-keys" {
+		t.Fatalf("AUTH_SIGNING_KEY_DIRECTORY override not applied: %q", got)
+	}
+	if got := bc.GetAuth().GetActiveSigningKeyId(); got != "runtime-2026-09" {
+		t.Fatalf("AUTH_ACTIVE_SIGNING_KEY_ID override not applied: %q", got)
 	}
 	if got := bc.GetObservability().GetTraceSampleRatio(); got != 0.05 {
 		t.Fatalf("OBSERVABILITY_TRACE_SAMPLE_RATIO override not applied: %v", got)
@@ -137,14 +141,15 @@ func TestDatabaseConfigRejectsInvalidDriverAndMySQLTimeParsing(t *testing.T) {
 func TestAuthConfigRequiresEagleTokenSettings(t *testing.T) {
 	bc := loadConfig(t)
 	bc.Auth.Audience = ""
-	bc.Auth.SigningSecret = ""
+	bc.Auth.SigningKeyDirectory = ""
+	bc.Auth.ActiveSigningKeyId = ""
 
 	err := appconfig.Validate(bc)
 	if err == nil {
 		t.Fatal("未配置 Eagle token audience 和签名密钥时应拒绝启动")
 	}
 	message := err.Error()
-	for _, want := range []string{"auth.audience is required", "auth.signing_secret must be at least 32 bytes"} {
+	for _, want := range []string{"auth.audience is required", "auth.signing_key_directory is required", "auth.active_signing_key_id is required"} {
 		if !strings.Contains(message, want) {
 			t.Errorf("Validate error = %q, want %q", message, want)
 		}
@@ -170,8 +175,8 @@ func TestAuthConfigIsUsable(t *testing.T) {
 	if auth.GetAudience() == "" {
 		t.Error("auth.audience 未配置")
 	}
-	if len(auth.GetSigningSecret()) < 32 {
-		t.Error("auth.signing_secret 必须至少 32 字节")
+	if auth.GetSigningKeyDirectory() == "" || auth.GetActiveSigningKeyId() == "" {
+		t.Error("auth signing key directory 和 active key id 必须配置")
 	}
 	if auth.GetAccessTokenTtl().AsDuration() <= 0 {
 		t.Error("auth.access_token_ttl 必须为正数")

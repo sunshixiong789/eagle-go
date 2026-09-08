@@ -18,6 +18,7 @@ import (
 	dictionaryinfra "github.com/eagle-go/eagle/internal/dictionary/infrastructure"
 	dictionaryinterfaces "github.com/eagle-go/eagle/internal/dictionary/interfaces"
 	platformdb "github.com/eagle-go/eagle/internal/platform/database"
+	"github.com/eagle-go/eagle/pkg/authn"
 	"github.com/eagle-go/eagle/pkg/platform/config"
 	platformruntime "github.com/eagle-go/eagle/pkg/platform/runtime"
 	"github.com/eagle-go/eagle/pkg/platform/server"
@@ -41,11 +42,20 @@ func composeApp(bc *config.Bootstrap, logger *slog.Logger) (platformruntime.Comp
 		return platformruntime.Components{}, err
 	}
 	auth := bc.GetAuth()
-	ms, err := server.NewMiddlewares(logger, server.NewVerifier(auth), enforcer, errorMappings()...)
+	issuer, err := authinfra.NewTokenIssuer(
+		auth.GetSigningKeyDirectory(), auth.GetActiveSigningKeyId(),
+		auth.GetIssuer(), auth.GetAudience(), auth.GetAccessTokenTtl().AsDuration(),
+	)
 	if err != nil {
 		return platformruntime.Components{}, err
 	}
-	issuer, err := authinfra.NewTokenIssuer(auth.GetSigningSecret(), auth.GetIssuer(), auth.GetAudience(), auth.GetAccessTokenTtl().AsDuration())
+	verifier, err := authn.NewVerifier(authn.Config{
+		Issuer: auth.GetIssuer(), Audience: auth.GetAudience(), Keys: authn.NewStaticKeySet(issuer.PublicKeySet()),
+	})
+	if err != nil {
+		return platformruntime.Components{}, err
+	}
+	ms, err := server.NewMiddlewares(logger, verifier, enforcer, errorMappings()...)
 	if err != nil {
 		return platformruntime.Components{}, err
 	}
@@ -54,8 +64,11 @@ func composeApp(bc *config.Bootstrap, logger *slog.Logger) (platformruntime.Comp
 	permissions := accessinterfaces.NewPermissionService(accessapp.NewPermissionUsecase(accessinfra.NewPermissionRepo(db), policy))
 	roles := accessinterfaces.NewRoleBindingService(accessapp.NewRoleBindingUsecase(policy))
 	dictionaries := dictionaryinterfaces.NewDictService(dictionaryinfra.NewDictRepo(db))
-	sessions := authinfra.NewSessionRepository(db, issuer)
-	login := authinterfaces.NewAuthService(authapp.NewUsecase(authinfra.NewProviderVerifier(auth), sessions, auth.GetAccessTokenTtl().AsDuration(), auth.GetRefreshTokenTtl().AsDuration()))
+	sessions := authinfra.NewSessionRepository(db, issuer, auth.GetAudience())
+	login := authinterfaces.NewAuthService(
+		authapp.NewUsecase(authinfra.NewProviderVerifier(auth), sessions, auth.GetAccessTokenTtl().AsDuration(), auth.GetRefreshTokenTtl().AsDuration()),
+		issuer,
+	)
 	hs := server.NewHTTPServer(bc.GetServer(), ms, func(s *http.Server) {
 		accessv1.RegisterPermissionServiceHTTPServer(s, permissions)
 		accessv1.RegisterRoleBindingServiceHTTPServer(s, roles)

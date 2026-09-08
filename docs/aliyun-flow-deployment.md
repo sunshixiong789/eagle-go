@@ -52,7 +52,8 @@ ECS 上只运行一次性迁移任务和 `eagle` 应用。若后续迁移到 ACK
 | `EAGLE_DATABASE_DSN` | 私密 | 当前环境独立 RDS DSN |
 | `EAGLE_AUTH_ISSUER` | 普通 | 必须与 token 的 `iss` 完全一致 |
 | `EAGLE_AUTH_AUDIENCE` | 普通 | 当前环境 Eagle JWT audience |
-| `EAGLE_AUTH_SIGNING_SECRET` | 私密 | 至少 32 字节的随机 Eagle token 签名密钥 |
+| `EAGLE_AUTH_SIGNING_KEY_HOST_DIRECTORY` | 普通 | ECS 上 JWT 密钥目录，部署时只读挂载到容器 `/run/secrets/eagle-jwt` |
+| `EAGLE_AUTH_ACTIVE_SIGNING_KEY_ID` | 普通 | 当前签发密钥文件名（不含 `.pem`） |
 | `EAGLE_AUTH_GOOGLE_ENABLED` / `EAGLE_AUTH_GOOGLE_CLIENT_ID` | 普通 | 启用 Google 登录及 Client ID |
 | `EAGLE_AUTH_APPLE_ENABLED` / `EAGLE_AUTH_APPLE_CLIENT_ID` | 普通 | 启用 Apple 登录及 Services ID / Bundle ID |
 | `EAGLE_OBSERVABILITY_OTLP_ENDPOINT` | 普通 | 可选，环境自己的 collector |
@@ -74,7 +75,9 @@ deploy/scripts/deploy.sh
 ```
 
 在开发、测试主机组分别预装 Docker Engine、Docker Compose v2 与 `flock`（通常由 `util-linux`
-提供），并给执行用户访问 Docker 的权限。主机部署命令在制品解压目录执行：
+提供），并给执行用户访问 Docker 的权限。每个环境先在 `EAGLE_AUTH_SIGNING_KEY_HOST_DIRECTORY`
+放置独立的 `<kid>.pem` 私钥，目录权限限制为部署用户可读；私钥不得进入镜像、仓库或 Flow 日志。
+主机部署命令在制品解压目录执行：
 
 ```bash
 chmod +x deploy/scripts/deploy.sh

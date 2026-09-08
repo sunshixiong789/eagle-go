@@ -86,3 +86,13 @@ func TestUnauthorizedMapping(t *testing.T) {
 		t.Fatalf("code = %d", kerrors.Code(err))
 	}
 }
+
+func TestForbiddenMapping(t *testing.T) {
+	domainErr := errors.New("account disabled")
+	err := toTransportError(domainErr, []ErrorMappingRule{
+		Forbidden(domainErr, v1.ErrorReason_ERROR_REASON_UNSPECIFIED),
+	})
+	if kerrors.Code(err) != 403 {
+		t.Fatalf("code = %d", kerrors.Code(err))
+	}
+}

@@ -37,11 +37,15 @@ func (uc *Usecase) Login(ctx context.Context, provider domain.Provider, idToken,
 		return nil, err
 	}
 	now := uc.now()
+	accountSubject, err := randomID()
+	if err != nil {
+		return nil, err
+	}
 	sessionID, err := randomID()
 	if err != nil {
 		return nil, err
 	}
-	grant, err := uc.sessions.Create(ctx, external, domain.Session{ID: sessionID, RefreshTokenHash: hash, ExpiresAt: now.Add(uc.refreshTTL)})
+	grant, err := uc.sessions.Create(ctx, external, accountSubject, domain.Session{ID: sessionID, RefreshTokenHash: hash, ExpiresAt: now.Add(uc.refreshTTL)})
 	if err != nil {
 		return nil, err
 	}

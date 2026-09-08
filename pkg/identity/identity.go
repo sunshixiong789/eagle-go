@@ -13,9 +13,8 @@ type Principal struct {
 	// Subject 是 token 的 sub，用户在本系统的唯一锚点。
 	Subject string
 
-	// Username 用于展示、日志与审计，不参与鉴权判定。
-	Username string
-	Email    string
+	// SessionID 用于会话级审计或高风险接口的即时撤权，不承载个人资料。
+	SessionID string
 
 	// Roles 是 Eagle 分配的稳定角色键，Casbin 判定基于它。
 	Roles []string

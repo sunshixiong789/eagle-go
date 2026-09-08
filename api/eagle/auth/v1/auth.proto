@@ -9,7 +9,15 @@ import "google/api/annotations.proto";
 option go_package = "github.com/eagle-go/eagle/api/eagle/auth/v1;authv1";
 
 service AuthService {
+  // GetJSONWebKeySet 公开 access token 验签公钥，供网关和资源服务缓存。
+  rpc GetJSONWebKeySet(GetJSONWebKeySetRequest) returns (GetJSONWebKeySetResponse) {
+    option (google.api.http) = {get: "/.well-known/jwks.json"};
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PUBLIC;
+  }
+
   // SocialLogin 接收客户端从 Google/Apple SDK 获得的 ID Token。
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 预生产既有响应契约，保持客户端 wire/source 兼容。
   rpc SocialLogin(SocialLoginRequest) returns (TokenResponse) {
     option (google.api.http) = {
       post: "/v1/auth/social/login"
@@ -18,6 +26,8 @@ service AuthService {
     option (eagle.annotations.v1.access) = ACCESS_LEVEL_PUBLIC;
   }
 
+  // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 预生产既有响应契约，保持客户端 wire/source 兼容。
   rpc RefreshToken(RefreshTokenRequest) returns (TokenResponse) {
     option (google.api.http) = {
       post: "/v1/auth/token/refresh"
@@ -91,4 +101,22 @@ message TokenResponse {
   string token_type = 3;
   int64 expires_in = 4;
   User user = 5;
+}
+
+message GetJSONWebKeySetRequest {}
+
+message GetJSONWebKeySetResponse {
+  repeated JSONWebKey keys = 1;
+}
+
+message JSONWebKey {
+  string kty = 1;
+  string use = 2;
+  string alg = 3;
+  string kid = 4;
+  string crv = 5;
+  string x = 6;
+  string y = 7;
+  string n = 8;
+  string e = 9;
 }

@@ -32,8 +32,12 @@ type Tx struct {
 	PolicyAudit *PolicyAuditClient
 	// PolicyState is the client for interacting with the PolicyState builders.
 	PolicyState *PolicyStateClient
-	// SocialIdentity is the client for interacting with the SocialIdentity builders.
-	SocialIdentity *SocialIdentityClient
+	// UserAccount is the client for interacting with the UserAccount builders.
+	UserAccount *UserAccountClient
+	// UserIdentity is the client for interacting with the UserIdentity builders.
+	UserIdentity *UserIdentityClient
+	// UserRoleBinding is the client for interacting with the UserRoleBinding builders.
+	UserRoleBinding *UserRoleBindingClient
 
 	// lazily loaded.
 	client     *Client
@@ -174,7 +178,9 @@ func (tx *Tx) init() {
 	tx.PermissionTreeState = NewPermissionTreeStateClient(tx.config)
 	tx.PolicyAudit = NewPolicyAuditClient(tx.config)
 	tx.PolicyState = NewPolicyStateClient(tx.config)
-	tx.SocialIdentity = NewSocialIdentityClient(tx.config)
+	tx.UserAccount = NewUserAccountClient(tx.config)
+	tx.UserIdentity = NewUserIdentityClient(tx.config)
+	tx.UserRoleBinding = NewUserRoleBindingClient(tx.config)
 }
 
 // txDriver wraps the given dialect.Tx with a nop dialect.Driver implementation.

@@ -35,40 +35,47 @@ const (
 
 // Config 是 Eagle access token 的验证参数。
 type Config struct {
-	Issuer        string
-	Audience      string
-	SigningSecret string
+	Issuer   string
+	Audience string
+	Keys     KeySource
 }
 
 // Verifier 验证 access token。
 type Verifier struct {
-	issuer        string
-	audience      string
-	signingSecret []byte
+	issuer   string
+	audience string
+	keys     KeySource
 }
 
 // NewVerifier 构造验证器。
-func NewVerifier(cfg Config) *Verifier {
-	return &Verifier{
-		issuer:        cfg.Issuer,
-		audience:      cfg.Audience,
-		signingSecret: []byte(cfg.SigningSecret),
+func NewVerifier(cfg Config) (*Verifier, error) {
+	if cfg.Issuer == "" || cfg.Audience == "" || cfg.Keys == nil {
+		return nil, fmt.Errorf("authn: issuer、audience 和 key source 均为必填")
 	}
+	return &Verifier{issuer: cfg.Issuer, audience: cfg.Audience, keys: cfg.Keys}, nil
 }
 
 // Verify 校验 token 并返回其载荷。
-func (v *Verifier) Verify(_ context.Context, rawToken string) (*Claims, error) {
-	return v.verifyLocal(rawToken)
+func (v *Verifier) Verify(ctx context.Context, rawToken string) (*Claims, error) {
+	return v.verify(ctx, rawToken)
 }
 
-func (v *Verifier) verifyLocal(rawToken string) (*Claims, error) {
-	token, err := jwt.ParseSigned(rawToken, []jose.SignatureAlgorithm{jose.HS256})
+func (v *Verifier) verify(ctx context.Context, rawToken string) (*Claims, error) {
+	token, err := jwt.ParseSigned(rawToken, []jose.SignatureAlgorithm{jose.ES256, jose.RS256})
 	if err != nil {
 		return nil, fmt.Errorf("%w: token 格式无效", ErrInvalidToken)
 	}
+	if len(token.Headers) != 1 || token.Headers[0].KeyID == "" {
+		return nil, fmt.Errorf("%w: token 缺少唯一 kid", ErrInvalidToken)
+	}
+	header := token.Headers[0]
+	key, err := v.keys.Key(ctx, header.KeyID, header.Algorithm)
+	if err != nil {
+		return nil, fmt.Errorf("%w: 查找签名公钥: %w", ErrInvalidToken, err)
+	}
 	var standard jwt.Claims
 	var claims Claims
-	if err := token.Claims(v.signingSecret, &standard, &claims); err != nil {
+	if err := token.Claims(key.Key, &standard, &claims); err != nil {
 		return nil, fmt.Errorf("%w: 签名校验失败", ErrInvalidToken)
 	}
 	if err := standard.Validate(jwt.Expected{
@@ -81,6 +88,11 @@ func (v *Verifier) verifyLocal(rawToken string) (*Claims, error) {
 		}
 		return nil, fmt.Errorf("%w: 标准声明校验失败", ErrInvalidToken)
 	}
+	if standard.Subject == "" || standard.ID == "" || standard.IssuedAt == nil || standard.Expiry == nil || claims.SessionID == "" {
+		return nil, fmt.Errorf("%w: token 缺少必需声明", ErrInvalidToken)
+	}
+	claims.Subject = standard.Subject
+	claims.TokenID = standard.ID
 	return &claims, nil
 }
 
@@ -130,10 +142,9 @@ func toTransportError(err error) error {
 
 func (v *Verifier) toPrincipal(c *Claims) *identity.Principal {
 	return &identity.Principal{
-		Subject:  c.Subject,
-		Username: c.Username,
-		Email:    c.Email,
-		Roles:    slices.Clone(c.Roles),
+		Subject:   c.Subject,
+		SessionID: c.SessionID,
+		Roles:     slices.Clone(c.Roles),
 	}
 }
 

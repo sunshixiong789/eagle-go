@@ -435,6 +435,194 @@ func (x *TokenResponse) GetUser() *User {
 	return nil
 }
 
+type GetJSONWebKeySetRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetJSONWebKeySetRequest) Reset() {
+	*x = GetJSONWebKeySetRequest{}
+	mi := &file_eagle_auth_v1_auth_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetJSONWebKeySetRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetJSONWebKeySetRequest) ProtoMessage() {}
+
+func (x *GetJSONWebKeySetRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_eagle_auth_v1_auth_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetJSONWebKeySetRequest.ProtoReflect.Descriptor instead.
+func (*GetJSONWebKeySetRequest) Descriptor() ([]byte, []int) {
+	return file_eagle_auth_v1_auth_proto_rawDescGZIP(), []int{6}
+}
+
+type GetJSONWebKeySetResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Keys          []*JSONWebKey          `protobuf:"bytes,1,rep,name=keys,proto3" json:"keys,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetJSONWebKeySetResponse) Reset() {
+	*x = GetJSONWebKeySetResponse{}
+	mi := &file_eagle_auth_v1_auth_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetJSONWebKeySetResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetJSONWebKeySetResponse) ProtoMessage() {}
+
+func (x *GetJSONWebKeySetResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_eagle_auth_v1_auth_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetJSONWebKeySetResponse.ProtoReflect.Descriptor instead.
+func (*GetJSONWebKeySetResponse) Descriptor() ([]byte, []int) {
+	return file_eagle_auth_v1_auth_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *GetJSONWebKeySetResponse) GetKeys() []*JSONWebKey {
+	if x != nil {
+		return x.Keys
+	}
+	return nil
+}
+
+type JSONWebKey struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Kty           string                 `protobuf:"bytes,1,opt,name=kty,proto3" json:"kty,omitempty"`
+	Use           string                 `protobuf:"bytes,2,opt,name=use,proto3" json:"use,omitempty"`
+	Alg           string                 `protobuf:"bytes,3,opt,name=alg,proto3" json:"alg,omitempty"`
+	Kid           string                 `protobuf:"bytes,4,opt,name=kid,proto3" json:"kid,omitempty"`
+	Crv           string                 `protobuf:"bytes,5,opt,name=crv,proto3" json:"crv,omitempty"`
+	X             string                 `protobuf:"bytes,6,opt,name=x,proto3" json:"x,omitempty"`
+	Y             string                 `protobuf:"bytes,7,opt,name=y,proto3" json:"y,omitempty"`
+	N             string                 `protobuf:"bytes,8,opt,name=n,proto3" json:"n,omitempty"`
+	E             string                 `protobuf:"bytes,9,opt,name=e,proto3" json:"e,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *JSONWebKey) Reset() {
+	*x = JSONWebKey{}
+	mi := &file_eagle_auth_v1_auth_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *JSONWebKey) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*JSONWebKey) ProtoMessage() {}
+
+func (x *JSONWebKey) ProtoReflect() protoreflect.Message {
+	mi := &file_eagle_auth_v1_auth_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use JSONWebKey.ProtoReflect.Descriptor instead.
+func (*JSONWebKey) Descriptor() ([]byte, []int) {
+	return file_eagle_auth_v1_auth_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *JSONWebKey) GetKty() string {
+	if x != nil {
+		return x.Kty
+	}
+	return ""
+}
+
+func (x *JSONWebKey) GetUse() string {
+	if x != nil {
+		return x.Use
+	}
+	return ""
+}
+
+func (x *JSONWebKey) GetAlg() string {
+	if x != nil {
+		return x.Alg
+	}
+	return ""
+}
+
+func (x *JSONWebKey) GetKid() string {
+	if x != nil {
+		return x.Kid
+	}
+	return ""
+}
+
+func (x *JSONWebKey) GetCrv() string {
+	if x != nil {
+		return x.Crv
+	}
+	return ""
+}
+
+func (x *JSONWebKey) GetX() string {
+	if x != nil {
+		return x.X
+	}
+	return ""
+}
+
+func (x *JSONWebKey) GetY() string {
+	if x != nil {
+		return x.Y
+	}
+	return ""
+}
+
+func (x *JSONWebKey) GetN() string {
+	if x != nil {
+		return x.N
+	}
+	return ""
+}
+
+func (x *JSONWebKey) GetE() string {
+	if x != nil {
+		return x.E
+	}
+	return ""
+}
+
 var File_eagle_auth_v1_auth_proto protoreflect.FileDescriptor
 
 const file_eagle_auth_v1_auth_proto_rawDesc = "" +
@@ -471,12 +659,27 @@ const file_eagle_auth_v1_auth_proto_rawDesc = "" +
 	"token_type\x18\x03 \x01(\tR\ttokenType\x12\x1d\n" +
 	"\n" +
 	"expires_in\x18\x04 \x01(\x03R\texpiresIn\x12'\n" +
-	"\x04user\x18\x05 \x01(\v2\x13.eagle.auth.v1.UserR\x04user*h\n" +
+	"\x04user\x18\x05 \x01(\v2\x13.eagle.auth.v1.UserR\x04user\"\x19\n" +
+	"\x17GetJSONWebKeySetRequest\"I\n" +
+	"\x18GetJSONWebKeySetResponse\x12-\n" +
+	"\x04keys\x18\x01 \x03(\v2\x19.eagle.auth.v1.JSONWebKeyR\x04keys\"\x9e\x01\n" +
+	"\n" +
+	"JSONWebKey\x12\x10\n" +
+	"\x03kty\x18\x01 \x01(\tR\x03kty\x12\x10\n" +
+	"\x03use\x18\x02 \x01(\tR\x03use\x12\x10\n" +
+	"\x03alg\x18\x03 \x01(\tR\x03alg\x12\x10\n" +
+	"\x03kid\x18\x04 \x01(\tR\x03kid\x12\x10\n" +
+	"\x03crv\x18\x05 \x01(\tR\x03crv\x12\f\n" +
+	"\x01x\x18\x06 \x01(\tR\x01x\x12\f\n" +
+	"\x01y\x18\a \x01(\tR\x01y\x12\f\n" +
+	"\x01n\x18\b \x01(\tR\x01n\x12\f\n" +
+	"\x01e\x18\t \x01(\tR\x01e*h\n" +
 	"\x0eSocialProvider\x12\x1f\n" +
 	"\x1bSOCIAL_PROVIDER_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16SOCIAL_PROVIDER_GOOGLE\x10\x01\x12\x19\n" +
-	"\x15SOCIAL_PROVIDER_APPLE\x10\x022\xe3\x02\n" +
-	"\vAuthService\x12t\n" +
+	"\x15SOCIAL_PROVIDER_APPLE\x10\x022\xed\x03\n" +
+	"\vAuthService\x12\x87\x01\n" +
+	"\x10GetJSONWebKeySet\x12&.eagle.auth.v1.GetJSONWebKeySetRequest\x1a'.eagle.auth.v1.GetJSONWebKeySetResponse\"\"\x98\xb5\x18\x01\x82\xd3\xe4\x93\x02\x18\x12\x16/.well-known/jwks.json\x12t\n" +
 	"\vSocialLogin\x12!.eagle.auth.v1.SocialLoginRequest\x1a\x1c.eagle.auth.v1.TokenResponse\"$\x98\xb5\x18\x01\x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/v1/auth/social/login\x12w\n" +
 	"\fRefreshToken\x12\".eagle.auth.v1.RefreshTokenRequest\x1a\x1c.eagle.auth.v1.TokenResponse\"%\x98\xb5\x18\x01\x82\xd3\xe4\x93\x02\x1b:\x01*\"\x16/v1/auth/token/refresh\x12e\n" +
 	"\x06Logout\x12\x1c.eagle.auth.v1.LogoutRequest\x1a\x1d.eagle.auth.v1.LogoutResponse\"\x1e\x98\xb5\x18\x01\x82\xd3\xe4\x93\x02\x14:\x01*\"\x0f/v1/auth/logoutB4Z2github.com/eagle-go/eagle/api/eagle/auth/v1;authv1b\x06proto3"
@@ -494,31 +697,37 @@ func file_eagle_auth_v1_auth_proto_rawDescGZIP() []byte {
 }
 
 var file_eagle_auth_v1_auth_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_eagle_auth_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_eagle_auth_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_eagle_auth_v1_auth_proto_goTypes = []any{
-	(SocialProvider)(0),         // 0: eagle.auth.v1.SocialProvider
-	(*SocialLoginRequest)(nil),  // 1: eagle.auth.v1.SocialLoginRequest
-	(*RefreshTokenRequest)(nil), // 2: eagle.auth.v1.RefreshTokenRequest
-	(*LogoutRequest)(nil),       // 3: eagle.auth.v1.LogoutRequest
-	(*LogoutResponse)(nil),      // 4: eagle.auth.v1.LogoutResponse
-	(*User)(nil),                // 5: eagle.auth.v1.User
-	(*TokenResponse)(nil),       // 6: eagle.auth.v1.TokenResponse
+	(SocialProvider)(0),              // 0: eagle.auth.v1.SocialProvider
+	(*SocialLoginRequest)(nil),       // 1: eagle.auth.v1.SocialLoginRequest
+	(*RefreshTokenRequest)(nil),      // 2: eagle.auth.v1.RefreshTokenRequest
+	(*LogoutRequest)(nil),            // 3: eagle.auth.v1.LogoutRequest
+	(*LogoutResponse)(nil),           // 4: eagle.auth.v1.LogoutResponse
+	(*User)(nil),                     // 5: eagle.auth.v1.User
+	(*TokenResponse)(nil),            // 6: eagle.auth.v1.TokenResponse
+	(*GetJSONWebKeySetRequest)(nil),  // 7: eagle.auth.v1.GetJSONWebKeySetRequest
+	(*GetJSONWebKeySetResponse)(nil), // 8: eagle.auth.v1.GetJSONWebKeySetResponse
+	(*JSONWebKey)(nil),               // 9: eagle.auth.v1.JSONWebKey
 }
 var file_eagle_auth_v1_auth_proto_depIdxs = []int32{
 	0, // 0: eagle.auth.v1.SocialLoginRequest.provider:type_name -> eagle.auth.v1.SocialProvider
 	0, // 1: eagle.auth.v1.User.provider:type_name -> eagle.auth.v1.SocialProvider
 	5, // 2: eagle.auth.v1.TokenResponse.user:type_name -> eagle.auth.v1.User
-	1, // 3: eagle.auth.v1.AuthService.SocialLogin:input_type -> eagle.auth.v1.SocialLoginRequest
-	2, // 4: eagle.auth.v1.AuthService.RefreshToken:input_type -> eagle.auth.v1.RefreshTokenRequest
-	3, // 5: eagle.auth.v1.AuthService.Logout:input_type -> eagle.auth.v1.LogoutRequest
-	6, // 6: eagle.auth.v1.AuthService.SocialLogin:output_type -> eagle.auth.v1.TokenResponse
-	6, // 7: eagle.auth.v1.AuthService.RefreshToken:output_type -> eagle.auth.v1.TokenResponse
-	4, // 8: eagle.auth.v1.AuthService.Logout:output_type -> eagle.auth.v1.LogoutResponse
-	6, // [6:9] is the sub-list for method output_type
-	3, // [3:6] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	9, // 3: eagle.auth.v1.GetJSONWebKeySetResponse.keys:type_name -> eagle.auth.v1.JSONWebKey
+	7, // 4: eagle.auth.v1.AuthService.GetJSONWebKeySet:input_type -> eagle.auth.v1.GetJSONWebKeySetRequest
+	1, // 5: eagle.auth.v1.AuthService.SocialLogin:input_type -> eagle.auth.v1.SocialLoginRequest
+	2, // 6: eagle.auth.v1.AuthService.RefreshToken:input_type -> eagle.auth.v1.RefreshTokenRequest
+	3, // 7: eagle.auth.v1.AuthService.Logout:input_type -> eagle.auth.v1.LogoutRequest
+	8, // 8: eagle.auth.v1.AuthService.GetJSONWebKeySet:output_type -> eagle.auth.v1.GetJSONWebKeySetResponse
+	6, // 9: eagle.auth.v1.AuthService.SocialLogin:output_type -> eagle.auth.v1.TokenResponse
+	6, // 10: eagle.auth.v1.AuthService.RefreshToken:output_type -> eagle.auth.v1.TokenResponse
+	4, // 11: eagle.auth.v1.AuthService.Logout:output_type -> eagle.auth.v1.LogoutResponse
+	8, // [8:12] is the sub-list for method output_type
+	4, // [4:8] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_eagle_auth_v1_auth_proto_init() }
@@ -532,7 +741,7 @@ func file_eagle_auth_v1_auth_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_eagle_auth_v1_auth_proto_rawDesc), len(file_eagle_auth_v1_auth_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   6,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

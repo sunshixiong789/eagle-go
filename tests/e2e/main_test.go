@@ -10,6 +10,11 @@ package e2e
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/pem"
 	"flag"
 	"fmt"
 	"io"
@@ -37,6 +42,7 @@ import (
 	dictionaryinfra "github.com/eagle-go/eagle/internal/dictionary/infrastructure"
 	dictionaryinterfaces "github.com/eagle-go/eagle/internal/dictionary/interfaces"
 	platformdb "github.com/eagle-go/eagle/internal/platform/database"
+	"github.com/eagle-go/eagle/pkg/authn"
 	"github.com/eagle-go/eagle/pkg/authz"
 	"github.com/eagle-go/eagle/pkg/platform/config"
 	"github.com/eagle-go/eagle/pkg/platform/server"
@@ -44,20 +50,50 @@ import (
 )
 
 const (
-	testIssuer     = "https://eagle.test"
-	testAudience   = "eagle-api"
-	testAuthSecret = "test-signing-secret-at-least-32-bytes"
+	testIssuer   = "https://eagle.test"
+	testAudience = "eagle-api"
+	testKeyID    = "e2e-current"
 )
 
 var (
 	testDatabaseDriver string
 	testDSN            string
+	testSigningKey     *ecdsa.PrivateKey
+	testWrongKey       *ecdsa.PrivateKey
+	testKeyDirectory   string
 )
 
 func TestMain(m *testing.M) {
 	flag.Parse()
 	if testing.Short() {
 		os.Exit(m.Run())
+	}
+
+	var err error
+	testSigningKey, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "生成 e2e signing key 失败: %v\n", err)
+		os.Exit(1)
+	}
+	testWrongKey, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "生成 e2e wrong key 失败: %v\n", err)
+		os.Exit(1)
+	}
+	testKeyDirectory, err = os.MkdirTemp("", "eagle-e2e-keys-")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "创建 e2e key directory 失败: %v\n", err)
+		os.Exit(1)
+	}
+	der, err := x509.MarshalPKCS8PrivateKey(testSigningKey)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "编码 e2e signing key 失败: %v\n", err)
+		os.Exit(1)
+	}
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
+	if err := os.WriteFile(testKeyDirectory+"/"+testKeyID+".pem", keyPEM, 0o600); err != nil {
+		fmt.Fprintf(os.Stderr, "写入 e2e signing key 失败: %v\n", err)
+		os.Exit(1)
 	}
 
 	testDatabase, err := testkit.StartDatabase("e2e", "eagle_e2e")
@@ -68,6 +104,10 @@ func TestMain(m *testing.M) {
 	testDatabaseDriver = testDatabase.Driver
 	testDSN = testDatabase.DSN
 	code := m.Run()
+	if err := os.RemoveAll(testKeyDirectory); err != nil {
+		fmt.Fprintf(os.Stderr, "e2e key directory 清理失败: %v\n", err)
+		code = 1
+	}
 	if err := testDatabase.Close(); err != nil {
 		fmt.Fprintf(os.Stderr, "e2e 环境清理失败: %v\n", err)
 		code = 1
@@ -94,11 +134,9 @@ func newTestEnv(t *testing.T) *testEnv {
 	}
 
 	authConf := &config.Auth{
-		Issuer:          testIssuer,
-		Audience:        testAudience,
-		SigningSecret:   testAuthSecret,
-		AccessTokenTtl:  durationpb.New(15 * time.Minute),
-		RefreshTokenTtl: durationpb.New(30 * 24 * time.Hour),
+		Issuer: testIssuer, Audience: testAudience,
+		SigningKeyDirectory: testKeyDirectory, ActiveSigningKeyId: testKeyID,
+		AccessTokenTtl: durationpb.New(15 * time.Minute), RefreshTokenTtl: durationpb.New(30 * 24 * time.Hour),
 	}
 
 	adminDB, cleanup, err := platformdb.Open(&config.Data{Database: &config.Data_Database{
@@ -116,8 +154,20 @@ func newTestEnv(t *testing.T) *testEnv {
 		t.Fatalf("构造 Casbin enforcer: %v", err)
 	}
 
+	issuer, err := authinfra.NewTokenIssuer(
+		authConf.GetSigningKeyDirectory(), authConf.GetActiveSigningKeyId(),
+		authConf.GetIssuer(), authConf.GetAudience(), authConf.GetAccessTokenTtl().AsDuration(),
+	)
+	if err != nil {
+		t.Fatalf("构造 token issuer: %v", err)
+	}
+	verifier, err := authn.NewVerifier(authn.Config{
+		Issuer: testIssuer, Audience: testAudience, Keys: authn.NewStaticKeySet(issuer.PublicKeySet()),
+	})
+	if err != nil {
+		t.Fatalf("构造 token verifier: %v", err)
+	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	verifier := server.NewVerifier(authConf)
 	middlewares, err := server.NewMiddlewares(logger, verifier, enforcer, e2eErrorMappings()...)
 	if err != nil {
 		t.Fatalf("构造中间件链: %v", err)
@@ -128,18 +178,14 @@ func newTestEnv(t *testing.T) *testEnv {
 	permRepo := accessinfra.NewPermissionRepo(adminDB)
 	policyRepo := accessinfra.NewPolicyRepo(enforcer, store)
 	dictRepo := dictionaryinfra.NewDictRepo(adminDB)
-	issuer, err := authinfra.NewTokenIssuer(testAuthSecret, testIssuer, testAudience, 15*time.Minute)
-	if err != nil {
-		t.Fatalf("构造 token issuer: %v", err)
-	}
-	sessions := authinfra.NewSessionRepository(adminDB, issuer)
+	sessions := authinfra.NewSessionRepository(adminDB, issuer, testAudience)
 
 	permSvc := accessinterfaces.NewPermissionService(accessapp.NewPermissionUsecase(permRepo, policyRepo))
 	dictSvc := dictionaryinterfaces.NewDictService(dictRepo)
 	bindingSvc := accessinterfaces.NewRoleBindingService(accessapp.NewRoleBindingUsecase(policyRepo))
 	authSvc := authinterfaces.NewAuthService(authapp.NewUsecase(
 		providerVerifierStub{}, sessions, 15*time.Minute, 30*24*time.Hour,
-	))
+	), issuer)
 
 	// addr 留空：不监听真实端口，只把 Server 当 http.Handler 用
 	srv := server.NewHTTPServer(&config.Server{
@@ -197,6 +243,7 @@ func e2eErrorMappings() []server.ErrorMappingRule {
 		server.Unauthorized(authdomain.ErrInvalidIDToken, authv1.ErrorReason_ERROR_REASON_INVALID_ID_TOKEN),
 		server.Unauthorized(authdomain.ErrInvalidNonce, authv1.ErrorReason_ERROR_REASON_INVALID_NONCE),
 		server.Unauthorized(authdomain.ErrInvalidRefreshToken, authv1.ErrorReason_ERROR_REASON_INVALID_REFRESH_TOKEN),
+		server.Forbidden(authdomain.ErrAccountDisabled, authv1.ErrorReason_ERROR_REASON_ACCOUNT_DISABLED),
 		server.NotFound(dictionarydomain.ErrDictTypeNotFound, dictionaryv1.ErrorReason_ERROR_REASON_DICT_TYPE_NOT_FOUND),
 		server.Conflict(dictionarydomain.ErrDictTypeDuplicated, dictionaryv1.ErrorReason_ERROR_REASON_DICT_TYPE_DUPLICATED),
 		server.NotFound(dictionarydomain.ErrDictDataNotFound, dictionaryv1.ErrorReason_ERROR_REASON_DICT_DATA_NOT_FOUND),

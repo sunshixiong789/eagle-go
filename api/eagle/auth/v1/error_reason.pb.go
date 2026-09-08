@@ -29,6 +29,7 @@ const (
 	ErrorReason_ERROR_REASON_INVALID_ID_TOKEN      ErrorReason = 11
 	ErrorReason_ERROR_REASON_INVALID_NONCE         ErrorReason = 12
 	ErrorReason_ERROR_REASON_INVALID_REFRESH_TOKEN ErrorReason = 13
+	ErrorReason_ERROR_REASON_ACCOUNT_DISABLED      ErrorReason = 14
 )
 
 // Enum value maps for ErrorReason.
@@ -39,6 +40,7 @@ var (
 		11: "ERROR_REASON_INVALID_ID_TOKEN",
 		12: "ERROR_REASON_INVALID_NONCE",
 		13: "ERROR_REASON_INVALID_REFRESH_TOKEN",
+		14: "ERROR_REASON_ACCOUNT_DISABLED",
 	}
 	ErrorReason_value = map[string]int32{
 		"ERROR_REASON_UNSPECIFIED":           0,
@@ -46,6 +48,7 @@ var (
 		"ERROR_REASON_INVALID_ID_TOKEN":      11,
 		"ERROR_REASON_INVALID_NONCE":         12,
 		"ERROR_REASON_INVALID_REFRESH_TOKEN": 13,
+		"ERROR_REASON_ACCOUNT_DISABLED":      14,
 	}
 )
 
@@ -80,14 +83,15 @@ var File_eagle_auth_v1_error_reason_proto protoreflect.FileDescriptor
 
 const file_eagle_auth_v1_error_reason_proto_rawDesc = "" +
 	"\n" +
-	" eagle/auth/v1/error_reason.proto\x12\reagle.auth.v1*\xba\x01\n" +
+	" eagle/auth/v1/error_reason.proto\x12\reagle.auth.v1*\xdd\x01\n" +
 	"\vErrorReason\x12\x1c\n" +
 	"\x18ERROR_REASON_UNSPECIFIED\x10\x00\x12\"\n" +
 	"\x1eERROR_REASON_PROVIDER_DISABLED\x10\n" +
 	"\x12!\n" +
 	"\x1dERROR_REASON_INVALID_ID_TOKEN\x10\v\x12\x1e\n" +
 	"\x1aERROR_REASON_INVALID_NONCE\x10\f\x12&\n" +
-	"\"ERROR_REASON_INVALID_REFRESH_TOKEN\x10\rB4Z2github.com/eagle-go/eagle/api/eagle/auth/v1;authv1b\x06proto3"
+	"\"ERROR_REASON_INVALID_REFRESH_TOKEN\x10\r\x12!\n" +
+	"\x1dERROR_REASON_ACCOUNT_DISABLED\x10\x0eB4Z2github.com/eagle-go/eagle/api/eagle/auth/v1;authv1b\x06proto3"
 
 var (
 	file_eagle_auth_v1_error_reason_proto_rawDescOnce sync.Once

@@ -20,13 +20,13 @@ func (p providerFake) Verify(context.Context, domain.Provider, string, string) (
 
 type sessionsFake struct {
 	domain.SessionRepository
-	create func(context.Context, *domain.ExternalIdentity, domain.Session) (*domain.SessionGrant, error)
+	create func(context.Context, *domain.ExternalIdentity, string, domain.Session) (*domain.SessionGrant, error)
 	rotate func(context.Context, string, string, time.Time) (*domain.SessionGrant, error)
 	revoke func(context.Context, string) error
 }
 
-func (s sessionsFake) Create(ctx context.Context, e *domain.ExternalIdentity, session domain.Session) (*domain.SessionGrant, error) {
-	return s.create(ctx, e, session)
+func (s sessionsFake) Create(ctx context.Context, e *domain.ExternalIdentity, subject string, session domain.Session) (*domain.SessionGrant, error) {
+	return s.create(ctx, e, subject, session)
 }
 func (s sessionsFake) Rotate(ctx context.Context, old, next string, expiry time.Time) (*domain.SessionGrant, error) {
 	return s.rotate(ctx, old, next, expiry)
@@ -80,10 +80,10 @@ func TestRefreshReturnsOnlyCommittedGrant(t *testing.T) {
 func TestLoginPersistsOnlyRefreshHash(t *testing.T) {
 	now := time.Now()
 	var saved domain.Session
-	uc := NewUsecase(providerFake{}, sessionsFake{create: func(_ context.Context, e *domain.ExternalIdentity, s domain.Session) (*domain.SessionGrant, error) {
+	uc := NewUsecase(providerFake{}, sessionsFake{create: func(_ context.Context, e *domain.ExternalIdentity, subject string, s domain.Session) (*domain.SessionGrant, error) {
 		saved = s
-		if e.DisplayName != "Name" || e.ProviderID != "user" {
-			t.Fatalf("external = %+v", e)
+		if e.DisplayName != "Name" || e.ProviderID != "user" || len(subject) != 32 {
+			t.Fatalf("external = %+v, subject = %q", e, subject)
 		}
 		return &domain.SessionGrant{Identity: &domain.Identity{Subject: "user"}, AccessToken: "access"}, nil
 	}}, time.Minute, time.Hour)
@@ -101,7 +101,7 @@ func TestLoginPreservesVerifiedDisplayName(t *testing.T) {
 	provider := providerFakeWithIdentity{identity: &domain.ExternalIdentity{
 		Provider: domain.ProviderApple, ProviderID: "apple-user", DisplayName: "Verified Name",
 	}}
-	uc := NewUsecase(provider, sessionsFake{create: func(_ context.Context, e *domain.ExternalIdentity, _ domain.Session) (*domain.SessionGrant, error) {
+	uc := NewUsecase(provider, sessionsFake{create: func(_ context.Context, e *domain.ExternalIdentity, _ string, _ domain.Session) (*domain.SessionGrant, error) {
 		if e.DisplayName != "Verified Name" {
 			t.Fatalf("display name = %q", e.DisplayName)
 		}
@@ -122,7 +122,7 @@ func (p providerFakeWithIdentity) Verify(context.Context, domain.Provider, strin
 
 func TestLoginPropagatesCreateFailure(t *testing.T) {
 	want := errors.New("create failed")
-	uc := NewUsecase(providerFake{}, sessionsFake{create: func(context.Context, *domain.ExternalIdentity, domain.Session) (*domain.SessionGrant, error) {
+	uc := NewUsecase(providerFake{}, sessionsFake{create: func(context.Context, *domain.ExternalIdentity, string, domain.Session) (*domain.SessionGrant, error) {
 		return nil, want
 	}}, time.Minute, time.Hour)
 	tokens, err := uc.Login(context.Background(), domain.ProviderGoogle, "id", "nonce", "")

@@ -11,7 +11,6 @@ import (
 
 type tokenOpts struct {
 	subject   string
-	username  string
 	roles     []string
 	audience  []string
 	expiresIn time.Duration
@@ -22,20 +21,20 @@ type tokenOpts struct {
 
 func mintEagleToken(t *testing.T, opts tokenOpts) string {
 	t.Helper()
-	secret := testAuthSecret
-	if opts.wrongKey {
-		secret = "different-signing-secret-at-least-32-bytes"
-	}
 	alg := opts.algorithm
 	if alg == "" {
-		alg = jose.HS256
+		alg = jose.ES256
 	}
-	if alg == jose.HS512 && len(secret) < 64 {
-		secret = strings.Repeat("x", 64)
+	var key any = testSigningKey
+	if opts.wrongKey {
+		key = testWrongKey
+	}
+	if alg == jose.HS512 {
+		key = []byte(strings.Repeat("x", 64))
 	}
 	signer, err := jose.NewSigner(
-		jose.SigningKey{Algorithm: alg, Key: []byte(secret)},
-		(&jose.SignerOptions{}).WithType("JWT"),
+		jose.SigningKey{Algorithm: alg, Key: key},
+		(&jose.SignerOptions{}).WithType("JWT").WithHeader("kid", testKeyID),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -50,15 +49,14 @@ func mintEagleToken(t *testing.T, opts tokenOpts) string {
 		audience = []string{testAudience}
 	}
 	standard := jwt.Claims{
-		Issuer: testIssuer, Subject: opts.subject, Audience: audience,
+		Issuer: testIssuer, Subject: opts.subject, Audience: audience, ID: "test-token-id",
 		IssuedAt: jwt.NewNumericDate(now), Expiry: jwt.NewNumericDate(now.Add(expiresIn)),
 	}
 	if opts.notBefore != 0 {
 		standard.NotBefore = jwt.NewNumericDate(now.Add(opts.notBefore))
 	}
 	raw, err := jwt.Signed(signer).Claims(standard).Claims(map[string]any{
-		"preferred_username": opts.username,
-		"roles":              opts.roles,
+		"sid": "test-session-id", "roles": opts.roles,
 	}).Serialize()
 	if err != nil {
 		t.Fatal(err)
@@ -66,9 +64,9 @@ func mintEagleToken(t *testing.T, opts tokenOpts) string {
 	return raw
 }
 
-func userToken(t *testing.T, username string, roles ...string) string {
+func userToken(t *testing.T, label string, roles ...string) string {
 	t.Helper()
 	return mintEagleToken(t, tokenOpts{
-		subject: "subject-" + username, username: username, roles: roles,
+		subject: "subject-" + label, roles: roles,
 	})
 }

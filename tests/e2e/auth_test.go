@@ -58,6 +58,24 @@ func TestServiceBootsAndRoutes(t *testing.T) {
 	}
 }
 
+func TestPublicJWKSExposesOnlyVerificationMaterial(t *testing.T) {
+	env := newTestEnv(t)
+	code, body := env.get(t, "/.well-known/jwks.json", "")
+	if code != http.StatusOK {
+		t.Fatalf("JWKS = %d (%s), want 200", code, body)
+	}
+	var document struct {
+		Keys []map[string]any `json:"keys"`
+	}
+	if err := json.Unmarshal([]byte(body), &document); err != nil {
+		t.Fatal(err)
+	}
+	if len(document.Keys) != 1 || document.Keys[0]["kid"] != testKeyID ||
+		document.Keys[0]["alg"] != "ES256" || document.Keys[0]["d"] != nil {
+		t.Fatalf("unexpected JWKS: %s", body)
+	}
+}
+
 func TestUnauthenticatedIsRejected(t *testing.T) {
 	env := newTestEnv(t)
 
@@ -67,24 +85,24 @@ func TestUnauthenticatedIsRejected(t *testing.T) {
 	}{
 		{"无 token", ""},
 		{"伪造签名", mintEagleToken(t, tokenOpts{
-			subject: "s1", username: "mallory",
-			roles: []string{"admin"}, wrongKey: true,
+			subject: "s1",
+			roles:   []string{"admin"}, wrongKey: true,
 		})},
 		{"已过期", mintEagleToken(t, tokenOpts{
-			subject: "s2", username: "alice",
-			roles: []string{"admin"}, expiresIn: -time.Hour,
+			subject: "s2",
+			roles:   []string{"admin"}, expiresIn: -time.Hour,
 		})},
 		{"aud 不匹配", mintEagleToken(t, tokenOpts{
-			subject: "subject-3", username: "alice",
-			roles: []string{"admin"}, audience: []string{"another-service"},
+			subject: "subject-3",
+			roles:   []string{"admin"}, audience: []string{"another-service"},
 		})},
 		{"尚未生效", mintEagleToken(t, tokenOpts{
-			subject: "s4", username: "alice",
-			roles: []string{"admin"}, notBefore: 10 * time.Minute,
+			subject: "s4",
+			roles:   []string{"admin"}, notBefore: 10 * time.Minute,
 		})},
 		{"非白名单签名算法", mintEagleToken(t, tokenOpts{
-			subject: "s5", username: "alice",
-			roles: []string{"admin"}, algorithm: jose.HS512,
+			subject: "s5",
+			roles:   []string{"admin"}, algorithm: jose.HS512,
 		})},
 	}
 

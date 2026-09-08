@@ -37,7 +37,7 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	goose.SetLogger(goose.NopLogger())
 
 	dir := testkit.MigrationsDirFor(testDatabase.Driver)
-	assertSingleBaseline(t, sqlDB, testDatabase.Driver)
+	assertLatestSchema(t, sqlDB, testDatabase.Driver)
 	assertSeedData(t, sqlDB, testDatabase.Driver)
 
 	if err := goose.DownTo(sqlDB, dir, 0); err != nil {
@@ -50,27 +50,27 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	if err := goose.Up(sqlDB, dir); err != nil {
 		t.Fatalf("回滚后重新 up: %v", err)
 	}
-	assertSingleBaseline(t, sqlDB, testDatabase.Driver)
+	assertLatestSchema(t, sqlDB, testDatabase.Driver)
 	assertSeedData(t, sqlDB, testDatabase.Driver)
 	if err := goose.DownTo(sqlDB, dir, 0); err != nil {
 		t.Fatalf("最终 down-to 0: %v", err)
 	}
 }
 
-func assertSingleBaseline(t *testing.T, db *sql.DB, driver string) {
+func assertLatestSchema(t *testing.T, db *sql.DB, driver string) {
 	t.Helper()
 	if version, err := goose.GetDBVersion(db); err != nil {
 		t.Fatalf("读取迁移版本: %v", err)
-	} else if version != 1 {
-		t.Fatalf("迁移版本 = %d, want 1", version)
+	} else if version != 2 {
+		t.Fatalf("迁移版本 = %d, want 2", version)
 	}
-	for _, table := range []string{"social_identity", "auth_session"} {
+	for _, table := range []string{"user_account", "user_identity", "user_role_binding", "auth_session"} {
 		exists, err := tableExists(db, driver, table)
 		if err != nil {
 			t.Fatalf("检查表 %s: %v", table, err)
 		}
 		if !exists {
-			t.Errorf("基线迁移缺少表 %s", table)
+			t.Errorf("最新迁移缺少表 %s", table)
 		}
 	}
 }
@@ -184,7 +184,7 @@ func assertTablesDropped(t *testing.T, db *sql.DB, driver string) {
 	t.Helper()
 
 	for _, table := range []string{
-		"auth_session", "social_identity",
+		"auth_session", "social_identity", "user_account", "user_identity", "user_role_binding",
 		"navigation_node", "permission_definition", "permission_tree_state",
 		"sys_dict_type", "sys_dict_data", "casbin_rule",
 		"authz_policy_state", "authz_policy_audit",

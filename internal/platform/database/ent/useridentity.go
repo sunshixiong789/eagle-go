@@ -9,16 +9,16 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/eagle-go/eagle/internal/platform/database/ent/socialidentity"
+	"github.com/eagle-go/eagle/internal/platform/database/ent/useridentity"
 )
 
-// SocialIdentity is the model entity for the SocialIdentity schema.
-type SocialIdentity struct {
+// UserIdentity is the model entity for the UserIdentity schema.
+type UserIdentity struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int64 `json:"id,omitempty"`
-	// Subject holds the value of the "subject" field.
-	Subject string `json:"subject,omitempty"`
+	// AccountSubject holds the value of the "account_subject" field.
+	AccountSubject string `json:"account_subject,omitempty"`
 	// Provider holds the value of the "provider" field.
 	Provider string `json:"provider,omitempty"`
 	// ProviderSubject holds the value of the "provider_subject" field.
@@ -27,12 +27,6 @@ type SocialIdentity struct {
 	Email string `json:"email,omitempty"`
 	// EmailVerified holds the value of the "email_verified" field.
 	EmailVerified bool `json:"email_verified,omitempty"`
-	// DisplayName holds the value of the "display_name" field.
-	DisplayName string `json:"display_name,omitempty"`
-	// AvatarURL holds the value of the "avatar_url" field.
-	AvatarURL string `json:"avatar_url,omitempty"`
-	// Role holds the value of the "role" field.
-	Role string `json:"role,omitempty"`
 	// LastLoginAt holds the value of the "last_login_at" field.
 	LastLoginAt time.Time `json:"last_login_at,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
@@ -43,17 +37,17 @@ type SocialIdentity struct {
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
-func (*SocialIdentity) scanValues(columns []string) ([]any, error) {
+func (*UserIdentity) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case socialidentity.FieldEmailVerified:
+		case useridentity.FieldEmailVerified:
 			values[i] = new(sql.NullBool)
-		case socialidentity.FieldID:
+		case useridentity.FieldID:
 			values[i] = new(sql.NullInt64)
-		case socialidentity.FieldSubject, socialidentity.FieldProvider, socialidentity.FieldProviderSubject, socialidentity.FieldEmail, socialidentity.FieldDisplayName, socialidentity.FieldAvatarURL, socialidentity.FieldRole:
+		case useridentity.FieldAccountSubject, useridentity.FieldProvider, useridentity.FieldProviderSubject, useridentity.FieldEmail:
 			values[i] = new(sql.NullString)
-		case socialidentity.FieldLastLoginAt, socialidentity.FieldCreatedAt, socialidentity.FieldUpdatedAt:
+		case useridentity.FieldLastLoginAt, useridentity.FieldCreatedAt, useridentity.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -63,80 +57,62 @@ func (*SocialIdentity) scanValues(columns []string) ([]any, error) {
 }
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
-// to the SocialIdentity fields.
-func (_m *SocialIdentity) assignValues(columns []string, values []any) error {
+// to the UserIdentity fields.
+func (_m *UserIdentity) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
 	for i := range columns {
 		switch columns[i] {
-		case socialidentity.FieldID:
+		case useridentity.FieldID:
 			value, ok := values[i].(*sql.NullInt64)
 			if !ok {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int64(value.Int64)
-		case socialidentity.FieldSubject:
+		case useridentity.FieldAccountSubject:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field subject", values[i])
+				return fmt.Errorf("unexpected type %T for field account_subject", values[i])
 			} else if value.Valid {
-				_m.Subject = value.String
+				_m.AccountSubject = value.String
 			}
-		case socialidentity.FieldProvider:
+		case useridentity.FieldProvider:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field provider", values[i])
 			} else if value.Valid {
 				_m.Provider = value.String
 			}
-		case socialidentity.FieldProviderSubject:
+		case useridentity.FieldProviderSubject:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field provider_subject", values[i])
 			} else if value.Valid {
 				_m.ProviderSubject = value.String
 			}
-		case socialidentity.FieldEmail:
+		case useridentity.FieldEmail:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field email", values[i])
 			} else if value.Valid {
 				_m.Email = value.String
 			}
-		case socialidentity.FieldEmailVerified:
+		case useridentity.FieldEmailVerified:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field email_verified", values[i])
 			} else if value.Valid {
 				_m.EmailVerified = value.Bool
 			}
-		case socialidentity.FieldDisplayName:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field display_name", values[i])
-			} else if value.Valid {
-				_m.DisplayName = value.String
-			}
-		case socialidentity.FieldAvatarURL:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field avatar_url", values[i])
-			} else if value.Valid {
-				_m.AvatarURL = value.String
-			}
-		case socialidentity.FieldRole:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field role", values[i])
-			} else if value.Valid {
-				_m.Role = value.String
-			}
-		case socialidentity.FieldLastLoginAt:
+		case useridentity.FieldLastLoginAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field last_login_at", values[i])
 			} else if value.Valid {
 				_m.LastLoginAt = value.Time
 			}
-		case socialidentity.FieldCreatedAt:
+		case useridentity.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
 				_m.CreatedAt = value.Time
 			}
-		case socialidentity.FieldUpdatedAt:
+		case useridentity.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
@@ -149,37 +125,37 @@ func (_m *SocialIdentity) assignValues(columns []string, values []any) error {
 	return nil
 }
 
-// Value returns the ent.Value that was dynamically selected and assigned to the SocialIdentity.
+// Value returns the ent.Value that was dynamically selected and assigned to the UserIdentity.
 // This includes values selected through modifiers, order, etc.
-func (_m *SocialIdentity) Value(name string) (ent.Value, error) {
+func (_m *UserIdentity) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
 }
 
-// Update returns a builder for updating this SocialIdentity.
-// Note that you need to call SocialIdentity.Unwrap() before calling this method if this SocialIdentity
+// Update returns a builder for updating this UserIdentity.
+// Note that you need to call UserIdentity.Unwrap() before calling this method if this UserIdentity
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (_m *SocialIdentity) Update() *SocialIdentityUpdateOne {
-	return NewSocialIdentityClient(_m.config).UpdateOne(_m)
+func (_m *UserIdentity) Update() *UserIdentityUpdateOne {
+	return NewUserIdentityClient(_m.config).UpdateOne(_m)
 }
 
-// Unwrap unwraps the SocialIdentity entity that was returned from a transaction after it was closed,
+// Unwrap unwraps the UserIdentity entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (_m *SocialIdentity) Unwrap() *SocialIdentity {
+func (_m *UserIdentity) Unwrap() *UserIdentity {
 	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
-		panic("ent: SocialIdentity is not a transactional entity")
+		panic("ent: UserIdentity is not a transactional entity")
 	}
 	_m.config.driver = _tx.drv
 	return _m
 }
 
 // String implements the fmt.Stringer.
-func (_m *SocialIdentity) String() string {
+func (_m *UserIdentity) String() string {
 	var builder strings.Builder
-	builder.WriteString("SocialIdentity(")
+	builder.WriteString("UserIdentity(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
-	builder.WriteString("subject=")
-	builder.WriteString(_m.Subject)
+	builder.WriteString("account_subject=")
+	builder.WriteString(_m.AccountSubject)
 	builder.WriteString(", ")
 	builder.WriteString("provider=")
 	builder.WriteString(_m.Provider)
@@ -193,15 +169,6 @@ func (_m *SocialIdentity) String() string {
 	builder.WriteString("email_verified=")
 	builder.WriteString(fmt.Sprintf("%v", _m.EmailVerified))
 	builder.WriteString(", ")
-	builder.WriteString("display_name=")
-	builder.WriteString(_m.DisplayName)
-	builder.WriteString(", ")
-	builder.WriteString("avatar_url=")
-	builder.WriteString(_m.AvatarURL)
-	builder.WriteString(", ")
-	builder.WriteString("role=")
-	builder.WriteString(_m.Role)
-	builder.WriteString(", ")
 	builder.WriteString("last_login_at=")
 	builder.WriteString(_m.LastLoginAt.Format(time.ANSIC))
 	builder.WriteString(", ")
@@ -214,5 +181,5 @@ func (_m *SocialIdentity) String() string {
 	return builder.String()
 }
 
-// SocialIdentities is a parsable slice of SocialIdentity.
-type SocialIdentities []*SocialIdentity
+// UserIdentities is a parsable slice of UserIdentity.
+type UserIdentities []*UserIdentity

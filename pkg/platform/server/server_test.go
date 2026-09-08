@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	jose "github.com/go-jose/go-jose/v4"
 	kratoshttp "github.com/go-kratos/kratos/v3/transport/http"
 	"google.golang.org/protobuf/types/known/durationpb"
 
@@ -22,11 +23,11 @@ func (denyAuthorizer) AllowContext(context.Context, []string, string) (bool, err
 }
 
 func TestNewVerifierAndMiddlewares(t *testing.T) {
-	verifier := NewVerifier(&config.Auth{
-		Issuer: "https://eagle.test", Audience: "eagle-api", SigningSecret: "test-signing-secret-at-least-32-bytes",
+	verifier, err := authn.NewVerifier(authn.Config{
+		Issuer: "https://eagle.test", Audience: "eagle-api", Keys: authn.NewStaticKeySet(jose.JSONWebKeySet{}),
 	})
-	if verifier == nil {
-		t.Fatal("verifier is nil")
+	if err != nil {
+		t.Fatal(err)
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	middlewares, err := NewMiddlewares(logger, verifier, denyAuthorizer{})

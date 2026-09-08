@@ -33,5 +33,11 @@ type PolicyAudit func(*sql.Selector)
 // PolicyState is the predicate function for policystate builders.
 type PolicyState func(*sql.Selector)
 
-// SocialIdentity is the predicate function for socialidentity builders.
-type SocialIdentity func(*sql.Selector)
+// UserAccount is the predicate function for useraccount builders.
+type UserAccount func(*sql.Selector)
+
+// UserIdentity is the predicate function for useridentity builders.
+type UserIdentity func(*sql.Selector)
+
+// UserRoleBinding is the predicate function for userrolebinding builders.
+type UserRoleBinding func(*sql.Selector)

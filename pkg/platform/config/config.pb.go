@@ -186,16 +186,17 @@ type Auth struct {
 	// Eagle token 的 issuer，必须与 token 里的 iss 完全一致。
 	Issuer string `protobuf:"bytes,1,opt,name=issuer,proto3" json:"issuer,omitempty"`
 	// Eagle API 的 audience。
-	Audience string `protobuf:"bytes,3,opt,name=audience,proto3" json:"audience,omitempty"`
-	// Eagle 使用 HS256 签发和验证 access token。至少 32 字节；
-	// 生产环境必须通过 Secret 注入随机值。
-	SigningSecret   string               `protobuf:"bytes,11,opt,name=signing_secret,json=signingSecret,proto3" json:"signing_secret,omitempty"`
+	Audience        string               `protobuf:"bytes,3,opt,name=audience,proto3" json:"audience,omitempty"`
 	AccessTokenTtl  *durationpb.Duration `protobuf:"bytes,12,opt,name=access_token_ttl,json=accessTokenTtl,proto3" json:"access_token_ttl,omitempty"`
 	RefreshTokenTtl *durationpb.Duration `protobuf:"bytes,13,opt,name=refresh_token_ttl,json=refreshTokenTtl,proto3" json:"refresh_token_ttl,omitempty"`
 	Google          *Auth_SocialProvider `protobuf:"bytes,14,opt,name=google,proto3" json:"google,omitempty"`
 	Apple           *Auth_SocialProvider `protobuf:"bytes,15,opt,name=apple,proto3" json:"apple,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// 目录内每个 <kid>.pem 是一把 ES256/RS256 私钥或公钥；只有 active
+	// 对应的文件必须包含私钥。保留旧公钥即可让轮换期间的存量 token 继续验签。
+	SigningKeyDirectory string `protobuf:"bytes,16,opt,name=signing_key_directory,json=signingKeyDirectory,proto3" json:"signing_key_directory,omitempty"`
+	ActiveSigningKeyId  string `protobuf:"bytes,17,opt,name=active_signing_key_id,json=activeSigningKeyId,proto3" json:"active_signing_key_id,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *Auth) Reset() {
@@ -242,13 +243,6 @@ func (x *Auth) GetAudience() string {
 	return ""
 }
 
-func (x *Auth) GetSigningSecret() string {
-	if x != nil {
-		return x.SigningSecret
-	}
-	return ""
-}
-
 func (x *Auth) GetAccessTokenTtl() *durationpb.Duration {
 	if x != nil {
 		return x.AccessTokenTtl
@@ -275,6 +269,20 @@ func (x *Auth) GetApple() *Auth_SocialProvider {
 		return x.Apple
 	}
 	return nil
+}
+
+func (x *Auth) GetSigningKeyDirectory() string {
+	if x != nil {
+		return x.SigningKeyDirectory
+	}
+	return ""
+}
+
+func (x *Auth) GetActiveSigningKeyId() string {
+	if x != nil {
+		return x.ActiveSigningKeyId
+	}
+	return ""
 }
 
 type Observability struct {
@@ -591,20 +599,21 @@ const file_config_proto_rawDesc = "" +
 	"\tmax_conns\x18\x02 \x01(\x05R\bmaxConns\x12$\n" +
 	"\x0emax_idle_conns\x18\x03 \x01(\x05R\fmaxIdleConns\x12E\n" +
 	"\x11max_conn_lifetime\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\x0fmaxConnLifetime\x12F\n" +
-	"\x12max_conn_idle_time\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\x0fmaxConnIdleTimeJ\x04\b\x02\x10\x03\"\xec\x03\n" +
+	"\x12max_conn_idle_time\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\x0fmaxConnIdleTimeJ\x04\b\x02\x10\x03\"\xb2\x04\n" +
 	"\x04Auth\x12\x16\n" +
 	"\x06issuer\x18\x01 \x01(\tR\x06issuer\x12\x1a\n" +
-	"\baudience\x18\x03 \x01(\tR\baudience\x12%\n" +
-	"\x0esigning_secret\x18\v \x01(\tR\rsigningSecret\x12C\n" +
+	"\baudience\x18\x03 \x01(\tR\baudience\x12C\n" +
 	"\x10access_token_ttl\x18\f \x01(\v2\x19.google.protobuf.DurationR\x0eaccessTokenTtl\x12E\n" +
 	"\x11refresh_token_ttl\x18\r \x01(\v2\x19.google.protobuf.DurationR\x0frefreshTokenTtl\x12B\n" +
 	"\x06google\x18\x0e \x01(\v2*.eagle.platform.config.Auth.SocialProviderR\x06google\x12@\n" +
-	"\x05apple\x18\x0f \x01(\v2*.eagle.platform.config.Auth.SocialProviderR\x05apple\x1aG\n" +
+	"\x05apple\x18\x0f \x01(\v2*.eagle.platform.config.Auth.SocialProviderR\x05apple\x122\n" +
+	"\x15signing_key_directory\x18\x10 \x01(\tR\x13signingKeyDirectory\x121\n" +
+	"\x15active_signing_key_id\x18\x11 \x01(\tR\x12activeSigningKeyId\x1aG\n" +
 	"\x0eSocialProvider\x12\x18\n" +
 	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x1b\n" +
 	"\tclient_id\x18\x02 \x01(\tR\bclientIdJ\x04\b\x02\x10\x03J\x04\b\x04\x10\x05J\x04\b\x05\x10\x06J\x04\b\x06\x10\aJ\x04\b\a\x10\bJ\x04\b\b\x10\tJ\x04\b\t\x10\n" +
 	"J\x04\b\n" +
-	"\x10\v\"\xc7\x01\n" +
+	"\x10\vJ\x04\b\v\x10\f\"\xc7\x01\n" +
 	"\rObservability\x12#\n" +
 	"\rotlp_endpoint\x18\x01 \x01(\tR\fotlpEndpoint\x12,\n" +
 	"\x12trace_sample_ratio\x18\x02 \x01(\x01R\x10traceSampleRatio\x12\x1b\n" +

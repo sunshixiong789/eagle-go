@@ -2,6 +2,9 @@ package interfaces
 
 import (
 	"context"
+	"encoding/json"
+
+	jose "github.com/go-jose/go-jose/v4"
 
 	v1 "github.com/eagle-go/eagle/api/eagle/auth/v1"
 	"github.com/eagle-go/eagle/internal/auth/application"
@@ -9,10 +12,46 @@ import (
 )
 
 type AuthService struct {
-	uc *application.Usecase
+	uc   *application.Usecase
+	keys publicKeySetProvider
 }
 
-func NewAuthService(uc *application.Usecase) *AuthService { return &AuthService{uc: uc} }
+type publicKeySetProvider interface {
+	PublicKeySet() jose.JSONWebKeySet
+}
+
+func NewAuthService(uc *application.Usecase, keys publicKeySetProvider) *AuthService {
+	return &AuthService{uc: uc, keys: keys}
+}
+
+func (s *AuthService) GetJSONWebKeySet(context.Context, *v1.GetJSONWebKeySetRequest) (*v1.GetJSONWebKeySetResponse, error) {
+	out := &v1.GetJSONWebKeySetResponse{}
+	for _, key := range s.keys.PublicKeySet().Keys {
+		raw, err := json.Marshal(key)
+		if err != nil {
+			return nil, err
+		}
+		var fields struct {
+			Kty string `json:"kty"`
+			Use string `json:"use"`
+			Alg string `json:"alg"`
+			Kid string `json:"kid"`
+			Crv string `json:"crv"`
+			X   string `json:"x"`
+			Y   string `json:"y"`
+			N   string `json:"n"`
+			E   string `json:"e"`
+		}
+		if err := json.Unmarshal(raw, &fields); err != nil {
+			return nil, err
+		}
+		out.Keys = append(out.Keys, &v1.JSONWebKey{
+			Kty: fields.Kty, Use: fields.Use, Alg: fields.Alg, Kid: fields.Kid,
+			Crv: fields.Crv, X: fields.X, Y: fields.Y, N: fields.N, E: fields.E,
+		})
+	}
+	return out, nil
+}
 
 func (s *AuthService) SocialLogin(ctx context.Context, req *v1.SocialLoginRequest) (*v1.TokenResponse, error) {
 	var provider domain.Provider
@@ -58,7 +97,7 @@ func toTokenResponse(tokens *domain.Tokens) *v1.TokenResponse {
 		User: &v1.User{
 			Subject: identity.Subject, Provider: provider, Email: identity.Email,
 			EmailVerified: identity.EmailVerified, DisplayName: identity.DisplayName,
-			AvatarUrl: identity.AvatarURL, Roles: []string{identity.Role},
+			AvatarUrl: identity.AvatarURL, Roles: identity.Roles,
 		},
 	}
 }

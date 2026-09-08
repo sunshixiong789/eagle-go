@@ -38,8 +38,11 @@ func Validate(b *Bootstrap) error {
 	if auth.GetAudience() == "" {
 		errs = append(errs, errors.New("auth.audience is required"))
 	}
-	if len(auth.GetSigningSecret()) < 32 {
-		errs = append(errs, errors.New("auth.signing_secret must be at least 32 bytes"))
+	if auth.GetSigningKeyDirectory() == "" {
+		errs = append(errs, errors.New("auth.signing_key_directory is required"))
+	}
+	if auth.GetActiveSigningKeyId() == "" {
+		errs = append(errs, errors.New("auth.active_signing_key_id is required"))
 	}
 	accessTTL := protoDuration(auth.GetAccessTokenTtl())
 	refreshTTL := protoDuration(auth.GetRefreshTokenTtl())

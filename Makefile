@@ -33,6 +33,7 @@ BUF := $(BIN)/buf
 ENT := $(BIN)/ent
 GOOSE := $(BIN)/goose
 GOLANGCI_LINT := $(BIN)/golangci-lint
+DEV_SIGNING_KEY := $(CURDIR)/configs/keys/development-es256.pem
 
 TOOL_PKG_buf := github.com/bufbuild/buf/cmd/buf
 TOOL_PKG_ent := entgo.io/ent/cmd/ent
@@ -119,6 +120,13 @@ build:
 	go build -ldflags "$(LDFLAGS)" -o $(BIN)/eagle ./cmd/eagle
 	go -C tools build -o $(BIN)/migrate ./migrate
 
+.PHONY: dev-key
+# 生成仅供本地运行使用的 ES256 私钥（已被 .gitignore 排除）
+dev-key:
+	@mkdir -p $(dir $(DEV_SIGNING_KEY))
+	@umask 077; test -f $(DEV_SIGNING_KEY) || openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out $(DEV_SIGNING_KEY)
+	@chmod 0600 $(DEV_SIGNING_KEY)
+
 .PHONY: image
 # 构建服务镜像，例如 make image VERSION=v1.2.0 REGISTRY=registry.example.com/eagle
 image:
@@ -135,7 +143,7 @@ push-image:
 
 .PHONY: run
 # 本地直接启动服务（依赖 make up-deps 起好的所选数据库）
-run:
+run: dev-key
 	EAGLE_DATABASE_DRIVER="$(EAGLE_DATABASE_DRIVER)" EAGLE_DATABASE_DSN="$(EAGLE_DSN)" go run -ldflags "$(LDFLAGS)" ./cmd/eagle -conf configs
 
 .PHONY: lint
@@ -172,7 +180,7 @@ test-coverage:
 
 .PHONY: up
 # 构建并启动完整本地环境
-up:
+up: dev-key
 	EAGLE_BUILDER_IMAGE="$(EAGLE_BUILDER_IMAGE)" \
 	EAGLE_RUNTIME_IMAGE="$(EAGLE_RUNTIME_IMAGE)" \
 		docker compose -f deploy/docker-compose.yml up -d --build
@@ -188,6 +196,7 @@ validate-deploy:
 	docker compose -f deploy/docker-compose.yml config --quiet
 	EAGLE_IMAGE=eagle/eagle:validation \
 	EAGLE_ENV_FILE=$(CURDIR)/deploy/environments/development.env.example \
+	EAGLE_AUTH_SIGNING_KEY_HOST_DIRECTORY=$(CURDIR)/configs/keys \
 		docker compose -f deploy/compose.app.yml config --quiet
 	sh -n deploy/scripts/deploy.sh
 

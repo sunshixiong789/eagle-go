@@ -6,7 +6,7 @@
 - `compose.app.yml`：远端应用与迁移任务，不包含数据库；
 - `scripts/deploy.sh`：云效主机部署入口；
 - `environments/*.env.example`：开发、测试环境的非敏感变量示例；
-- Google/Apple 登录通过 `EAGLE_AUTH_*` 配置启用，不需要部署独立 IdP。
+- Google/Apple 登录通过 `EAGLE_AUTH_*` 配置启用；JWT 私钥以只读 Secret 目录挂载，公钥由 JWKS 端点发布。
 
 本地使用见[开发环境部署](../docs/development-deployment.md)，云效配置见
 [云效 Flow 开发与测试环境部署](../docs/aliyun-flow-deployment.md)。

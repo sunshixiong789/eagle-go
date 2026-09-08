@@ -2,6 +2,9 @@ package authn
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"errors"
 	"net/http"
 	"slices"
@@ -19,36 +22,72 @@ import (
 const (
 	testIssuer   = "https://eagle.test"
 	testAudience = "eagle-api"
-	testSecret   = "test-signing-secret-at-least-32-bytes"
+	testKeyID    = "current"
 )
 
-func TestVerifierAcceptsFixedEagleClaims(t *testing.T) {
-	raw := signTestToken(t, testSecret, jwt.Claims{
-		Issuer: testIssuer, Subject: "google:123", Audience: jwt.Audience{testAudience},
-		IssuedAt: jwt.NewNumericDate(time.Now()), Expiry: jwt.NewNumericDate(time.Now().Add(time.Minute)),
-	}, map[string]any{
-		"preferred_username": "Eagle User",
-		"email":              "user@example.com",
-		"roles":              []string{"viewer", "editor"},
-	})
+type tokenTestKeys struct {
+	signer jose.Signer
+	set    *StaticKeySet
+}
 
-	verifier := NewVerifier(Config{
-		Issuer: testIssuer, Audience: testAudience, SigningSecret: testSecret,
-	})
-	claims, err := verifier.Verify(context.Background(), raw)
+func newTokenTestKeys(t *testing.T) tokenTestKeys {
+	t.Helper()
+	private, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if claims.Subject != "google:123" || claims.Username != "Eagle User" || claims.Email != "user@example.com" {
-		t.Fatalf("claims = %+v", claims)
+	signer, err := jose.NewSigner(
+		jose.SigningKey{Algorithm: jose.ES256, Key: private},
+		(&jose.SignerOptions{}).WithType("JWT").WithHeader("kid", testKeyID),
+	)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !slices.Equal(claims.Roles, []string{"viewer", "editor"}) {
-		t.Fatalf("roles = %v", claims.Roles)
+	return tokenTestKeys{signer: signer, set: NewStaticKeySet(jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{
+		Key: &private.PublicKey, KeyID: testKeyID, Algorithm: string(jose.ES256), Use: "sig",
+	}}})}
+}
+
+func newTestVerifier(t *testing.T, keys KeySource) *Verifier {
+	t.Helper()
+	verifier, err := NewVerifier(Config{Issuer: testIssuer, Audience: testAudience, Keys: keys})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return verifier
+}
+
+func TestVerifierAcceptsMinimalEagleClaims(t *testing.T) {
+	keys := newTokenTestKeys(t)
+	raw := signTestToken(t, keys.signer, jwt.Claims{
+		Issuer: testIssuer, Subject: "account-subject", Audience: jwt.Audience{testAudience}, ID: "token-id",
+		IssuedAt: jwt.NewNumericDate(time.Now()), Expiry: jwt.NewNumericDate(time.Now().Add(time.Minute)),
+	}, map[string]any{
+		"sid": "session-id", "roles": []string{"viewer", "editor"},
+		// Resource services must not turn profile PII into Principal fields.
+		"email": "ignored@example.com", "preferred_username": "ignored",
+	})
+
+	claims, err := newTestVerifier(t, keys.set).Verify(context.Background(), raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if claims.Subject != "account-subject" || claims.SessionID != "session-id" || claims.TokenID != "token-id" ||
+		!slices.Equal(claims.Roles, []string{"viewer", "editor"}) {
+		t.Fatalf("claims = %+v", claims)
 	}
 }
 
 func TestVerifierRejectsInvalidEagleTokens(t *testing.T) {
+	keys := newTokenTestKeys(t)
+	other := newTokenTestKeys(t)
 	now := time.Now()
+	validClaims := func() jwt.Claims {
+		return jwt.Claims{
+			Issuer: testIssuer, Subject: "account", Audience: jwt.Audience{testAudience}, ID: "token-id",
+			IssuedAt: jwt.NewNumericDate(now), Expiry: jwt.NewNumericDate(now.Add(time.Minute)),
+		}
+	}
 	tests := []struct {
 		name string
 		raw  func(*testing.T) string
@@ -57,43 +96,37 @@ func TestVerifierRejectsInvalidEagleTokens(t *testing.T) {
 		{
 			name: "expired",
 			raw: func(t *testing.T) string {
-				return signTestToken(t, testSecret, jwt.Claims{
-					Issuer: testIssuer, Subject: "expired", Audience: jwt.Audience{testAudience},
-					IssuedAt: jwt.NewNumericDate(now.Add(-2 * time.Hour)), Expiry: jwt.NewNumericDate(now.Add(-time.Hour)),
-				}, map[string]any{"roles": []string{"user"}})
+				claims := validClaims()
+				claims.IssuedAt, claims.Expiry = jwt.NewNumericDate(now.Add(-2*time.Hour)), jwt.NewNumericDate(now.Add(-time.Hour))
+				return signTestToken(t, keys.signer, claims, map[string]any{"sid": "session"})
 			},
 			is: ErrTokenExpired,
 		},
 		{
 			name: "wrong signature",
 			raw: func(t *testing.T) string {
-				return signTestToken(t, "another-signing-secret-at-least-32-bytes", jwt.Claims{
-					Issuer: testIssuer, Subject: "forged", Audience: jwt.Audience{testAudience},
-					IssuedAt: jwt.NewNumericDate(now), Expiry: jwt.NewNumericDate(now.Add(time.Minute)),
-				}, map[string]any{"roles": []string{"admin"}})
+				return signTestToken(t, other.signer, validClaims(), map[string]any{"sid": "session"})
 			},
 			is: ErrInvalidToken,
 		},
 		{
 			name: "wrong audience",
 			raw: func(t *testing.T) string {
-				return signTestToken(t, testSecret, jwt.Claims{
-					Issuer: testIssuer, Subject: "wrong-aud", Audience: jwt.Audience{"another-api"},
-					IssuedAt: jwt.NewNumericDate(now), Expiry: jwt.NewNumericDate(now.Add(time.Minute)),
-				}, map[string]any{"roles": []string{"user"}})
+				claims := validClaims()
+				claims.Audience = jwt.Audience{"another-api"}
+				return signTestToken(t, keys.signer, claims, map[string]any{"sid": "session"})
 			},
 			is: ErrInvalidToken,
 		},
 		{
-			name: "malformed",
-			raw:  func(*testing.T) string { return "not-a-jwt" },
+			name: "missing required sid",
+			raw:  func(t *testing.T) string { return signTestToken(t, keys.signer, validClaims(), nil) },
 			is:   ErrInvalidToken,
 		},
+		{name: "malformed", raw: func(*testing.T) string { return "not-a-jwt" }, is: ErrInvalidToken},
 	}
 
-	verifier := NewVerifier(Config{
-		Issuer: testIssuer, Audience: testAudience, SigningSecret: testSecret,
-	})
+	verifier := newTestVerifier(t, keys.set)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := verifier.Verify(context.Background(), tt.raw(t))
@@ -104,15 +137,8 @@ func TestVerifierRejectsInvalidEagleTokens(t *testing.T) {
 	}
 }
 
-func signTestToken(t *testing.T, secret string, standard jwt.Claims, private map[string]any) string {
+func signTestToken(t *testing.T, signer jose.Signer, standard jwt.Claims, private map[string]any) string {
 	t.Helper()
-	signer, err := jose.NewSigner(
-		jose.SigningKey{Algorithm: jose.HS256, Key: []byte(secret)},
-		(&jose.SignerOptions{}).WithType("JWT"),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
 	raw, err := jwt.Signed(signer).Claims(standard).Claims(private).Serialize()
 	if err != nil {
 		t.Fatal(err)
@@ -154,11 +180,12 @@ func authnServerContext(authorization string) context.Context {
 }
 
 func TestServerAuthenticationBoundaries(t *testing.T) {
-	verifier := NewVerifier(Config{Issuer: testIssuer, Audience: testAudience, SigningSecret: testSecret})
-	valid := signTestToken(t, testSecret, jwt.Claims{
-		Issuer: testIssuer, Subject: "user-1", Audience: jwt.Audience{testAudience},
+	keys := newTokenTestKeys(t)
+	verifier := newTestVerifier(t, keys.set)
+	valid := signTestToken(t, keys.signer, jwt.Claims{
+		Issuer: testIssuer, Subject: "user-1", Audience: jwt.Audience{testAudience}, ID: "token-id",
 		IssuedAt: jwt.NewNumericDate(time.Now()), Expiry: jwt.NewNumericDate(time.Now().Add(time.Minute)),
-	}, map[string]any{"preferred_username": "Eagle", "email": "user@example.com", "roles": []string{"viewer"}})
+	}, map[string]any{"sid": "session-1", "roles": []string{"viewer"}})
 
 	for _, tc := range []struct {
 		name   string
@@ -180,8 +207,8 @@ func TestServerAuthenticationBoundaries(t *testing.T) {
 				called = true
 				if tc.name == "valid lowercase scheme" {
 					principal, ok := identity.FromContext(ctx)
-					if !ok || principal.Subject != "user-1" || principal.Username != "Eagle" ||
-						principal.Email != "user@example.com" || !slices.Equal(principal.Roles, []string{"viewer"}) {
+					if !ok || principal.Subject != "user-1" || principal.SessionID != "session-1" ||
+						!slices.Equal(principal.Roles, []string{"viewer"}) {
 						t.Fatalf("principal = %+v, %v", principal, ok)
 					}
 				}
@@ -204,15 +231,22 @@ func TestServerAuthenticationBoundaries(t *testing.T) {
 }
 
 func TestServerReportsExpiredTokenSeparately(t *testing.T) {
-	expired := signTestToken(t, testSecret, jwt.Claims{
-		Issuer: testIssuer, Subject: "user-1", Audience: jwt.Audience{testAudience},
+	keys := newTokenTestKeys(t)
+	expired := signTestToken(t, keys.signer, jwt.Claims{
+		Issuer: testIssuer, Subject: "user-1", Audience: jwt.Audience{testAudience}, ID: "token-id",
 		IssuedAt: jwt.NewNumericDate(time.Now().Add(-2 * time.Hour)), Expiry: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
-	}, nil)
+	}, map[string]any{"sid": "session-1"})
 	called := false
-	_, err := Server(NewVerifier(Config{Issuer: testIssuer, Audience: testAudience, SigningSecret: testSecret}))(
+	_, err := Server(newTestVerifier(t, keys.set))(
 		func(context.Context, any) (any, error) { called = true; return nil, nil },
 	)(authnServerContext("Bearer "+expired), nil)
 	if called || kratoserrors.Code(err) != 401 || kratoserrors.Reason(err) != ReasonTokenExpired {
 		t.Fatalf("called=%v, error=%v", called, err)
+	}
+}
+
+func TestNewVerifierRejectsIncompleteConfig(t *testing.T) {
+	if _, err := NewVerifier(Config{}); err == nil {
+		t.Fatal("incomplete verifier config accepted")
 	}
 }

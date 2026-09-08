@@ -17,6 +17,10 @@ services:
     image: "${EAGLE_IMAGE:?EAGLE_IMAGE is required}"
     env_file:
       - "${EAGLE_ENV_FILE:?EAGLE_ENV_FILE is required}"
+    environment:
+      EAGLE_AUTH_SIGNING_KEY_DIRECTORY: /run/secrets/eagle-jwt
+    volumes:
+      - "${EAGLE_AUTH_SIGNING_KEY_HOST_DIRECTORY:?EAGLE_AUTH_SIGNING_KEY_HOST_DIRECTORY is required}:/run/secrets/eagle-jwt:ro"
     ports:
       - "${EAGLE_BIND_ADDRESS:-127.0.0.1}:${EAGLE_HTTP_PORT:-8000}:8000"
       - "${EAGLE_BIND_ADDRESS:-127.0.0.1}:${EAGLE_METRICS_PORT:-9101}:9100"

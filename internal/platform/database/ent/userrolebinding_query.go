@@ -12,67 +12,67 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/predicate"
-	"github.com/eagle-go/eagle/internal/platform/database/ent/socialidentity"
+	"github.com/eagle-go/eagle/internal/platform/database/ent/userrolebinding"
 )
 
-// SocialIdentityQuery is the builder for querying SocialIdentity entities.
-type SocialIdentityQuery struct {
+// UserRoleBindingQuery is the builder for querying UserRoleBinding entities.
+type UserRoleBindingQuery struct {
 	config
 	ctx        *QueryContext
-	order      []socialidentity.OrderOption
+	order      []userrolebinding.OrderOption
 	inters     []Interceptor
-	predicates []predicate.SocialIdentity
+	predicates []predicate.UserRoleBinding
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
 }
 
-// Where adds a new predicate for the SocialIdentityQuery builder.
-func (_q *SocialIdentityQuery) Where(ps ...predicate.SocialIdentity) *SocialIdentityQuery {
+// Where adds a new predicate for the UserRoleBindingQuery builder.
+func (_q *UserRoleBindingQuery) Where(ps ...predicate.UserRoleBinding) *UserRoleBindingQuery {
 	_q.predicates = append(_q.predicates, ps...)
 	return _q
 }
 
 // Limit the number of records to be returned by this query.
-func (_q *SocialIdentityQuery) Limit(limit int) *SocialIdentityQuery {
+func (_q *UserRoleBindingQuery) Limit(limit int) *UserRoleBindingQuery {
 	_q.ctx.Limit = &limit
 	return _q
 }
 
 // Offset to start from.
-func (_q *SocialIdentityQuery) Offset(offset int) *SocialIdentityQuery {
+func (_q *UserRoleBindingQuery) Offset(offset int) *UserRoleBindingQuery {
 	_q.ctx.Offset = &offset
 	return _q
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (_q *SocialIdentityQuery) Unique(unique bool) *SocialIdentityQuery {
+func (_q *UserRoleBindingQuery) Unique(unique bool) *UserRoleBindingQuery {
 	_q.ctx.Unique = &unique
 	return _q
 }
 
 // Order specifies how the records should be ordered.
-func (_q *SocialIdentityQuery) Order(o ...socialidentity.OrderOption) *SocialIdentityQuery {
+func (_q *UserRoleBindingQuery) Order(o ...userrolebinding.OrderOption) *UserRoleBindingQuery {
 	_q.order = append(_q.order, o...)
 	return _q
 }
 
-// First returns the first SocialIdentity entity from the query.
-// Returns a *NotFoundError when no SocialIdentity was found.
-func (_q *SocialIdentityQuery) First(ctx context.Context) (*SocialIdentity, error) {
+// First returns the first UserRoleBinding entity from the query.
+// Returns a *NotFoundError when no UserRoleBinding was found.
+func (_q *UserRoleBindingQuery) First(ctx context.Context) (*UserRoleBinding, error) {
 	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
-		return nil, &NotFoundError{socialidentity.Label}
+		return nil, &NotFoundError{userrolebinding.Label}
 	}
 	return nodes[0], nil
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (_q *SocialIdentityQuery) FirstX(ctx context.Context) *SocialIdentity {
+func (_q *UserRoleBindingQuery) FirstX(ctx context.Context) *UserRoleBinding {
 	node, err := _q.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -80,22 +80,22 @@ func (_q *SocialIdentityQuery) FirstX(ctx context.Context) *SocialIdentity {
 	return node
 }
 
-// FirstID returns the first SocialIdentity ID from the query.
-// Returns a *NotFoundError when no SocialIdentity ID was found.
-func (_q *SocialIdentityQuery) FirstID(ctx context.Context) (id int64, err error) {
+// FirstID returns the first UserRoleBinding ID from the query.
+// Returns a *NotFoundError when no UserRoleBinding ID was found.
+func (_q *UserRoleBindingQuery) FirstID(ctx context.Context) (id int64, err error) {
 	var ids []int64
 	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
-		err = &NotFoundError{socialidentity.Label}
+		err = &NotFoundError{userrolebinding.Label}
 		return
 	}
 	return ids[0], nil
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (_q *SocialIdentityQuery) FirstIDX(ctx context.Context) int64 {
+func (_q *UserRoleBindingQuery) FirstIDX(ctx context.Context) int64 {
 	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -103,10 +103,10 @@ func (_q *SocialIdentityQuery) FirstIDX(ctx context.Context) int64 {
 	return id
 }
 
-// Only returns a single SocialIdentity entity found by the query, ensuring it only returns one.
-// Returns a *NotSingularError when more than one SocialIdentity entity is found.
-// Returns a *NotFoundError when no SocialIdentity entities are found.
-func (_q *SocialIdentityQuery) Only(ctx context.Context) (*SocialIdentity, error) {
+// Only returns a single UserRoleBinding entity found by the query, ensuring it only returns one.
+// Returns a *NotSingularError when more than one UserRoleBinding entity is found.
+// Returns a *NotFoundError when no UserRoleBinding entities are found.
+func (_q *UserRoleBindingQuery) Only(ctx context.Context) (*UserRoleBinding, error) {
 	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
@@ -115,14 +115,14 @@ func (_q *SocialIdentityQuery) Only(ctx context.Context) (*SocialIdentity, error
 	case 1:
 		return nodes[0], nil
 	case 0:
-		return nil, &NotFoundError{socialidentity.Label}
+		return nil, &NotFoundError{userrolebinding.Label}
 	default:
-		return nil, &NotSingularError{socialidentity.Label}
+		return nil, &NotSingularError{userrolebinding.Label}
 	}
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (_q *SocialIdentityQuery) OnlyX(ctx context.Context) *SocialIdentity {
+func (_q *UserRoleBindingQuery) OnlyX(ctx context.Context) *UserRoleBinding {
 	node, err := _q.Only(ctx)
 	if err != nil {
 		panic(err)
@@ -130,10 +130,10 @@ func (_q *SocialIdentityQuery) OnlyX(ctx context.Context) *SocialIdentity {
 	return node
 }
 
-// OnlyID is like Only, but returns the only SocialIdentity ID in the query.
-// Returns a *NotSingularError when more than one SocialIdentity ID is found.
+// OnlyID is like Only, but returns the only UserRoleBinding ID in the query.
+// Returns a *NotSingularError when more than one UserRoleBinding ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (_q *SocialIdentityQuery) OnlyID(ctx context.Context) (id int64, err error) {
+func (_q *UserRoleBindingQuery) OnlyID(ctx context.Context) (id int64, err error) {
 	var ids []int64
 	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
@@ -142,15 +142,15 @@ func (_q *SocialIdentityQuery) OnlyID(ctx context.Context) (id int64, err error)
 	case 1:
 		id = ids[0]
 	case 0:
-		err = &NotFoundError{socialidentity.Label}
+		err = &NotFoundError{userrolebinding.Label}
 	default:
-		err = &NotSingularError{socialidentity.Label}
+		err = &NotSingularError{userrolebinding.Label}
 	}
 	return
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (_q *SocialIdentityQuery) OnlyIDX(ctx context.Context) int64 {
+func (_q *UserRoleBindingQuery) OnlyIDX(ctx context.Context) int64 {
 	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
@@ -158,18 +158,18 @@ func (_q *SocialIdentityQuery) OnlyIDX(ctx context.Context) int64 {
 	return id
 }
 
-// All executes the query and returns a list of SocialIdentities.
-func (_q *SocialIdentityQuery) All(ctx context.Context) ([]*SocialIdentity, error) {
+// All executes the query and returns a list of UserRoleBindings.
+func (_q *UserRoleBindingQuery) All(ctx context.Context) ([]*UserRoleBinding, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*SocialIdentity, *SocialIdentityQuery]()
-	return withInterceptors[[]*SocialIdentity](ctx, _q, qr, _q.inters)
+	qr := querierAll[[]*UserRoleBinding, *UserRoleBindingQuery]()
+	return withInterceptors[[]*UserRoleBinding](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (_q *SocialIdentityQuery) AllX(ctx context.Context) []*SocialIdentity {
+func (_q *UserRoleBindingQuery) AllX(ctx context.Context) []*UserRoleBinding {
 	nodes, err := _q.All(ctx)
 	if err != nil {
 		panic(err)
@@ -177,20 +177,20 @@ func (_q *SocialIdentityQuery) AllX(ctx context.Context) []*SocialIdentity {
 	return nodes
 }
 
-// IDs executes the query and returns a list of SocialIdentity IDs.
-func (_q *SocialIdentityQuery) IDs(ctx context.Context) (ids []int64, err error) {
+// IDs executes the query and returns a list of UserRoleBinding IDs.
+func (_q *UserRoleBindingQuery) IDs(ctx context.Context) (ids []int64, err error) {
 	if _q.ctx.Unique == nil && _q.path != nil {
 		_q.Unique(true)
 	}
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
-	if err = _q.Select(socialidentity.FieldID).Scan(ctx, &ids); err != nil {
+	if err = _q.Select(userrolebinding.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (_q *SocialIdentityQuery) IDsX(ctx context.Context) []int64 {
+func (_q *UserRoleBindingQuery) IDsX(ctx context.Context) []int64 {
 	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
@@ -199,16 +199,16 @@ func (_q *SocialIdentityQuery) IDsX(ctx context.Context) []int64 {
 }
 
 // Count returns the count of the given query.
-func (_q *SocialIdentityQuery) Count(ctx context.Context) (int, error) {
+func (_q *UserRoleBindingQuery) Count(ctx context.Context) (int, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*SocialIdentityQuery](), _q.inters)
+	return withInterceptors[int](ctx, _q, querierCount[*UserRoleBindingQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (_q *SocialIdentityQuery) CountX(ctx context.Context) int {
+func (_q *UserRoleBindingQuery) CountX(ctx context.Context) int {
 	count, err := _q.Count(ctx)
 	if err != nil {
 		panic(err)
@@ -217,7 +217,7 @@ func (_q *SocialIdentityQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (_q *SocialIdentityQuery) Exist(ctx context.Context) (bool, error) {
+func (_q *UserRoleBindingQuery) Exist(ctx context.Context) (bool, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
 	switch _, err := _q.FirstID(ctx); {
 	case IsNotFound(err):
@@ -230,7 +230,7 @@ func (_q *SocialIdentityQuery) Exist(ctx context.Context) (bool, error) {
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (_q *SocialIdentityQuery) ExistX(ctx context.Context) bool {
+func (_q *UserRoleBindingQuery) ExistX(ctx context.Context) bool {
 	exist, err := _q.Exist(ctx)
 	if err != nil {
 		panic(err)
@@ -238,18 +238,18 @@ func (_q *SocialIdentityQuery) ExistX(ctx context.Context) bool {
 	return exist
 }
 
-// Clone returns a duplicate of the SocialIdentityQuery builder, including all associated steps. It can be
+// Clone returns a duplicate of the UserRoleBindingQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (_q *SocialIdentityQuery) Clone() *SocialIdentityQuery {
+func (_q *UserRoleBindingQuery) Clone() *UserRoleBindingQuery {
 	if _q == nil {
 		return nil
 	}
-	return &SocialIdentityQuery{
+	return &UserRoleBindingQuery{
 		config:     _q.config,
 		ctx:        _q.ctx.Clone(),
-		order:      append([]socialidentity.OrderOption{}, _q.order...),
+		order:      append([]userrolebinding.OrderOption{}, _q.order...),
 		inters:     append([]Interceptor{}, _q.inters...),
-		predicates: append([]predicate.SocialIdentity{}, _q.predicates...),
+		predicates: append([]predicate.UserRoleBinding{}, _q.predicates...),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -262,19 +262,19 @@ func (_q *SocialIdentityQuery) Clone() *SocialIdentityQuery {
 // Example:
 //
 //	var v []struct {
-//		Subject string `json:"subject,omitempty"`
+//		AccountSubject string `json:"account_subject,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
-//	client.SocialIdentity.Query().
-//		GroupBy(socialidentity.FieldSubject).
+//	client.UserRoleBinding.Query().
+//		GroupBy(userrolebinding.FieldAccountSubject).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (_q *SocialIdentityQuery) GroupBy(field string, fields ...string) *SocialIdentityGroupBy {
+func (_q *UserRoleBindingQuery) GroupBy(field string, fields ...string) *UserRoleBindingGroupBy {
 	_q.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &SocialIdentityGroupBy{build: _q}
+	grbuild := &UserRoleBindingGroupBy{build: _q}
 	grbuild.flds = &_q.ctx.Fields
-	grbuild.label = socialidentity.Label
+	grbuild.label = userrolebinding.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
 }
@@ -285,26 +285,26 @@ func (_q *SocialIdentityQuery) GroupBy(field string, fields ...string) *SocialId
 // Example:
 //
 //	var v []struct {
-//		Subject string `json:"subject,omitempty"`
+//		AccountSubject string `json:"account_subject,omitempty"`
 //	}
 //
-//	client.SocialIdentity.Query().
-//		Select(socialidentity.FieldSubject).
+//	client.UserRoleBinding.Query().
+//		Select(userrolebinding.FieldAccountSubject).
 //		Scan(ctx, &v)
-func (_q *SocialIdentityQuery) Select(fields ...string) *SocialIdentitySelect {
+func (_q *UserRoleBindingQuery) Select(fields ...string) *UserRoleBindingSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
-	sbuild := &SocialIdentitySelect{SocialIdentityQuery: _q}
-	sbuild.label = socialidentity.Label
+	sbuild := &UserRoleBindingSelect{UserRoleBindingQuery: _q}
+	sbuild.label = userrolebinding.Label
 	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
-// Aggregate returns a SocialIdentitySelect configured with the given aggregations.
-func (_q *SocialIdentityQuery) Aggregate(fns ...AggregateFunc) *SocialIdentitySelect {
+// Aggregate returns a UserRoleBindingSelect configured with the given aggregations.
+func (_q *UserRoleBindingQuery) Aggregate(fns ...AggregateFunc) *UserRoleBindingSelect {
 	return _q.Select().Aggregate(fns...)
 }
 
-func (_q *SocialIdentityQuery) prepareQuery(ctx context.Context) error {
+func (_q *UserRoleBindingQuery) prepareQuery(ctx context.Context) error {
 	for _, inter := range _q.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
@@ -316,7 +316,7 @@ func (_q *SocialIdentityQuery) prepareQuery(ctx context.Context) error {
 		}
 	}
 	for _, f := range _q.ctx.Fields {
-		if !socialidentity.ValidColumn(f) {
+		if !userrolebinding.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
@@ -330,16 +330,16 @@ func (_q *SocialIdentityQuery) prepareQuery(ctx context.Context) error {
 	return nil
 }
 
-func (_q *SocialIdentityQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*SocialIdentity, error) {
+func (_q *UserRoleBindingQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*UserRoleBinding, error) {
 	var (
-		nodes = []*SocialIdentity{}
+		nodes = []*UserRoleBinding{}
 		_spec = _q.querySpec()
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
-		return (*SocialIdentity).scanValues(nil, columns)
+		return (*UserRoleBinding).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &SocialIdentity{config: _q.config}
+		node := &UserRoleBinding{config: _q.config}
 		nodes = append(nodes, node)
 		return node.assignValues(columns, values)
 	}
@@ -355,7 +355,7 @@ func (_q *SocialIdentityQuery) sqlAll(ctx context.Context, hooks ...queryHook) (
 	return nodes, nil
 }
 
-func (_q *SocialIdentityQuery) sqlCount(ctx context.Context) (int, error) {
+func (_q *UserRoleBindingQuery) sqlCount(ctx context.Context) (int, error) {
 	_spec := _q.querySpec()
 	_spec.Node.Columns = _q.ctx.Fields
 	if len(_q.ctx.Fields) > 0 {
@@ -364,8 +364,8 @@ func (_q *SocialIdentityQuery) sqlCount(ctx context.Context) (int, error) {
 	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
 }
 
-func (_q *SocialIdentityQuery) querySpec() *sqlgraph.QuerySpec {
-	_spec := sqlgraph.NewQuerySpec(socialidentity.Table, socialidentity.Columns, sqlgraph.NewFieldSpec(socialidentity.FieldID, field.TypeInt64))
+func (_q *UserRoleBindingQuery) querySpec() *sqlgraph.QuerySpec {
+	_spec := sqlgraph.NewQuerySpec(userrolebinding.Table, userrolebinding.Columns, sqlgraph.NewFieldSpec(userrolebinding.FieldID, field.TypeInt64))
 	_spec.From = _q.sql
 	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
@@ -374,9 +374,9 @@ func (_q *SocialIdentityQuery) querySpec() *sqlgraph.QuerySpec {
 	}
 	if fields := _q.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
-		_spec.Node.Columns = append(_spec.Node.Columns, socialidentity.FieldID)
+		_spec.Node.Columns = append(_spec.Node.Columns, userrolebinding.FieldID)
 		for i := range fields {
-			if fields[i] != socialidentity.FieldID {
+			if fields[i] != userrolebinding.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
 		}
@@ -404,12 +404,12 @@ func (_q *SocialIdentityQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (_q *SocialIdentityQuery) sqlQuery(ctx context.Context) *sql.Selector {
+func (_q *UserRoleBindingQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	builder := sql.Dialect(_q.driver.Dialect())
-	t1 := builder.Table(socialidentity.Table)
+	t1 := builder.Table(userrolebinding.Table)
 	columns := _q.ctx.Fields
 	if len(columns) == 0 {
-		columns = socialidentity.Columns
+		columns = userrolebinding.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
 	if _q.sql != nil {
@@ -436,28 +436,28 @@ func (_q *SocialIdentityQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	return selector
 }
 
-// SocialIdentityGroupBy is the group-by builder for SocialIdentity entities.
-type SocialIdentityGroupBy struct {
+// UserRoleBindingGroupBy is the group-by builder for UserRoleBinding entities.
+type UserRoleBindingGroupBy struct {
 	selector
-	build *SocialIdentityQuery
+	build *UserRoleBindingQuery
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (_g *SocialIdentityGroupBy) Aggregate(fns ...AggregateFunc) *SocialIdentityGroupBy {
+func (_g *UserRoleBindingGroupBy) Aggregate(fns ...AggregateFunc) *UserRoleBindingGroupBy {
 	_g.fns = append(_g.fns, fns...)
 	return _g
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (_g *SocialIdentityGroupBy) Scan(ctx context.Context, v any) error {
+func (_g *UserRoleBindingGroupBy) Scan(ctx context.Context, v any) error {
 	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*SocialIdentityQuery, *SocialIdentityGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return scanWithInterceptors[*UserRoleBindingQuery, *UserRoleBindingGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
-func (_g *SocialIdentityGroupBy) sqlScan(ctx context.Context, root *SocialIdentityQuery, v any) error {
+func (_g *UserRoleBindingGroupBy) sqlScan(ctx context.Context, root *UserRoleBindingQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
 	aggregation := make([]string, 0, len(_g.fns))
 	for _, fn := range _g.fns {
@@ -484,28 +484,28 @@ func (_g *SocialIdentityGroupBy) sqlScan(ctx context.Context, root *SocialIdenti
 	return sql.ScanSlice(rows, v)
 }
 
-// SocialIdentitySelect is the builder for selecting fields of SocialIdentity entities.
-type SocialIdentitySelect struct {
-	*SocialIdentityQuery
+// UserRoleBindingSelect is the builder for selecting fields of UserRoleBinding entities.
+type UserRoleBindingSelect struct {
+	*UserRoleBindingQuery
 	selector
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (_s *SocialIdentitySelect) Aggregate(fns ...AggregateFunc) *SocialIdentitySelect {
+func (_s *UserRoleBindingSelect) Aggregate(fns ...AggregateFunc) *UserRoleBindingSelect {
 	_s.fns = append(_s.fns, fns...)
 	return _s
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (_s *SocialIdentitySelect) Scan(ctx context.Context, v any) error {
+func (_s *UserRoleBindingSelect) Scan(ctx context.Context, v any) error {
 	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*SocialIdentityQuery, *SocialIdentitySelect](ctx, _s.SocialIdentityQuery, _s, _s.inters, v)
+	return scanWithInterceptors[*UserRoleBindingQuery, *UserRoleBindingSelect](ctx, _s.UserRoleBindingQuery, _s, _s.inters, v)
 }
 
-func (_s *SocialIdentitySelect) sqlScan(ctx context.Context, root *SocialIdentityQuery, v any) error {
+func (_s *UserRoleBindingSelect) sqlScan(ctx context.Context, root *UserRoleBindingQuery, v any) error {
 	selector := root.sqlQuery(ctx)
 	aggregation := make([]string, 0, len(_s.fns))
 	for _, fn := range _s.fns {

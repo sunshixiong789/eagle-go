@@ -4,7 +4,7 @@
 # 使用方式见 docs/aliyun-flow-deployment.md。
 set -eu
 
-required_variables="EAGLE_IMAGE DEPLOY_ENV EAGLE_DATABASE_DSN EAGLE_AUTH_ISSUER EAGLE_AUTH_AUDIENCE EAGLE_AUTH_SIGNING_SECRET"
+required_variables="EAGLE_IMAGE DEPLOY_ENV EAGLE_DATABASE_DSN EAGLE_AUTH_ISSUER EAGLE_AUTH_AUDIENCE EAGLE_AUTH_SIGNING_KEY_HOST_DIRECTORY EAGLE_AUTH_ACTIVE_SIGNING_KEY_ID"
 for variable_name in ${required_variables}; do
   eval "variable_value=\${${variable_name}:-}"
   if [ -z "${variable_value}" ]; then
@@ -73,7 +73,8 @@ write_env() {
     write_env_value EAGLE_DATABASE_DSN "${EAGLE_DATABASE_DSN}"
     write_env_value EAGLE_AUTH_ISSUER "${EAGLE_AUTH_ISSUER}"
     write_env_value EAGLE_AUTH_AUDIENCE "${EAGLE_AUTH_AUDIENCE}"
-    write_env_value EAGLE_AUTH_SIGNING_SECRET "${EAGLE_AUTH_SIGNING_SECRET}"
+    write_env_value EAGLE_AUTH_SIGNING_KEY_HOST_DIRECTORY "${EAGLE_AUTH_SIGNING_KEY_HOST_DIRECTORY}"
+    write_env_value EAGLE_AUTH_ACTIVE_SIGNING_KEY_ID "${EAGLE_AUTH_ACTIVE_SIGNING_KEY_ID}"
     write_env_value EAGLE_AUTH_ACCESS_TOKEN_TTL "${EAGLE_AUTH_ACCESS_TOKEN_TTL:-900s}"
     write_env_value EAGLE_AUTH_REFRESH_TOKEN_TTL "${EAGLE_AUTH_REFRESH_TOKEN_TTL:-2592000s}"
     write_env_value EAGLE_AUTH_GOOGLE_ENABLED "${EAGLE_AUTH_GOOGLE_ENABLED:-false}"

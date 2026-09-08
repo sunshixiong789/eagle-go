@@ -21,6 +21,7 @@ func (AuthSession) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("id").MaxLen(32),
 		field.Int64("identity_id"),
+		field.String("audience").MaxLen(255),
 		field.String("refresh_token_hash").MaxLen(64).Unique(),
 		field.Time("expires_at"),
 		field.Time("revoked_at").Optional().Nillable(),
