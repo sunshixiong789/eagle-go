@@ -3,6 +3,7 @@ package infrastructure
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -24,6 +25,16 @@ func TestSessionLifecycle(t *testing.T) {
 	if identity.Identity.Subject != "google:provider-user-1" || identity.Identity.Role != "user" {
 		t.Fatalf("unexpected identity: %+v", identity)
 	}
+	updated, err := repo.Create(context.Background(), &domain.ExternalIdentity{
+		Provider: domain.ProviderGoogle, ProviderID: "provider-user-1", Email: "updated@example.com",
+		EmailVerified: true,
+	}, domain.Session{ID: "session0000000000000000000000002", RefreshTokenHash: "other-session", ExpiresAt: time.Now().Add(time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Identity.ID != identity.Identity.ID || updated.Identity.Email != "updated@example.com" || updated.Identity.DisplayName != "User" {
+		t.Fatalf("upserted identity = %+v", updated.Identity)
+	}
 
 	rotated, err := repo.Rotate(context.Background(), "old-hash", "new-hash", time.Now().Add(2*time.Hour))
 	if err != nil || rotated.Identity.ID != identity.Identity.ID {
@@ -37,6 +48,29 @@ func TestSessionLifecycle(t *testing.T) {
 	}
 	if _, err := repo.Rotate(context.Background(), "new-hash", "third-hash", time.Now().Add(time.Hour)); !errors.Is(err, domain.ErrInvalidRefreshToken) {
 		t.Fatalf("revoked token error = %v", err)
+	}
+}
+
+func TestProviderSubjectsRemainCaseSensitive(t *testing.T) {
+	if testing.Short() {
+		t.Skip("需要真实数据库")
+	}
+	repo := NewSessionRepository(authTestDB, &testIssuer{})
+	var identities []*domain.Identity
+	for i, providerID := range []string{"CaseSensitive", "casesensitive"} {
+		grant, err := repo.Create(context.Background(), &domain.ExternalIdentity{
+			Provider: domain.ProviderGoogle, ProviderID: providerID,
+		}, domain.Session{
+			ID: fmt.Sprintf("case-sensitive-session-%08d", i), RefreshTokenHash: fmt.Sprintf("case-sensitive-hash-%d", i),
+			ExpiresAt: time.Now().Add(time.Hour),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		identities = append(identities, grant.Identity)
+	}
+	if identities[0].ID == identities[1].ID {
+		t.Fatalf("case-distinct provider subjects collapsed to identity %d", identities[0].ID)
 	}
 }
 

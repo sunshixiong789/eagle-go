@@ -1,11 +1,11 @@
-// Package e2e 端到端验证真实服务：真实 PostgreSQL、真实迁移、
+// Package e2e 端到端验证真实服务：真实数据库、真实迁移、
 // 真实 HTTP 服务器、真实签名的 JWT，走完整的中间件链。
 //
 // 与各模块 infrastructure 集成测试的区别：那里验证仓储实现与 SQL，
 // 这里验证的是「服务作为一个整体能不能起来并正确响应」——
 // 配置解析、依赖装配、中间件顺序、认证与授权判定、错误码映射。
 //
-// 不依赖 Docker：PostgreSQL 由 embedded-postgres 在进程内拉起。
+// PostgreSQL 默认由 embedded-postgres 拉起；MySQL 由专用测试任务提供。
 package e2e
 
 import (
@@ -49,7 +49,10 @@ const (
 	testAuthSecret = "test-signing-secret-at-least-32-bytes"
 )
 
-var testDSN string
+var (
+	testDatabaseDriver string
+	testDSN            string
+)
 
 func TestMain(m *testing.M) {
 	flag.Parse()
@@ -57,14 +60,19 @@ func TestMain(m *testing.M) {
 		os.Exit(m.Run())
 	}
 
-	pg, err := testkit.StartPostgres("e2e", "eagle_e2e")
+	testDatabase, err := testkit.StartDatabase("e2e", "eagle_e2e")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "e2e 环境准备失败: %v\n", err)
 		os.Exit(1)
 	}
-	defer func() { _ = pg.Close() }()
-	testDSN = pg.DSN
-	os.Exit(m.Run())
+	testDatabaseDriver = testDatabase.Driver
+	testDSN = testDatabase.DSN
+	code := m.Run()
+	if err := testDatabase.Close(); err != nil {
+		fmt.Fprintf(os.Stderr, "e2e 环境清理失败: %v\n", err)
+		code = 1
+	}
+	os.Exit(code)
 }
 
 // testEnv 是一次测试用的完整服务实例。
@@ -94,7 +102,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	}
 
 	adminDB, cleanup, err := platformdb.Open(&config.Data{Database: &config.Data_Database{
-		Dsn: testDSN, MaxConns: 4, MaxIdleConns: 1,
+		Driver: testDatabaseDriver, Dsn: testDSN, MaxConns: 4, MaxIdleConns: 1,
 	}})
 	if err != nil {
 		t.Fatalf("构造 admin Data: %v", err)

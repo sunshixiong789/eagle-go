@@ -104,6 +104,34 @@ jobs:
           name: coverage
           path: coverage/
 
+  mysql:
+    name: MySQL 集成测试
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: eagle-root
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -peagle-root"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: "**/go.sum"
+
+      - name: 迁移、仓储与 e2e
+        env:
+          EAGLE_TEST_MYSQL_DSN: root:eagle-root@tcp(127.0.0.1:3306)/mysql?parseTime=true&loc=UTC&charset=utf8mb4
+        run: make test-mysql
+
   lint:
     name: 静态检查
     runs-on: ubuntu-latest

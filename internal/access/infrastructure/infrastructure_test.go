@@ -783,13 +783,22 @@ func TestBindingCatalogLocksValidatedRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = other.Rollback() }()
-	if _, err := other.Client().ExecContext(ctx, "SET LOCAL lock_timeout = '100ms'"); err != nil {
+	lockTimeout := "SET LOCAL lock_timeout = '100ms'"
+	if testDB.Dialect().String() == "mysql" {
+		lockTimeout = "SET SESSION innodb_lock_wait_timeout = 1"
+	}
+	if _, err := other.Client().ExecContext(ctx, lockTimeout); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := other.PermissionDefinition.Update().Where(permissiondefinition.CodeEQ(code)).SetStatus(0).Save(ctx); err == nil {
 		t.Fatal("catalog update bypassed validation lock")
-	} else if !strings.Contains(err.Error(), "lock timeout") {
+	} else if message := strings.ToLower(err.Error()); !strings.Contains(message, "lock timeout") && !strings.Contains(message, "lock wait timeout") {
 		t.Fatalf("expected lock timeout: %v", err)
+	}
+	// PostgreSQL aborts the transaction after lock_timeout; MySQL only rolls
+	// back the failed statement, so explicitly release any retained locks.
+	if err := other.Rollback(); err != nil {
+		t.Fatal(err)
 	}
 	if err := tx.Rollback(); err != nil {
 		t.Fatal(err)

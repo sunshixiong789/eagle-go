@@ -6,12 +6,12 @@
 |---|---|
 | domain 规则或聚合 | 表驱动单测覆盖合法路径、边界值和不变量 |
 | application 编排 | 用端口 fake 验证调用顺序、错误传播和结果 |
-| infrastructure | 使用真实 PostgreSQL 或临时存储验证查询、事务、并发与错误翻译 |
+| infrastructure | 使用真实 PostgreSQL/MySQL 或临时存储验证查询、事务、并发与错误翻译 |
 | interfaces / API | 验证 Proto 映射、错误映射、401 / 403 / 200 |
 | 分层、依赖或新模块 | `go test ./tests/architecture/...` |
-| schema / migration | 在 `migrations/` 执行 `up -> down -> up` |
+| schema / migration | 对 PostgreSQL 与 MySQL 迁移分别执行 `up -> down -> up` |
 
-- 单元和集成测试不依赖 Docker；现有数据库集成测试使用 embedded-postgres。
+- 默认 `make test` 不依赖 Docker，使用 embedded-postgres；`make test-mysql` 必须通过 DSN 连接真实 MySQL，CI 为它提供独立服务。
 - e2e 认证链路必须走真实验签，不向 context 塞假 Principal 绕过中间件。
 - 修改公共 matcher、权限覆盖规则或跨层约束时，同时运行其一致性/架构测试。
 - 先运行最小相关包测试；跨模块或生成类改动再运行 `make lint`、`make test`。保留实际命令输出作为“已验证”的依据。
@@ -23,7 +23,7 @@
 - `make test-unit` 运行不依赖数据库和外部网络的快速单元测试；`make test-coverage` 对同一组核心手写代码执行语句覆盖率门禁，当前最低为 **80%**。
 - domain 的不变量、安全边界以及 application 的关键编排应优先做到 **90% 以上**；无法稳定触发的操作系统或密码学随机源失败分支可以不为数字改造生产代码，但要保证错误可传播且在评审中说明。
 - 新增或实质修改的手写生产包，包级覆盖率不得低于 **80%**；仅包含类型、常量或端口定义且没有可执行语句的包不强制补空测试。
-- Protobuf / Ent 生成代码、组合根、进程启动与数据库 infrastructure 不计入单元覆盖率门禁。生成代码由生成幂等和契约/E2E 验证；组合根由 build 和架构测试验证；数据库适配由 embedded-postgres 集成测试验证。
+- Protobuf / Ent 生成代码、组合根、进程启动与数据库 infrastructure 不计入单元覆盖率门禁。生成代码由生成幂等和契约/E2E 验证；组合根由 build 和架构测试验证；数据库适配由 PostgreSQL/MySQL 真实集成测试验证。
 - 不允许用无断言调用、只测 getter、复制生产实现到测试等方式凑覆盖率。优先覆盖合法路径、边界值、错误传播、权限拒绝、事务失败和不可变性。
 
 合并前至少运行 `make test-coverage`；涉及数据库、HTTP 契约、认证授权链或跨模块装配时，还必须运行完整的 `make test`。

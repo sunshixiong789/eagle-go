@@ -43,8 +43,21 @@ $(BIN)/%:
 	@mkdir -p $(BIN)
 	go -C tools build -o $@ $(TOOL_PKG_$*)
 
+EAGLE_DATABASE_DRIVER ?= postgres
+ifeq ($(EAGLE_DATABASE_DRIVER),mysql)
+EAGLE_DSN ?= eagle:eagle@tcp(127.0.0.1:3306)/eagle?parseTime=true&loc=UTC&charset=utf8mb4
+MIGRATION_DIR := migrations/mysql
+else
 EAGLE_DSN ?= postgres://eagle:eagle@127.0.0.1:5432/eagle?sslmode=disable
 MIGRATION_DIR := migrations
+endif
+MYSQL_TEST_PACKAGES := \
+	./pkg/db \
+	./internal/access/infrastructure \
+	./internal/auth/infrastructure \
+	./internal/dictionary/infrastructure \
+	./tests/database \
+	./tests/e2e
 
 .PHONY: init
 # 下载并验证项目锁定的开发期工具链
@@ -84,16 +97,16 @@ tidy:
 .PHONY: migrate-up
 # 执行数据库迁移
 migrate-up: $(GOOSE)
-	$(GOOSE) -dir $(MIGRATION_DIR) postgres "$(EAGLE_DSN)" up
+	$(GOOSE) -dir $(MIGRATION_DIR) $(EAGLE_DATABASE_DRIVER) "$(EAGLE_DSN)" up
 
 .PHONY: migrate-down
 # 回滚一个版本
 migrate-down: $(GOOSE)
-	$(GOOSE) -dir $(MIGRATION_DIR) postgres "$(EAGLE_DSN)" down
+	$(GOOSE) -dir $(MIGRATION_DIR) $(EAGLE_DATABASE_DRIVER) "$(EAGLE_DSN)" down
 
 .PHONY: migrate-status
 migrate-status: $(GOOSE)
-	$(GOOSE) -dir $(MIGRATION_DIR) postgres "$(EAGLE_DSN)" status
+	$(GOOSE) -dir $(MIGRATION_DIR) $(EAGLE_DATABASE_DRIVER) "$(EAGLE_DSN)" status
 
 .PHONY: generate
 # 全量生成：对外契约 + 进程配置 + Ent
@@ -121,18 +134,24 @@ push-image:
 	docker push $(IMAGE):$(VERSION)
 
 .PHONY: run
-# 本地直接启动服务（依赖 make up-deps 起好的 PostgreSQL）
+# 本地直接启动服务（依赖 make up-deps 起好的所选数据库）
 run:
-	EAGLE_DATABASE_DSN="$(EAGLE_DSN)" go run -ldflags "$(LDFLAGS)" ./cmd/eagle -conf configs
+	EAGLE_DATABASE_DRIVER="$(EAGLE_DATABASE_DRIVER)" EAGLE_DATABASE_DSN="$(EAGLE_DSN)" go run -ldflags "$(LDFLAGS)" ./cmd/eagle -conf configs
 
 .PHONY: lint
 lint: $(GOLANGCI_LINT)
 	$(GOLANGCI_LINT) run ./...
 
 .PHONY: test
-# 单测 + 集成测试（embedded-postgres，不需要 Docker）
+# 单测 + PostgreSQL 集成测试（embedded-postgres，不需要 Docker）
 test:
 	go test -race -cover ./...
+
+.PHONY: test-mysql
+# 对真实 MySQL 运行迁移、仓储和 e2e 测试
+test-mysql:
+	@test -n "$(EAGLE_TEST_MYSQL_DSN)" || (echo "EAGLE_TEST_MYSQL_DSN is required" >&2; exit 1)
+	EAGLE_TEST_DATABASE_DRIVER=mysql EAGLE_TEST_MYSQL_DSN="$(EAGLE_TEST_MYSQL_DSN)" go test -race -cover $(MYSQL_TEST_PACKAGES)
 
 .PHONY: test-unit
 # 只运行不依赖数据库和网络的快速单元测试
@@ -161,7 +180,7 @@ up:
 .PHONY: up-deps
 # 只启动本地基础依赖，服务由 make run 单独启动
 up-deps:
-	docker compose -f deploy/docker-compose.yml up -d postgres
+	docker compose -f deploy/docker-compose.yml --profile $(EAGLE_DATABASE_DRIVER) up -d $(EAGLE_DATABASE_DRIVER)
 
 .PHONY: validate-deploy
 # 校验 Compose 文件能被正确解析

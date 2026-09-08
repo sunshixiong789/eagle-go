@@ -24,6 +24,23 @@ services:
       timeout: 3s
       retries: 10
 
+  mysql:
+    image: mysql:8.4
+    profiles: ["mysql"]
+    environment:
+      MYSQL_USER: eagle
+      MYSQL_PASSWORD: eagle
+      MYSQL_DATABASE: eagle
+      MYSQL_ROOT_PASSWORD: eagle-root
+    ports: ["3306:3306"]
+    volumes:
+      - mysqldata:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-peagle-root"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+
   # 迁移与服务是同一个镜像的两个 entrypoint：schema 与代码同版本发布，
   # 不会出现「服务已升级、迁移还没跑」的窗口。
   eagle-migrate:
@@ -32,6 +49,7 @@ services:
     entrypoint: ["/app/migrate"]
     command: ["-dir", "/app/migrations"]
     environment:
+      EAGLE_DATABASE_DRIVER: postgres
       EAGLE_DATABASE_DSN: postgres://eagle:eagle@postgres:5432/eagle?sslmode=disable
     depends_on:
       postgres:
@@ -41,6 +59,7 @@ services:
     image: eagle/eagle:dev
     build: *eagle-build
     environment:
+      EAGLE_DATABASE_DRIVER: postgres
       EAGLE_DATABASE_DSN: postgres://eagle:eagle@postgres:5432/eagle?sslmode=disable
       EAGLE_AUTH_SIGNING_SECRET: "${EAGLE_AUTH_SIGNING_SECRET:-development-only-signing-secret-change-me}"
       EAGLE_AUTH_GOOGLE_ENABLED: "${EAGLE_AUTH_GOOGLE_ENABLED:-false}"
@@ -55,3 +74,4 @@ services:
 
 volumes:
   pgdata:
+  mysqldata:

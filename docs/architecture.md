@@ -55,7 +55,7 @@ Google/Apple 只负责证明第三方身份；Eagle 保存最小身份资料与�
 
 ## 数据所有权
 
-全进程共用一个 PostgreSQL database 和一个 Ent Client。表仍然归模块所有：跨模块读写对方的表要经过对方 domain 定义的端口，不在自己的 infrastructure 里直连别人的表。
+全进程共用一个启动时选定的 PostgreSQL 或 MySQL database 和一个 Ent Client。表仍然归模块所有：跨模块读写对方的表要经过对方 domain 定义的端口，不在自己的 infrastructure 里直连别人的表。
 
 这条约束在单体里没有编译器强制。`tests/architecture/data_ownership_test.go` 检查显式 SQL 表名、生成模型 import 和 Client 选择器；动态 SQL 与间接别名仍需 review。它的价值在拆分时才兑现——一张被三个模块直接查询的表，拆分时会同时变成三个模块的阻塞点。
 
@@ -86,12 +86,12 @@ Google/Apple 只负责证明第三方身份；Eagle 保存最小身份资料与�
 
 本地：
 
-    Browser / App → Google / Apple ID Token → eagle:8000 → PostgreSQL
+    Browser / App → Google / Apple ID Token → eagle:8000 → PostgreSQL / MySQL
                                                 ↓
                                   Eagle JWT → authn → Casbin
 
 `make up` 会先跑一次性迁移任务，成功后再启动应用。远端部署不启动数据库，只连接环境侧独立
-管理的 PostgreSQL；生产入口需要的 TLS 终止、请求限制和真实客户端 IP 由环境侧的 LB 或网关提供，
+管理的 PostgreSQL 或 MySQL；生产入口需要的 TLS 终止、请求限制和真实客户端 IP 由环境侧的 LB 或网关提供，
 仓库不绑定具体网关。
 
 生产是同一个镜像的两个 entrypoint：`/app/migrate` 跑迁移，`/app/eagle` 跑服务。schema 与代码同版本发布，不会出现「服务已升级、迁移还没跑」的窗口。服务进程启动时**不会**自动迁移；发布顺序固定为「迁移任务 → 服务滚动 → 观察」，编排方式（Compose、Kubernetes 或其它）由环境仓库自行维护。

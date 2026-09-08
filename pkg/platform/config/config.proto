@@ -46,7 +46,7 @@ message Data {
   message Database {
     // 数据库方言：postgres 或 mysql。留空时兼容为 postgres。
     string driver = 6;
-    // pgx 连接串，如 postgres://user:pass@host:5432/db?sslmode=disable
+    // 所选驱动的连接串；MySQL 必须启用 parseTime=true。
     string dsn = 1;
     // 连接池上限。开发环境 20 足够，生产按并发量调
     int32 max_conns = 2;

@@ -3,6 +3,7 @@ package db_test
 import (
 	"database/sql"
 	"flag"
+	"strings"
 	"testing"
 
 	"github.com/pressly/goose/v3"
@@ -18,45 +19,45 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	}
 	flag.Parse()
 
-	pg, err := testkit.StartPostgres("migrations", "eagle_migrate_test")
+	testDatabase, err := testkit.StartDatabase("migrations", "eagle_migrate_test")
 	if err != nil {
-		t.Fatalf("启动 embedded postgres: %v", err)
+		t.Fatalf("启动测试数据库: %v", err)
 	}
-	t.Cleanup(func() { _ = pg.Close() })
+	t.Cleanup(func() { _ = testDatabase.Close() })
 
-	sqlDB, err := sql.Open("pgx", pg.DSN)
+	sqlDB, err := sql.Open(testDatabase.SQLDriver, testDatabase.DSN)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
 	t.Cleanup(func() { _ = sqlDB.Close() })
 
-	if err := goose.SetDialect("postgres"); err != nil {
+	if err := goose.SetDialect(testDatabase.Driver); err != nil {
 		t.Fatalf("set dialect: %v", err)
 	}
 	goose.SetLogger(goose.NopLogger())
 
-	dir := testkit.MigrationsDir()
-	assertSingleBaseline(t, sqlDB)
-	assertSeedData(t, sqlDB)
+	dir := testkit.MigrationsDirFor(testDatabase.Driver)
+	assertSingleBaseline(t, sqlDB, testDatabase.Driver)
+	assertSeedData(t, sqlDB, testDatabase.Driver)
 
 	if err := goose.DownTo(sqlDB, dir, 0); err != nil {
 		t.Fatalf("down-to 0: %v", err)
 	}
-	assertTablesDropped(t, sqlDB)
+	assertTablesDropped(t, sqlDB, testDatabase.Driver)
 
 	// 再 up 一次：验证 down 确实把状态清干净了，
 	// 而不是留下残留导致重建时主键冲突或对象已存在
 	if err := goose.Up(sqlDB, dir); err != nil {
 		t.Fatalf("回滚后重新 up: %v", err)
 	}
-	assertSingleBaseline(t, sqlDB)
-	assertSeedData(t, sqlDB)
+	assertSingleBaseline(t, sqlDB, testDatabase.Driver)
+	assertSeedData(t, sqlDB, testDatabase.Driver)
 	if err := goose.DownTo(sqlDB, dir, 0); err != nil {
 		t.Fatalf("最终 down-to 0: %v", err)
 	}
 }
 
-func assertSingleBaseline(t *testing.T, db *sql.DB) {
+func assertSingleBaseline(t *testing.T, db *sql.DB, driver string) {
 	t.Helper()
 	if version, err := goose.GetDBVersion(db); err != nil {
 		t.Fatalf("读取迁移版本: %v", err)
@@ -64,8 +65,8 @@ func assertSingleBaseline(t *testing.T, db *sql.DB) {
 		t.Fatalf("迁移版本 = %d, want 1", version)
 	}
 	for _, table := range []string{"social_identity", "auth_session"} {
-		var exists bool
-		if err := db.QueryRow(`SELECT to_regclass($1) IS NOT NULL`, table).Scan(&exists); err != nil {
+		exists, err := tableExists(db, driver, table)
+		if err != nil {
 			t.Fatalf("检查表 %s: %v", table, err)
 		}
 		if !exists {
@@ -78,15 +79,15 @@ func assertSingleBaseline(t *testing.T, db *sql.DB) {
 //
 // 这里断言的是不变量而不是行数：写死 count 的测试在任何人新增一个
 // 权限节点时都会变红，除了制造噪音没有别的作用。
-func assertSeedData(t *testing.T, db *sql.DB) {
+func assertSeedData(t *testing.T, db *sql.DB, driver string) {
 	t.Helper()
 
 	// Casbin 策略里必须有内置角色。角色由 Eagle 令牌提供，
 	// 这里存的是「角色 -> 权限码」映射
 	for _, role := range []string{"admin", "user"} {
 		var exists bool
-		err := db.QueryRow(
-			`SELECT EXISTS(SELECT 1 FROM casbin_rule WHERE ptype = 'p' AND v0 = $1)`, role).Scan(&exists)
+		err := db.QueryRow(bind(driver,
+			`SELECT EXISTS(SELECT 1 FROM casbin_rule WHERE ptype = 'p' AND v0 = $1)`), role).Scan(&exists)
 		if err != nil {
 			t.Fatalf("查询角色策略 %s: %v", role, err)
 		}
@@ -101,7 +102,7 @@ func assertSeedData(t *testing.T, db *sql.DB) {
 		"system:role:assign", "system:dict:list",
 	} {
 		var exists bool
-		err := db.QueryRow(`SELECT EXISTS(SELECT 1 FROM permission_definition WHERE code = $1)`, code).Scan(&exists)
+		err := db.QueryRow(bind(driver, `SELECT EXISTS(SELECT 1 FROM permission_definition WHERE code = $1)`), code).Scan(&exists)
 		if err != nil {
 			t.Fatalf("查询权限码 %s: %v", code, err)
 		}
@@ -166,7 +167,11 @@ func assertSeedData(t *testing.T, db *sql.DB) {
 	if err := db.QueryRow(`SELECT max(id) FROM navigation_node`).Scan(&maxID); err != nil {
 		t.Fatalf("读取权限最大 id: %v", err)
 	}
-	err = db.QueryRow(`SELECT nextval(pg_get_serial_sequence('navigation_node','id'))`).Scan(&nextID)
+	query := `SELECT nextval(pg_get_serial_sequence('navigation_node','id'))`
+	if driver == "mysql" {
+		query = `SELECT auto_increment FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'navigation_node'`
+	}
+	err = db.QueryRow(query).Scan(&nextID)
 	if err != nil {
 		t.Fatalf("读取权限序列: %v", err)
 	}
@@ -175,7 +180,7 @@ func assertSeedData(t *testing.T, db *sql.DB) {
 	}
 }
 
-func assertTablesDropped(t *testing.T, db *sql.DB) {
+func assertTablesDropped(t *testing.T, db *sql.DB, driver string) {
 	t.Helper()
 
 	for _, table := range []string{
@@ -184,8 +189,7 @@ func assertTablesDropped(t *testing.T, db *sql.DB) {
 		"sys_dict_type", "sys_dict_data", "casbin_rule",
 		"authz_policy_state", "authz_policy_audit",
 	} {
-		var exists bool
-		err := db.QueryRow(`SELECT to_regclass($1) IS NOT NULL`, table).Scan(&exists)
+		exists, err := tableExists(db, driver, table)
 		if err != nil {
 			t.Fatalf("检查表 %s: %v", table, err)
 		}
@@ -193,4 +197,24 @@ func assertTablesDropped(t *testing.T, db *sql.DB) {
 			t.Errorf("回滚后表 %s 仍然存在", table)
 		}
 	}
+}
+
+func tableExists(db *sql.DB, driver, table string) (bool, error) {
+	if driver == "mysql" {
+		var exists bool
+		err := db.QueryRow(`SELECT EXISTS(
+			SELECT 1 FROM information_schema.tables
+			WHERE table_schema = DATABASE() AND table_name = ?)`, table).Scan(&exists)
+		return exists, err
+	}
+	var exists bool
+	err := db.QueryRow(`SELECT to_regclass($1) IS NOT NULL`, table).Scan(&exists)
+	return exists, err
+}
+
+func bind(driver, query string) string {
+	if driver == "mysql" {
+		return strings.ReplaceAll(query, "$1", "?")
+	}
+	return query
 }

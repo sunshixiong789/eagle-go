@@ -48,7 +48,8 @@ func loadConfig(t *testing.T) *appconfig.Bootstrap {
 
 func TestEnvironmentOverridesSensitiveDefaults(t *testing.T) {
 	path := configDir(t)
-	t.Setenv("EAGLE_DATABASE_DSN", "postgres://runtime:secret@db.internal:5432/eagle?sslmode=require")
+	t.Setenv("EAGLE_DATABASE_DRIVER", "mysql")
+	t.Setenv("EAGLE_DATABASE_DSN", "runtime:secret@tcp(db.internal:3306)/eagle?parseTime=true&loc=UTC")
 	t.Setenv("EAGLE_SERVER_HTTP_ADDR", "0.0.0.0:18000")
 	t.Setenv("EAGLE_AUTH_SIGNING_SECRET", "runtime-signing-secret-at-least-32-bytes")
 	t.Setenv("EAGLE_OBSERVABILITY_TRACE_SAMPLE_RATIO", "0.05")
@@ -65,7 +66,10 @@ func TestEnvironmentOverridesSensitiveDefaults(t *testing.T) {
 	if err := c.Scan(&bc); err != nil {
 		t.Fatalf("解析配置: %v", err)
 	}
-	if got := bc.GetData().GetDatabase().GetDsn(); !strings.Contains(got, "runtime:secret@db.internal") {
+	if got := bc.GetData().GetDatabase().GetDriver(); got != "mysql" {
+		t.Fatalf("DATABASE_DRIVER override not applied: %q", got)
+	}
+	if got := bc.GetData().GetDatabase().GetDsn(); !strings.Contains(got, "runtime:secret@tcp(db.internal:3306)") {
 		t.Fatalf("DATABASE_DSN override not applied: %q", got)
 	}
 	if got := bc.GetServer().GetHttp().GetAddr(); got != "0.0.0.0:18000" {
@@ -76,6 +80,9 @@ func TestEnvironmentOverridesSensitiveDefaults(t *testing.T) {
 	}
 	if got := bc.GetObservability().GetTraceSampleRatio(); got != 0.05 {
 		t.Fatalf("OBSERVABILITY_TRACE_SAMPLE_RATIO override not applied: %v", got)
+	}
+	if err := appconfig.Validate(&bc); err != nil {
+		t.Fatalf("environment-overridden config rejected: %v", err)
 	}
 }
 
@@ -93,6 +100,38 @@ func TestConfigParses(t *testing.T) {
 	if got := bc.GetData().GetDatabase().GetDsn(); !strings.Contains(got, "/eagle?") {
 		t.Errorf("data.database.dsn = %q, want database %q", got, "eagle")
 	}
+	if got := bc.GetData().GetDatabase().GetDriver(); got != "postgres" {
+		t.Errorf("data.database.driver = %q, want postgres", got)
+	}
+}
+
+func TestDatabaseConfigAllowsMySQL(t *testing.T) {
+	bc := loadConfig(t)
+	database := bc.GetData().GetDatabase()
+	database.Driver = "mysql"
+	database.Dsn = "eagle:eagle@tcp(127.0.0.1:3306)/eagle?parseTime=true&loc=UTC"
+	if err := appconfig.Validate(bc); err != nil {
+		t.Fatalf("mysql configuration rejected: %v", err)
+	}
+}
+
+func TestDatabaseConfigRejectsInvalidDriverAndMySQLTimeParsing(t *testing.T) {
+	t.Run("driver", func(t *testing.T) {
+		bc := loadConfig(t)
+		bc.GetData().GetDatabase().Driver = "sqlite"
+		if err := appconfig.Validate(bc); err == nil || !strings.Contains(err.Error(), "unsupported database driver") {
+			t.Fatalf("Validate() error = %v", err)
+		}
+	})
+	t.Run("parse time", func(t *testing.T) {
+		bc := loadConfig(t)
+		database := bc.GetData().GetDatabase()
+		database.Driver = "mysql"
+		database.Dsn = "eagle:eagle@tcp(127.0.0.1:3306)/eagle"
+		if err := appconfig.Validate(bc); err == nil || !strings.Contains(err.Error(), "parseTime=true") {
+			t.Fatalf("Validate() error = %v", err)
+		}
+	})
 }
 
 func TestAuthConfigRequiresEagleTokenSettings(t *testing.T) {

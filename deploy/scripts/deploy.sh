@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# 云效主机部署入口。数据库不在这里创建，只连接环境侧预先准备好的 RDS/PostgreSQL。
+# 云效主机部署入口。数据库不在这里创建，只连接环境侧预先准备好的 RDS。
 # 使用方式见 docs/aliyun-flow-deployment.md。
 set -eu
 
@@ -69,6 +69,7 @@ write_env() {
     write_env_value EAGLE_BIND_ADDRESS "${EAGLE_BIND_ADDRESS:-127.0.0.1}"
     write_env_value EAGLE_HTTP_PORT "${EAGLE_HTTP_PORT:-8000}"
     write_env_value EAGLE_METRICS_PORT "${EAGLE_METRICS_PORT:-9101}"
+    write_env_value EAGLE_DATABASE_DRIVER "${EAGLE_DATABASE_DRIVER:-postgres}"
     write_env_value EAGLE_DATABASE_DSN "${EAGLE_DATABASE_DSN}"
     write_env_value EAGLE_AUTH_ISSUER "${EAGLE_AUTH_ISSUER}"
     write_env_value EAGLE_AUTH_AUDIENCE "${EAGLE_AUTH_AUDIENCE}"

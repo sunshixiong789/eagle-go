@@ -424,7 +424,9 @@ func (x *Server_HTTP) GetTimeout() *durationpb.Duration {
 
 type Data_Database struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// pgx 连接串，如 postgres://user:pass@host:5432/db?sslmode=disable
+	// 数据库方言：postgres 或 mysql。留空时兼容为 postgres。
+	Driver string `protobuf:"bytes,6,opt,name=driver,proto3" json:"driver,omitempty"`
+	// 所选驱动的连接串；MySQL 必须启用 parseTime=true。
 	Dsn string `protobuf:"bytes,1,opt,name=dsn,proto3" json:"dsn,omitempty"`
 	// 连接池上限。开发环境 20 足够，生产按并发量调
 	MaxConns int32 `protobuf:"varint,2,opt,name=max_conns,json=maxConns,proto3" json:"max_conns,omitempty"`
@@ -467,6 +469,13 @@ func (x *Data_Database) ProtoReflect() protoreflect.Message {
 // Deprecated: Use Data_Database.ProtoReflect.Descriptor instead.
 func (*Data_Database) Descriptor() ([]byte, []int) {
 	return file_config_proto_rawDescGZIP(), []int{2, 0}
+}
+
+func (x *Data_Database) GetDriver() string {
+	if x != nil {
+		return x.Driver
+	}
+	return ""
 }
 
 func (x *Data_Database) GetDsn() string {
@@ -573,10 +582,11 @@ const file_config_proto_rawDesc = "" +
 	"\x04HTTP\x12\x18\n" +
 	"\anetwork\x18\x01 \x01(\tR\anetwork\x12\x12\n" +
 	"\x04addr\x18\x02 \x01(\tR\x04addr\x123\n" +
-	"\atimeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\atimeoutJ\x04\b\x02\x10\x03\"\xbf\x02\n" +
+	"\atimeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\atimeoutJ\x04\b\x02\x10\x03\"\xd7\x02\n" +
 	"\x04Data\x12@\n" +
-	"\bdatabase\x18\x01 \x01(\v2$.eagle.platform.config.Data.DatabaseR\bdatabase\x1a\xee\x01\n" +
-	"\bDatabase\x12\x10\n" +
+	"\bdatabase\x18\x01 \x01(\v2$.eagle.platform.config.Data.DatabaseR\bdatabase\x1a\x86\x02\n" +
+	"\bDatabase\x12\x16\n" +
+	"\x06driver\x18\x06 \x01(\tR\x06driver\x12\x10\n" +
 	"\x03dsn\x18\x01 \x01(\tR\x03dsn\x12\x1b\n" +
 	"\tmax_conns\x18\x02 \x01(\x05R\bmaxConns\x12$\n" +
 	"\x0emax_idle_conns\x18\x03 \x01(\x05R\fmaxIdleConns\x12E\n" +

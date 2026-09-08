@@ -3,12 +3,12 @@
 基于 Kratos 的 Go 单体后端脚手架：一个进程、一个数据库、一个镜像，内置 Google/Apple 登录、
 集中式 RBAC 和结构化日志 / 指标 / trace 埋点。适合作为新项目的起点，而不是一套需要先拆分才能用的微服务底座。
 
-技术栈：Go 1.27、Kratos v3、Protobuf、buf、Ent、PostgreSQL 17、Casbin、
+技术栈：Go 1.27、Kratos v3、Protobuf、buf、Ent、PostgreSQL / MySQL、Casbin、
 go-oidc / go-jose、OpenTelemetry、Docker Compose。
 
 ## 项目现状
 
-单进程单模块：一个根 `go.mod`、一个二进制 `eagle`、一个 PostgreSQL 库、一个镜像。
+单进程单模块：一个根 `go.mod`、一个二进制 `eagle`、一个 PostgreSQL 或 MySQL 库、一个镜像。
 业务能力按模块划分，模块只是包边界，不是部署边界。
 
 | 模块 | 职责 | 分层 |
@@ -33,7 +33,7 @@ flowchart TB
     end
 
     idp["Google / Apple"]
-    db[(PostgreSQL)]
+    db[(PostgreSQL / MySQL)]
 
     client -->|HTTP| middleware
     middleware --> modules
@@ -164,6 +164,14 @@ make run
 默认配置位于 `configs/config.yaml`，可用 `EAGLE_*` 环境变量覆盖。宿主机进程与 `eagle`
 容器使用同一组端口，不能同时运行；完整的调试组合见[开发环境部署](docs/development-deployment.md)。
 
+MySQL 宿主机调试使用同一组命令，显式选择驱动：
+
+```bash
+make up-deps EAGLE_DATABASE_DRIVER=mysql
+make migrate-up EAGLE_DATABASE_DRIVER=mysql
+make run EAGLE_DATABASE_DRIVER=mysql
+```
+
 ### 5. 启用 Google/Apple 登录并调用接口
 
 在 Google Cloud 或 Apple Developer 创建客户端，通过 `EAGLE_AUTH_GOOGLE_*` / `EAGLE_AUTH_APPLE_*`
@@ -256,6 +264,8 @@ make validate-deploy
 
 `make test` 不需要 Docker。集成测试会用 embedded-postgres 启动真实 PostgreSQL；首次运行需要
 联网下载约 100 MB 的数据库二进制，之后复用本地缓存。
+真实 MySQL 迁移、仓储和 e2e 测试由 `make test-mysql` 运行，并通过
+`EAGLE_TEST_MYSQL_DSN` 提供拥有创建临时数据库权限的账号。CI 会在真实 MySQL 服务上执行该目标。
 
 跳过集成测试可使用：
 
@@ -269,7 +279,7 @@ go test -short ./...
 
 1. 在 `api/eagle/<module>/v1/*.proto` 修改契约。
 2. 每个 RPC 显式声明 `access`；需要权限时同时声明三段式 `perm`。
-3. 新权限码通过 `migrations/` 下的 goose 迁移写入 `permission_definition`。
+3. 新权限码同时通过 `migrations/`（PostgreSQL）和 `migrations/mysql/` 下的 goose 迁移写入 `permission_definition`。
 4. 执行 `make api`，不要手改 `*.pb.go`。
 5. 按用例复杂度选择 `interfaces -> domain <- infrastructure` 或 `interfaces -> application -> domain <- infrastructure`。
 6. 只有新增一个 Protobuf Service 时，才在 `cmd/eagle` 的 组合根 里注册。
@@ -338,7 +348,7 @@ subject := identity.Subject(ctx)
 
 1. 在 `internal/platform/database/ent/schema/` 定义表结构。
 2. 执行 `make ent`，不要手改生成的 `ent/` 文件。
-3. 在 `migrations/` 添加 goose SQL；生产不使用 Ent 自动迁移。
+3. 同时在 `migrations/`（PostgreSQL）和 `migrations/mysql/` 添加等价的 goose SQL；生产不使用 Ent 自动迁移。
 4. 在 `api/` 定义 RPC、校验规则、HTTP 映射和访问级别，然后执行 `make api`。
 5. 在 `internal/<module>/domain` 放模型、规则和仓储/存储接口。
 6. 仅在存在多端口、聚合变更、用例级事务编排、幂等、补偿或多入口复用时在 `application` 编排用例；纯 CRUD 由 `interfaces` 依赖 domain 端口。单个仓储操作内部使用事务不要求增加 application。`infrastructure` 实现数据库或外部服务端口，`interfaces` 只转换协议对象。
@@ -373,7 +383,8 @@ Google/Apple 负责证明“第三方账号是谁”，Eagle 将其映射为本�
 
 | 环境变量 | 用途 |
 |---|---|
-| `EAGLE_DATABASE_DSN` | 数据库连接，生产必须 `sslmode=require` 或更强 |
+| `EAGLE_DATABASE_DRIVER` | `postgres` 或 `mysql`，默认 `postgres` |
+| `EAGLE_DATABASE_DSN` | 数据库连接；PostgreSQL 生产启用 TLS，MySQL 必须包含 `parseTime=true` 并配置 TLS |
 | `EAGLE_AUTH_ISSUER` | 必须与 token 的 `iss` 完全一致 |
 | `EAGLE_AUTH_AUDIENCE` | Eagle access token 的必填 audience |
 | `EAGLE_AUTH_SIGNING_SECRET` | Eagle token 的 HS256 密钥，生产必须是至少 32 字节的随机 Secret |

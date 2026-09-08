@@ -9,11 +9,11 @@ require (
 	github.com/casbin/casbin/v2 v2.135.0 // 授权：基于策略的访问控制
 	github.com/coreos/go-oidc/v3 v3.21.0 // 认证：Google/Apple OIDC 身份校验
 	github.com/fergusstrange/embedded-postgres v1.34.0 // 测试：启动隔离的真实 PostgreSQL
-	github.com/go-sql-driver/mysql v1.10.0 // 数据：MySQL database/sql 驱动
 	github.com/go-jose/go-jose/v4 v4.1.5 // 认证：JOSE、JWK 与 JWT 加解签
 	github.com/go-kratos/kratos/contrib/middleware/validate/v3 v3.0.0-20260626125723-668db92c2c00 // API：Protobuf 请求校验中间件
 	github.com/go-kratos/kratos/contrib/otel/v3 v3.0.0-20260626125723-668db92c2c00 // 可观测性：Kratos 的 OpenTelemetry 集成
 	github.com/go-kratos/kratos/v3 v3.0.0 // API：服务框架与 HTTP 传输层
+	github.com/go-sql-driver/mysql v1.10.0 // 数据：MySQL database/sql 驱动
 	github.com/jackc/pgx/v5 v5.11.0 // 数据：PostgreSQL 驱动与连接池
 	github.com/pressly/goose/v3 v3.28.0 // 数据：版本化 SQL 迁移
 	github.com/prometheus/client_golang v1.24.1 // 可观测性：Prometheus 指标端点
@@ -33,6 +33,7 @@ require (
 	ariga.io/atlas v0.36.2-0.20250730182955-2c6300d0a3e1 // indirect
 	buf.build/go/protovalidate v1.2.0 // indirect
 	cel.dev/expr v0.25.2 // indirect
+	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/agext/levenshtein v1.2.3 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect

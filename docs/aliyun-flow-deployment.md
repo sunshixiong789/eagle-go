@@ -1,6 +1,6 @@
 # 云效 Flow 开发与测试环境部署
 
-本方案面向阿里云 ECS + Docker Compose。数据库作为独立基础设施部署，推荐使用 RDS PostgreSQL；
+本方案面向阿里云 ECS + Docker Compose。数据库作为独立基础设施部署，可使用 RDS PostgreSQL 或 RDS MySQL；
 ECS 上只运行一次性迁移任务和 `eagle` 应用。若后续迁移到 ACK，仍沿用“一个镜像、先迁移、后发布”
 的边界，但应把本清单替换为 Job + Deployment。
 
@@ -15,10 +15,10 @@ ECS 上只运行一次性迁移任务和 `eagle` 应用。若后续迁移到 ACK
 | 发布 | `develop` 分支自动 | 人工卡点后提升同一镜像 |
 
 两个环境至少要使用不同数据库和账号；更推荐使用不同 RDS 实例。RDS 只开放给对应 ECS 安全组，
-不映射公网端口。数据库账号只授予该环境数据库的权限，DSN 使用 `sslmode=require` 或更强。
+不映射公网端口。数据库账号只授予该环境数据库的权限；PostgreSQL 使用 `sslmode=require` 或更强，MySQL DSN 启用 TLS。
 备份、监控、参数组与版本升级由 RDS 管理，不再放入应用 Compose 生命周期。
 
-`deploy/docker-compose.yml` 继续只服务本地开发，其中的 PostgreSQL 不是远端部署资产。远端使用
+`deploy/docker-compose.yml` 继续只服务本地开发，其中的 PostgreSQL/MySQL 不是远端部署资产。远端使用
 `deploy/compose.app.yml`，该文件没有数据库服务。
 
 ## 流水线设计
@@ -48,6 +48,7 @@ ECS 上只运行一次性迁移任务和 `eagle` 应用。若后续迁移到 ACK
 |---|---|---|
 | `DEPLOY_ENV` | 普通 | `development` 或 `testing` |
 | `EAGLE_IMAGE` | 上游输出 | ACR 完整镜像地址，使用提交 SHA/digest |
+| `EAGLE_DATABASE_DRIVER` | 普通 | `postgres` 或 `mysql` |
 | `EAGLE_DATABASE_DSN` | 私密 | 当前环境独立 RDS DSN |
 | `EAGLE_AUTH_ISSUER` | 普通 | 必须与 token 的 `iss` 完全一致 |
 | `EAGLE_AUTH_AUDIENCE` | 普通 | 当前环境 Eagle JWT audience |

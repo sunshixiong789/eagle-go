@@ -3,7 +3,6 @@
 package testkit
 
 import (
-	"database/sql"
 	"fmt"
 	"io"
 	"net"
@@ -12,8 +11,6 @@ import (
 	"runtime"
 
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
-	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/pressly/goose/v3"
 )
 
 type Postgres struct {
@@ -79,19 +76,7 @@ func (p *Postgres) Close() error {
 
 // RunMigrations 对 dsn 执行仓库根目录 migrations/ 下的全部 goose 迁移。
 func RunMigrations(dsn string) error {
-	db, err := sql.Open("pgx", dsn)
-	if err != nil {
-		return fmt.Errorf("open migration database: %w", err)
-	}
-	defer func() { _ = db.Close() }()
-	if err := goose.SetDialect("postgres"); err != nil {
-		return fmt.Errorf("set migration dialect: %w", err)
-	}
-	goose.SetLogger(goose.NopLogger())
-	if err := goose.Up(db, MigrationsDir()); err != nil {
-		return fmt.Errorf("run migrations: %w", err)
-	}
-	return nil
+	return RunMigrationsFor("postgres", dsn)
 }
 
 // MigrationsDir 返回仓库根目录下的 migrations/ 绝对路径。

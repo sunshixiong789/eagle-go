@@ -95,10 +95,18 @@ make migrate-up
 make run
 ```
 
+调试 MySQL 时使用 Compose 中的 `mysql` profile，三个命令都显式传入方言：
+
+```bash
+make up-deps EAGLE_DATABASE_DRIVER=mysql
+make migrate-up EAGLE_DATABASE_DRIVER=mysql
+make run EAGLE_DATABASE_DRIVER=mysql
+```
+
 本地配置在 `configs/config.yaml`。宿主机运行使用其中的 `127.0.0.1` 默认值；容器运行由
 Compose 的 `EAGLE_*` 环境变量覆盖为容器 DNS。
 
-宿为机进程与 `eagle` 容器使用同一组宿主机端口（8000 / 9101），不能同时运行。需要断点调试时
+宿主机进程与 `eagle` 容器使用同一组宿主机端口（8000 / 9101），不能同时运行。需要断点调试时
 先停掉容器：
 
 ```bash
@@ -149,7 +157,7 @@ EAGLE_BUILDER_IMAGE=golang:1.27-alpine make up
 docker compose -f deploy/docker-compose.yml logs eagle-migrate
 ```
 
-常见原因是 PostgreSQL 尚未健康、数据卷来自旧版本，或迁移 SQL 失败。不要绕过迁移任务强行
+常见原因是所选数据库尚未健康、数据卷来自旧版本，或迁移 SQL 失败。不要绕过迁移任务强行
 启动应用——应用启动时会校验 proto 声明的权限码与数据库 catalog 一致，迁移没跑完会直接
 fail closed。
 
