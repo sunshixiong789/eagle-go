@@ -4,27 +4,27 @@ go 1.27.0
 
 // 直接依赖按用途标记为：API、认证、授权、数据、可观测性和测试。
 require (
-	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.11-20260415201107-50325440f8f2.1 // API：Protovalidate 规则的生成类型
+	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20260825204119-511051f7f437.2 // API：Protovalidate 规则的生成类型
 	entgo.io/ent v0.14.6 // 数据：数据模型与类型安全查询
 	github.com/casbin/casbin/v2 v2.135.0 // 授权：基于策略的访问控制
-	github.com/coreos/go-oidc/v3 v3.20.0 // 认证：Google/Apple OIDC 身份校验
+	github.com/coreos/go-oidc/v3 v3.21.0 // 认证：Google/Apple OIDC 身份校验
 	github.com/fergusstrange/embedded-postgres v1.34.0 // 测试：启动隔离的真实 PostgreSQL
-	github.com/go-jose/go-jose/v4 v4.1.4 // 认证：JOSE、JWK 与 JWT 加解签
+	github.com/go-jose/go-jose/v4 v4.1.5 // 认证：JOSE、JWK 与 JWT 加解签
 	github.com/go-kratos/kratos/contrib/middleware/validate/v3 v3.0.0-20260626125723-668db92c2c00 // API：Protobuf 请求校验中间件
 	github.com/go-kratos/kratos/contrib/otel/v3 v3.0.0-20260626125723-668db92c2c00 // 可观测性：Kratos 的 OpenTelemetry 集成
 	github.com/go-kratos/kratos/v3 v3.0.0 // API：服务框架与 HTTP 传输层
-	github.com/jackc/pgx/v5 v5.10.0 // 数据：PostgreSQL 驱动与连接池
-	github.com/pressly/goose/v3 v3.27.3 // 数据：版本化 SQL 迁移
+	github.com/jackc/pgx/v5 v5.11.0 // 数据：PostgreSQL 驱动与连接池
+	github.com/pressly/goose/v3 v3.28.0 // 数据：版本化 SQL 迁移
 	github.com/prometheus/client_golang v1.24.1 // 可观测性：Prometheus 指标端点
-	go.opentelemetry.io/otel v1.45.0 // 可观测性：OpenTelemetry 核心 API
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.45.0 // 可观测性：通过 OTLP/gRPC 导出链路
-	go.opentelemetry.io/otel/exporters/prometheus v0.67.0 // 可观测性：导出 Prometheus 指标
-	go.opentelemetry.io/otel/metric v1.45.0 // 可观测性：指标 API
-	go.opentelemetry.io/otel/sdk v1.45.0 // 可观测性：链路 SDK
-	go.opentelemetry.io/otel/sdk/metric v1.45.0 // 可观测性：指标 SDK
-	go.opentelemetry.io/otel/trace v1.45.0 // 可观测性：链路 API
-	google.golang.org/genproto/googleapis/api v0.0.0-20260803160001-6ac0973c030d // API：Google API HTTP 注解类型
-	google.golang.org/protobuf v1.36.11 // API：Protobuf Go 运行时
+	go.opentelemetry.io/otel v1.46.0 // 可观测性：OpenTelemetry 核心 API
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.46.0 // 可观测性：通过 OTLP/gRPC 导出链路
+	go.opentelemetry.io/otel/exporters/prometheus v0.68.0 // 可观测性：导出 Prometheus 指标
+	go.opentelemetry.io/otel/metric v1.46.0 // 可观测性：指标 API
+	go.opentelemetry.io/otel/sdk v1.46.0 // 可观测性：链路 SDK
+	go.opentelemetry.io/otel/sdk/metric v1.46.0 // 可观测性：指标 SDK
+	go.opentelemetry.io/otel/trace v1.46.0 // 可观测性：链路 API
+	google.golang.org/genproto/googleapis/api v0.0.0-20260904194346-d0f1323225a4 // API：Google API HTTP 注解类型
+	google.golang.org/protobuf v1.36.12 // API：Protobuf Go 运行时
 )
 
 // 间接依赖由以上直接依赖自动引入，统一交给 go mod tidy 维护。
@@ -51,12 +51,11 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
-	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 // indirect
 	github.com/hashicorp/hcl/v2 v2.18.1 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
-	github.com/klauspost/compress v1.19.2 // indirect
 	github.com/lib/pq v1.10.9 // indirect
 	github.com/mfridman/interpolate v0.0.2 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
@@ -64,24 +63,24 @@ require (
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.70.1 // indirect
 	github.com/prometheus/otlptranslator v1.0.0 // indirect
-	github.com/prometheus/procfs v0.21.1 // indirect
+	github.com/prometheus/procfs v0.22.0 // indirect
 	github.com/sethvargo/go-retry v0.4.0 // indirect
 	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect
 	github.com/zclconf/go-cty v1.14.4 // indirect
 	github.com/zclconf/go-cty-yaml v1.1.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.45.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.46.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
-	golang.org/x/exp v0.0.0-20260718201538-764159d718ef // indirect
-	golang.org/x/mod v0.38.0 // indirect
+	golang.org/x/exp v0.0.0-20260824195058-e88cd73687aa // indirect
+	golang.org/x/mod v0.39.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260803160001-6ac0973c030d // indirect
-	google.golang.org/grpc v1.83.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260831171406-18b4a7587f8a // indirect
+	google.golang.org/grpc v1.83.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
