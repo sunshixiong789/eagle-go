@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -47,5 +48,41 @@ func TestToTransportErrorKeepsDistinctReasons(t *testing.T) {
 		if kerrors.Reason(got) != tc.reason.String() {
 			t.Errorf("%v reason = %s, want %s", tc.err, kerrors.Reason(got), tc.reason)
 		}
+	}
+}
+
+func TestErrorMappingMiddleware(t *testing.T) {
+	domainErr := errors.New("conflict")
+	wrapped := errors.Join(errors.New("context"), domainErr)
+	rule := Conflict(domainErr, v1.ErrorReason_ERROR_REASON_PERMISSION_CODE_DUPLICATED)
+	response, err := ErrorMapping(rule)(func(context.Context, any) (any, error) {
+		return "partial", wrapped
+	})(context.Background(), nil)
+	if response != "partial" || kerrors.Code(err) != 409 ||
+		kerrors.Reason(err) != v1.ErrorReason_ERROR_REASON_PERMISSION_CODE_DUPLICATED.String() || !errors.Is(err, wrapped) {
+		t.Fatalf("response=%v, error=%v", response, err)
+	}
+
+	want := errors.New("unmapped")
+	response, err = ErrorMapping(rule)(func(context.Context, any) (any, error) {
+		return "unchanged", want
+	})(context.Background(), nil)
+	if response != "unchanged" || !errors.Is(err, want) {
+		t.Fatalf("unmapped response=%v, error=%v", response, err)
+	}
+	if _, err := ErrorMapping(rule)(func(context.Context, any) (any, error) {
+		return "ok", nil
+	})(context.Background(), nil); err != nil {
+		t.Fatalf("nil error changed to %v", err)
+	}
+}
+
+func TestUnauthorizedMapping(t *testing.T) {
+	domainErr := errors.New("invalid token")
+	err := toTransportError(domainErr, []ErrorMappingRule{
+		Unauthorized(domainErr, v1.ErrorReason_ERROR_REASON_UNSPECIFIED),
+	})
+	if kerrors.Code(err) != 401 {
+		t.Fatalf("code = %d", kerrors.Code(err))
 	}
 }

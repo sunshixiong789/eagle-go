@@ -2,13 +2,15 @@ module github.com/eagle-go/eagle/tools
 
 go 1.27.0
 
-// 迁移程序的运行时依赖：连接 PostgreSQL 并执行 goose SQL 迁移。
+// 迁移程序的运行时依赖：连接 PostgreSQL/MySQL 并执行 goose SQL 迁移。
+//
+// 间接依赖由下方固定版本的开发工具自动引入，不进入业务程序的依赖图。
 require (
+	github.com/go-sql-driver/mysql v1.10.0 // MySQL 驱动
 	github.com/jackc/pgx/v5 v5.11.0 // PostgreSQL 驱动
 	github.com/pressly/goose/v3 v3.28.0 // SQL 迁移引擎
 )
 
-// 间接依赖由下方固定版本的开发工具自动引入，不进入业务程序的依赖图。
 require (
 	4d63.com/gocheckcompilerdirectives v1.4.0 // indirect
 	4d63.com/gochecknoglobals v0.2.2 // indirect
@@ -130,7 +132,6 @@ require (
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/inflect v0.19.0 // indirect
-	github.com/go-sql-driver/mysql v1.10.0 // indirect
 	github.com/go-toolsmith/astcast v1.1.0 // indirect
 	github.com/go-toolsmith/astcopy v1.1.0 // indirect
 	github.com/go-toolsmith/astequal v1.2.0 // indirect

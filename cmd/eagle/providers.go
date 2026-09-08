@@ -11,12 +11,12 @@ import (
 	dictionaryv1 "github.com/eagle-go/eagle/api/eagle/dictionary/v1"
 	accessapp "github.com/eagle-go/eagle/internal/access/application"
 	accessinfra "github.com/eagle-go/eagle/internal/access/infrastructure"
-	accessservice "github.com/eagle-go/eagle/internal/access/service"
+	accessinterfaces "github.com/eagle-go/eagle/internal/access/interfaces"
 	authapp "github.com/eagle-go/eagle/internal/auth/application"
 	authinfra "github.com/eagle-go/eagle/internal/auth/infrastructure"
-	authservice "github.com/eagle-go/eagle/internal/auth/service"
+	authinterfaces "github.com/eagle-go/eagle/internal/auth/interfaces"
 	dictionaryinfra "github.com/eagle-go/eagle/internal/dictionary/infrastructure"
-	dictionaryservice "github.com/eagle-go/eagle/internal/dictionary/service"
+	dictionaryinterfaces "github.com/eagle-go/eagle/internal/dictionary/interfaces"
 	platformdb "github.com/eagle-go/eagle/internal/platform/database"
 	"github.com/eagle-go/eagle/pkg/platform/config"
 	platformruntime "github.com/eagle-go/eagle/pkg/platform/runtime"
@@ -51,11 +51,11 @@ func composeApp(bc *config.Bootstrap, logger *slog.Logger) (platformruntime.Comp
 	}
 
 	policy := accessinfra.NewPolicyRepo(enforcer, store)
-	permissions := accessservice.NewPermissionService(accessapp.NewPermissionUsecase(accessinfra.NewPermissionRepo(db), policy))
-	roles := accessservice.NewRoleBindingService(accessapp.NewRoleBindingUsecase(policy))
-	dictionaries := dictionaryservice.NewDictService(dictionaryinfra.NewDictRepo(db))
+	permissions := accessinterfaces.NewPermissionService(accessapp.NewPermissionUsecase(accessinfra.NewPermissionRepo(db), policy))
+	roles := accessinterfaces.NewRoleBindingService(accessapp.NewRoleBindingUsecase(policy))
+	dictionaries := dictionaryinterfaces.NewDictService(dictionaryinfra.NewDictRepo(db))
 	sessions := authinfra.NewSessionRepository(db, issuer)
-	login := authservice.NewAuthService(authapp.NewUsecase(authinfra.NewProviderVerifier(auth), sessions, auth.GetAccessTokenTtl().AsDuration(), auth.GetRefreshTokenTtl().AsDuration()))
+	login := authinterfaces.NewAuthService(authapp.NewUsecase(authinfra.NewProviderVerifier(auth), sessions, auth.GetAccessTokenTtl().AsDuration(), auth.GetRefreshTokenTtl().AsDuration()))
 	hs := server.NewHTTPServer(bc.GetServer(), ms, func(s *http.Server) {
 		accessv1.RegisterPermissionServiceHTTPServer(s, permissions)
 		accessv1.RegisterRoleBindingServiceHTTPServer(s, roles)

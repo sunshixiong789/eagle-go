@@ -1,4 +1,4 @@
-// Package db 构造可复用的 PostgreSQL database/sql 连接池。
+// Package db 构造可复用的 database/sql 连接池。
 //
 // 只依赖一个朴素的 Config 结构体而不是进程内部的 config proto，
 // 使多个服务能共用同一份实现，pkg 不反向依赖 app。
@@ -13,12 +13,14 @@ import (
 
 	"github.com/eagle-go/eagle/pkg/healthx"
 
-	// 注册 pgx 的 database/sql 驱动。
+	// 注册 PostgreSQL 和 MySQL 的 database/sql 驱动。
+	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 // Config 是连接池参数。零值字段会落到下面的默认值。
 type Config struct {
+	Dialect         Dialect
 	DSN             string
 	MaxConns        int32
 	MaxIdleConns    int32
@@ -29,9 +31,16 @@ type Config struct {
 // New 建立连接池并做一次连通性探测。
 // 返回的 cleanup 需由应用装配层在退出时执行。
 func New(ctx context.Context, cfg Config) (*sql.DB, func(), error) {
-	sqlDB, err := sql.Open("pgx", cfg.DSN)
+	databaseDialect, err := ParseDialect(cfg.Dialect.String())
 	if err != nil {
-		return nil, nil, fmt.Errorf("open postgres: %w", err)
+		return nil, nil, err
+	}
+	if err := ValidateDSN(databaseDialect, cfg.DSN); err != nil {
+		return nil, nil, fmt.Errorf("validate %s database: %w", databaseDialect, err)
+	}
+	sqlDB, err := sql.Open(databaseDialect.SQLDriver(), cfg.DSN)
+	if err != nil {
+		return nil, nil, fmt.Errorf("open %s: %w", databaseDialect, err)
 	}
 
 	if cfg.MaxConns > 0 {
@@ -52,13 +61,13 @@ func New(ctx context.Context, cfg Config) (*sql.DB, func(), error) {
 	defer cancel()
 	if err := sqlDB.PingContext(pingCtx); err != nil {
 		_ = sqlDB.Close()
-		return nil, nil, fmt.Errorf("ping postgres: %w", err)
+		return nil, nil, fmt.Errorf("ping %s: %w", databaseDialect, err)
 	}
 
 	return sqlDB, func() { _ = sqlDB.Close() }, nil
 }
 
-// NewMonitored 建立连接池并把 PostgreSQL 就绪状态注册到进程健康检查。
+// NewMonitored 建立连接池并把数据库就绪状态注册到进程健康检查。
 func NewMonitored(ctx context.Context, cfg Config, health *healthx.Registry) (*sql.DB, func(), error) {
 	sqlDB, closeDB, err := New(ctx, cfg)
 	if err != nil {
@@ -66,7 +75,7 @@ func NewMonitored(ctx context.Context, cfg Config, health *healthx.Registry) (*s
 	}
 	unregister := func() {}
 	if health != nil {
-		unregister = health.Register("postgres", func(ctx context.Context) error {
+		unregister = health.Register("database", func(ctx context.Context) error {
 			return sqlDB.PingContext(ctx)
 		})
 	}

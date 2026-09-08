@@ -21,6 +21,9 @@ func TestLayerDependencies(t *testing.T) {
 	for _, module := range discoverModules(t, root) {
 		basePath := "./internal/" + module
 		baseImport := modulePrefix + module
+		if isDirectory(filepath.Join(root, "internal", module, "service")) {
+			t.Errorf("模块 %s 使用了旧入站层目录 service（应使用经典 DDD 术语 interfaces）", module)
+		}
 
 		assertImports(t, root, basePath+"/domain/...", nil, func(imp string) bool {
 			return !isStandardImport(imp)
@@ -32,8 +35,8 @@ func TestLayerDependencies(t *testing.T) {
 			})
 		}
 
-		if isDirectory(filepath.Join(root, "internal", module, "service")) {
-			assertImports(t, root, basePath+"/service/...", nil, func(imp string) bool {
+		if isDirectory(filepath.Join(root, "internal", module, "interfaces")) {
+			assertImports(t, root, basePath+"/interfaces/...", nil, func(imp string) bool {
 				return strings.HasPrefix(imp, baseImport+"/infrastructure") ||
 					strings.Contains(imp, "/internal/platform/database")
 			})
@@ -41,7 +44,7 @@ func TestLayerDependencies(t *testing.T) {
 
 		if isDirectory(filepath.Join(root, "internal", module, "infrastructure")) {
 			assertImports(t, root, basePath+"/infrastructure/...", nil, func(imp string) bool {
-				return strings.HasPrefix(imp, baseImport+"/service")
+				return strings.HasPrefix(imp, baseImport+"/interfaces")
 			})
 		}
 	}
@@ -49,7 +52,7 @@ func TestLayerDependencies(t *testing.T) {
 
 // 单体不代表模块可以互相穿透。模块之间只允许通过对方的 domain 端口或
 // application 用例协作，跨模块依赖集中在本模块 infrastructure 适配器中。
-// service 是 HTTP 适配层、infrastructure 是持久化细节，
+// interfaces 是入站接口层、infrastructure 是持久化细节，
 // 被别的模块直接引用就等于把实现绑死，日后想把某个模块拆出去时会寸步难行。
 func TestModuleBoundaries(t *testing.T) {
 	root := repositoryRoot()

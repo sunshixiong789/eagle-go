@@ -16,6 +16,7 @@ server:
 
 data:
   database:
+    driver: "${DATABASE_DRIVER:postgres}"
     dsn: "${DATABASE_DSN:postgres://eagle:eagle@127.0.0.1:5432/eagle?sslmode=disable}"
     max_conns: 20
     max_idle_conns: 2

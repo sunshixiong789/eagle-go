@@ -2,11 +2,13 @@ package config
 
 import (
 	"errors"
-	"net/url"
+	"fmt"
 	"strings"
 	"time"
 
 	"google.golang.org/protobuf/types/known/durationpb"
+
+	"github.com/eagle-go/eagle/pkg/db"
 )
 
 // Validate 校验单体进程启动所需的完整配置。
@@ -15,19 +17,18 @@ func Validate(b *Bootstrap) error {
 		return errors.New("config: bootstrap is nil")
 	}
 	var errs []error
-	db := b.GetData().GetDatabase()
+	database := b.GetData().GetDatabase()
 	auth := b.GetAuth()
 	server := b.GetServer()
 	obs := b.GetObservability()
 
-	if db.GetDsn() == "" {
-		errs = append(errs, errors.New("data.database.dsn is required"))
-	} else {
-		if u, err := url.Parse(db.GetDsn()); err != nil || (u.Scheme != "postgres" && u.Scheme != "postgresql") {
-			errs = append(errs, errors.New("data.database.dsn must be a postgres URL"))
-		}
+	databaseDialect, err := db.ParseDialect(database.GetDriver())
+	if err != nil {
+		errs = append(errs, fmt.Errorf("data.database.driver: %w", err))
+	} else if err := db.ValidateDSN(databaseDialect, database.GetDsn()); err != nil {
+		errs = append(errs, fmt.Errorf("data.database.dsn: %w", err))
 	}
-	if db.GetMaxConns() <= 0 || db.GetMaxIdleConns() < 0 || db.GetMaxIdleConns() > db.GetMaxConns() {
+	if database.GetMaxConns() <= 0 || database.GetMaxIdleConns() < 0 || database.GetMaxIdleConns() > database.GetMaxConns() {
 		errs = append(errs, errors.New("database pool requires 0 <= max_idle_conns <= max_conns and max_conns > 0"))
 	}
 	if err := validateIssuer(auth.GetIssuer()); err != nil {

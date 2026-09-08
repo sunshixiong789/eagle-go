@@ -16,7 +16,7 @@
 ```text
 cmd/eagle                       # 进程入口和 显式组合根
 internal/<module>/
-├── service                     # 入站适配：Protobuf handler 和任务入口
+├── interfaces                  # 入站接口：Protobuf handler 和任务入口
 ├── application                 # 可选；只在存在用例编排时创建
 ├── domain                      # 领域模型、规则、错误和端口
 └── infrastructure              # 出站适配：数据库和外部服务调用
@@ -27,22 +27,22 @@ migrations                      # goose SQL 迁移
 模块按复杂度渐进生长，允许两种依赖形态：
 
 ```text
-service -> domain <- infrastructure
+interfaces -> domain <- infrastructure
 
 或
 
-service -> application -> domain <- infrastructure
+interfaces -> application -> domain <- infrastructure
 ```
 
 - `domain` 只依赖标准库，负责业务概念、纯业务不变量、领域错误，以及被用例实际需要的仓储或外部能力端口。
 - `application` 是可选的，只依赖本模块 `domain`，负责一个用例的流程编排；不依赖 Proto、Kratos、Ent、Casbin 或具体客户端。
 - `infrastructure` 实现 domain 端口，负责 Ent/SQL、事务和外部服务调用，并把技术错误翻译为领域错误。
-- `service` 承载入站适配，只做协议对象转换、主体传递和错误边界适配；不写业务规则、事务、补偿或持久化逻辑，也不 import `infrastructure`。
+- `interfaces` 是入站接口层，只做协议对象转换、主体传递和错误边界适配；不写业务规则、事务、补偿或持久化逻辑，也不 import `infrastructure`。
 
 DDD 用来保护边界和不变量，不用来增加代码量：
 
 - 只有存在生命周期、状态转换或必须始终成立的业务规则时，才使用聚合根、值对象或领域方法。字典、查询等简单 CRUD 保持简单。
-- 仅包含 `return repo.Xxx(...)` 的 application 应删除，由 service 依赖 domain 定义的最小端口。一旦用例需要多端口协作、聚合加载-变更-保存、用例级事务编排、幂等、补偿、审计或多入口复用，必须增加 application。
+- 仅包含 `return repo.Xxx(...)` 的 application 应删除，由 interfaces 依赖 domain 定义的最小端口。一旦用例需要多端口协作、聚合加载-变更-保存、用例级事务编排、幂等、补偿、审计或多入口复用，必须增加 application。
 - 不依赖 I/O 的规则放在 domain 构造器或方法中；跨端口的用例流程放在 application；必须依赖数据库锁、唯一约束或当前持久化状态的检查，放在 infrastructure 的同一事务内，不在 application 重复预检。
 - 单个仓储操作内部使用事务，本身不构成增加 application 的理由；已有真实编排的 application 可以保留同一用例下的简单查询转发。
 - 一个聚合的原子持久化可由聚合仓储内部完成；涉及多个本地写入时使用语义化的原子端口，禁止向 application 暴露 Ent Tx 或通过 context 隐式传递事务。
@@ -52,7 +52,7 @@ DDD 用来保护边界和不变量，不用来增加代码量：
 
 ## 模块与数据边界
 
-- 单进程不等于可以互相穿透。模块之间禁止 import 对方的 `service` 或 `infrastructure`；跨模块用例由本模块 `domain` 声明所需能力，`application` 依赖该端口，由本模块 `infrastructure` 适配到对方公开的 `domain` 端口或 `application` 用例；只在有实际调用方时增加适配器。
+- 单进程不等于可以互相穿透。模块之间禁止 import 对方的 `interfaces` 或 `infrastructure`；跨模块用例由本模块 `domain` 声明所需能力，`application` 依赖该端口，由本模块 `infrastructure` 适配到对方公开的 `domain` 端口或 `application` 用例；只在有实际调用方时增加适配器。
 - 新增模块就是在 `internal/` 下新建一个带 `domain` 的目录，并在 `cmd/eagle` 的组合根装配。通过显式构造函数装配，不引入 DI 容器或 Wire。
 - 全进程共用一个数据库与 Ent Client；表由模块拥有，跨模块读写对方的表要经过对方端口，不在 infrastructure 里直连别人的表。
 - `pkg/` 只放无业务语义、可复用的技术能力，禁止 import `internal/`。业务模型留在拥有它的模块。
@@ -67,7 +67,7 @@ DDD 用来保护边界和不变量，不用来增加代码量：
 ## 质量底线
 
 - Go 标准库优先，新增生产依赖前先确认现有依赖或 `pkg/` 不能解决；不要引入通用复制、转换、集合辅助库替代几行明确代码。
-- 测试跟随风险：domain 测不变量，application 测用例编排，infrastructure 测真实适配和事务，service/e2e 测协议、身份与授权边界。
+- 测试跟随风险：domain 测不变量，application 测用例编排，infrastructure 测真实适配和事务，interfaces/e2e 测协议、身份与授权边界。
 - 完成后至少对修改过的 Go 文件执行格式化并运行相关包测试。涉及跨层依赖、生成代码、迁移或组合根装配时，再运行对应生成命令、架构测试或 `make lint && make test`。
 - 未实际运行的命令不要声称通过；如果受环境限制无法验证，明确说明未验证项。
 

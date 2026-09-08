@@ -44,14 +44,14 @@ pkg/platform + pkg/*              无业务语义的 HTTP、配置、观测和�
 模块内继续按复杂度选择最小依赖形态：
 
 ```text
-service -> domain <- infrastructure
+interfaces -> domain <- infrastructure
 
 或
 
-service -> application -> domain <- infrastructure
+interfaces -> application -> domain <- infrastructure
 ```
 
-模块之间不得 import 对方的 `service` 或 `infrastructure`。跨模块用例由消费模块声明最小端口，
+模块之间不得 import 对方的 `interfaces` 或 `infrastructure`。跨模块用例由消费模块声明最小端口，
 组合根注入实现。当前不为这些端口增加网络语义；未来某个模块出现独立发布、扩缩容或故障隔离需求时，
 再将同一端口适配为 HTTP/gRPC 调用。
 
@@ -96,7 +96,7 @@ Google/Apple 适配器。未来增加手机号登录时扩展 Provider 与 adapt
 admin -> system:*
 ```
 
-因此所有授权都经过同一判定、版本和审计链路。Casbin 仍是 infrastructure 选择；domain 和 service
+因此所有授权都经过同一判定、版本和审计链路。Casbin 仍是 infrastructure 选择；domain 和 interfaces
 只依赖窄接口，不 import Casbin。
 
 以下当前能力继续保留：
@@ -191,7 +191,7 @@ CPU 限额并动态更新 `GOMAXPROCS`，该依赖已重复标准库能力。
 - Eagle token 过期与无效映射为稳定的 401 reason，内部签名细节不返回客户端。
 - 未登录返回 401；已登录但无权限返回 403。
 - RPC 访问策略无效、授权判定器未装配、策略加载或读取失败时拒绝访问。
-- service 只做协议转换和错误边界适配，不解析 JWT、不直接调用 Casbin、不暴露 Ent/SQL 错误。
+- interfaces 只做协议转换和错误边界适配，不解析 JWT、不直接调用 Casbin、不暴露 Ent/SQL 错误。
 
 ## 测试策略
 
@@ -228,4 +228,3 @@ make validate-deploy
 - `go.mod` 中每个直接依赖均能定位到真实生产、测试或生成调用方。
 - README、架构、登录和部署文档描述同一套实际行为。
 - 所有相关测试通过；因环境限制无法运行的验证项被明确记录。
-

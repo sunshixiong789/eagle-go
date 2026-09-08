@@ -1,5 +1,5 @@
-// Package service adapts the access module to protobuf transports.
-package service
+// Package interfaces adapts the access module to protobuf transports.
+package interfaces
 
 import (
 	"time"

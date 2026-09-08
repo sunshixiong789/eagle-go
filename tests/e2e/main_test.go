@@ -28,14 +28,14 @@ import (
 	accessapp "github.com/eagle-go/eagle/internal/access/application"
 	accessdomain "github.com/eagle-go/eagle/internal/access/domain"
 	accessinfra "github.com/eagle-go/eagle/internal/access/infrastructure"
-	accessservice "github.com/eagle-go/eagle/internal/access/service"
+	accessinterfaces "github.com/eagle-go/eagle/internal/access/interfaces"
 	authapp "github.com/eagle-go/eagle/internal/auth/application"
 	authdomain "github.com/eagle-go/eagle/internal/auth/domain"
 	authinfra "github.com/eagle-go/eagle/internal/auth/infrastructure"
-	authservice "github.com/eagle-go/eagle/internal/auth/service"
+	authinterfaces "github.com/eagle-go/eagle/internal/auth/interfaces"
 	dictionarydomain "github.com/eagle-go/eagle/internal/dictionary/domain"
 	dictionaryinfra "github.com/eagle-go/eagle/internal/dictionary/infrastructure"
-	dictionaryservice "github.com/eagle-go/eagle/internal/dictionary/service"
+	dictionaryinterfaces "github.com/eagle-go/eagle/internal/dictionary/interfaces"
 	platformdb "github.com/eagle-go/eagle/internal/platform/database"
 	"github.com/eagle-go/eagle/pkg/authz"
 	"github.com/eagle-go/eagle/pkg/platform/config"
@@ -126,10 +126,10 @@ func newTestEnv(t *testing.T) *testEnv {
 	}
 	sessions := authinfra.NewSessionRepository(adminDB, issuer)
 
-	permSvc := accessservice.NewPermissionService(accessapp.NewPermissionUsecase(permRepo, policyRepo))
-	dictSvc := dictionaryservice.NewDictService(dictRepo)
-	bindingSvc := accessservice.NewRoleBindingService(accessapp.NewRoleBindingUsecase(policyRepo))
-	authSvc := authservice.NewAuthService(authapp.NewUsecase(
+	permSvc := accessinterfaces.NewPermissionService(accessapp.NewPermissionUsecase(permRepo, policyRepo))
+	dictSvc := dictionaryinterfaces.NewDictService(dictRepo)
+	bindingSvc := accessinterfaces.NewRoleBindingService(accessapp.NewRoleBindingUsecase(policyRepo))
+	authSvc := authinterfaces.NewAuthService(authapp.NewUsecase(
 		providerVerifierStub{}, sessions, 15*time.Minute, 30*24*time.Hour,
 	))
 

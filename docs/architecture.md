@@ -26,7 +26,7 @@ Google/Apple 只负责证明第三方身份；Eagle 保存最小身份资料与�
     tests                               架构测试、e2e 与测试工具
     deploy                              本地 Compose 与云效/ECS 应用部署资产
 
-`internal/` 是 Go 的编译器可见性边界，仓库外无法 import。仓库内的模块边界由 `tests/architecture` 检查：模块之间不得 import 对方的 `service` 或 `infrastructure`。
+`internal/` 是 Go 的编译器可见性边界，仓库外无法 import。仓库内的模块边界由 `tests/architecture` 检查：模块之间不得 import 对方的 `interfaces` 或 `infrastructure`。
 
 `tools/` 保留独立 `go.mod`，是为了让 buf、goose、golangci-lint 和 protoc 插件的版本被锁定，又不进入业务依赖图。生成的二进制落在 `bin/`，由 Makefile 在仓库根目录调用——工具进程的工作目录必须是仓库根，否则 `buf.gen.yaml` 的相对路径、goose 的 `-dir`都会失效。
 
@@ -34,16 +34,16 @@ Google/Apple 只负责证明第三方身份；Eagle 保存最小身份资料与�
 
 模块不按目录数量评价 DDD，而是按用例复杂度选择最小结构。纯 CRUD 或查询使用：
 
-    service → domain ← infrastructure
+    interfaces → domain ← infrastructure
 
 存在多端口协作、聚合加载-变更-保存、用例级事务编排、幂等、补偿、审计或多入口复用时使用：
 
-    service → application → domain ← infrastructure
+    interfaces → application → domain ← infrastructure
 
 - domain：模型、不变量、领域错误和端口，只依赖标准库。
 - application：可选；编排用例，只依赖本模块 domain。
 - infrastructure：实现数据库或外部服务端口，把技术错误翻译成领域错误。
-- service：入站适配，包括 protobuf Service 和后台任务入口；完成协议转换并传递当前主体。
+- interfaces：入站接口层，包括 protobuf Service 和后台任务入口；完成协议转换并传递当前主体。
 
 两个模块覆盖两种典型形态：`dictionary` 没有 application，展示纯 CRUD；`access` 有 application 且 domain 承载权限码、导航树和策略版本等真实不变量，也展示事务与用例编排。
 

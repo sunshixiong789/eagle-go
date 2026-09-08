@@ -5,6 +5,21 @@ LDFLAGS := -X main.Version=$(VERSION)
 # 业务代码是单一 module；tools 独立成模块，用来锁定生成工具链版本，
 # 不让 buf/goose/golangci-lint 的依赖污染业务依赖图。
 MODULES := . tools
+UNIT_PACKAGES := \
+	./internal/access/application \
+	./internal/access/domain \
+	./internal/access/interfaces \
+	./internal/auth/application \
+	./internal/auth/domain \
+	./internal/auth/interfaces \
+	./internal/dictionary/domain \
+	./internal/dictionary/interfaces \
+	./pkg/authn \
+	./pkg/authz \
+	./pkg/healthx \
+	./pkg/identity \
+	./pkg/platform/server
+COVERAGE_MIN ?= 80
 REGISTRY ?= eagle
 IMAGE ?= $(REGISTRY)/eagle
 EAGLE_BUILDER_IMAGE ?= mirror.gcr.io/library/golang:1.27-alpine
@@ -118,6 +133,23 @@ lint: $(GOLANGCI_LINT)
 # 单测 + 集成测试（embedded-postgres，不需要 Docker）
 test:
 	go test -race -cover ./...
+
+.PHONY: test-unit
+# 只运行不依赖数据库和网络的快速单元测试
+test-unit:
+	go test -race $(UNIT_PACKAGES)
+
+.PHONY: test-coverage
+# 核心手写代码单元测试覆盖率门禁；可用 COVERAGE_MIN=85 临时提高阈值
+test-coverage:
+	@profile="$$(mktemp)"; \
+		trap 'rm -f "$$profile"' EXIT; \
+		go test -covermode=atomic -coverprofile="$$profile" $(UNIT_PACKAGES); \
+		coverage="$$(go tool cover -func="$$profile" | awk '/^total:/ { gsub(/%/, "", $$3); print $$3 }')"; \
+		awk -v got="$$coverage" -v min="$(COVERAGE_MIN)" 'BEGIN { \
+			printf "unit coverage: %.1f%% (minimum %.1f%%)\n", got, min; \
+			if (got + 0 < min + 0) exit 1; \
+		}'
 
 .PHONY: up
 # 构建并启动完整本地环境

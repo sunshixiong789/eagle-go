@@ -1,5 +1,5 @@
 // Package interfaces adapts dictionary use cases to protobuf transports.
-package service
+package interfaces
 
 import (
 	"time"

@@ -13,9 +13,9 @@ go-oidc / go-jose、OpenTelemetry、Docker Compose。
 
 | 模块 | 职责 | 分层 |
 |---|---|---|
-| `access` | 权限码目录、导航节点、角色权限绑定（Casbin） | `service → application → domain ← infrastructure` |
-| `auth` | Google/Apple 身份验证、本地会话与 Eagle token | `service → application → domain ← infrastructure` |
-| `dictionary` | 字典 CRUD，作为简单业务的样板 | `service → domain ← infrastructure` |
+| `access` | 权限码目录、导航节点、角色权限绑定（Casbin） | `interfaces → application → domain ← infrastructure` |
+| `auth` | Google/Apple 身份验证、本地会话与 Eagle token | `interfaces → application → domain ← infrastructure` |
+| `dictionary` | 字典 CRUD，作为简单业务的样板 | `interfaces → domain ← infrastructure` |
 
 ```mermaid
 flowchart TB
@@ -70,18 +70,18 @@ eagle-go/
 模块内按用例复杂度渐进分层。简单 CRUD 使用：
 
 ```text
-service -> domain <- infrastructure
+interfaces -> domain <- infrastructure
 ```
 
 存在用例编排时使用：
 
 ```text
-service -> application -> domain <- infrastructure
+interfaces -> application -> domain <- infrastructure
 ```
 
 | 层 | 职责 |
 |---|---|
-| `service` | 实现生成的 Protobuf Service，转换协议对象并传递当前主体 |
+| `interfaces` | 入站接口层；实现生成的 Protobuf Service，转换协议对象并传递当前主体 |
 | `application` | 可选；编排用例，只依赖本模块 `domain` |
 | `domain` | 模型、不变量、领域错误和仓储/存储端口，不依赖框架 |
 | `infrastructure` | 实现数据库和外部服务端口 |
@@ -271,7 +271,7 @@ go test -short ./...
 2. 每个 RPC 显式声明 `access`；需要权限时同时声明三段式 `perm`。
 3. 新权限码通过 `migrations/` 下的 goose 迁移写入 `permission_definition`。
 4. 执行 `make api`，不要手改 `*.pb.go`。
-5. 按用例复杂度选择 `service -> domain <- infrastructure` 或 `service -> application -> domain <- infrastructure`。
+5. 按用例复杂度选择 `interfaces -> domain <- infrastructure` 或 `interfaces -> application -> domain <- infrastructure`。
 6. 只有新增一个 Protobuf Service 时，才在 `cmd/eagle` 的 组合根 里注册。
 7. 添加测试并执行 `make lint && make test`。
 
@@ -341,13 +341,13 @@ subject := identity.Subject(ctx)
 3. 在 `migrations/` 添加 goose SQL；生产不使用 Ent 自动迁移。
 4. 在 `api/` 定义 RPC、校验规则、HTTP 映射和访问级别，然后执行 `make api`。
 5. 在 `internal/<module>/domain` 放模型、规则和仓储/存储接口。
-6. 仅在存在多端口、聚合变更、用例级事务编排、幂等、补偿或多入口复用时在 `application` 编排用例；纯 CRUD 由 `service` 依赖 domain 端口。单个仓储操作内部使用事务不要求增加 application。`infrastructure` 实现数据库或外部服务端口，`service` 只转换协议对象。
+6. 仅在存在多端口、聚合变更、用例级事务编排、幂等、补偿或多入口复用时在 `application` 编排用例；纯 CRUD 由 `interfaces` 依赖 domain 端口。单个仓储操作内部使用事务不要求增加 application。`infrastructure` 实现数据库或外部服务端口，`interfaces` 只转换协议对象。
 7. 在 `cmd/eagle` 的 `composeApp` 装配新模块，并检查构造失败和退出时的资源清理。
 8. 先测领域不变量，再测真实基础设施与 HTTP 链路。
 
 跨模块用例在本模块 `domain` 声明所需能力，由本模块 `infrastructure` 适配到对方公开的
 `domain` 端口或 `application` 用例；`application` 仍只依赖本模块 domain。禁止 import 别的模块的
-`infrastructure` 或 `service`。单体里没有网络边界拦着，这条约束靠架构测试保证——它是把
+`infrastructure` 或 `interfaces`。单体里没有网络边界拦着，这条约束靠架构测试保证——它是把
 “以后可以拆出去”这件事留在桌面上的唯一成本。简单 CRUD 不必为了形式引入聚合根、工厂或 DTO 体系。
 
 ## 认证与授权约定

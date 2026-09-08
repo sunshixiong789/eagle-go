@@ -89,6 +89,9 @@ jobs:
           go vet ./...
           go -C tools vet ./...
 
+      - name: 核心单元测试覆盖率门禁
+        run: make test-coverage
+
       - name: 测试
         run: |
           mkdir -p coverage
