@@ -40,6 +40,7 @@ func toDomainPermission(p *ent.Permission, revision int64) (*domain.Permission, 
 	})
 }
 
+// withTreeTx 先锁定整树状态并检查可选版本，再执行写入；失败或 panic 时回滚事务。
 func (r *permissionRepo) withTreeTx(ctx context.Context, expected *int64, fn func(*ent.Tx, *ent.PermissionTreeState) error) error {
 	tx, err := r.db.Client().Tx(ctx)
 	if err != nil {
@@ -120,7 +121,7 @@ func (r *permissionRepo) GetByID(ctx context.Context, id int64) (*domain.Permiss
 	return toDomainPermission(p, revision)
 }
 
-// List 平铺返回权限。总量只有百级，一次全量取出比递归 CTE 更简单也更快。
+// List 平铺读取节点，树形展示与菜单筛选由调用方完成。
 func (r *permissionRepo) List(ctx context.Context, q domain.ListPermissionsQuery) ([]*domain.Permission, error) {
 	revision, err := r.currentRevision(ctx)
 	if err != nil {
@@ -268,6 +269,7 @@ func (r *permissionRepo) currentRevision(ctx context.Context) (int64, error) {
 	return state.Revision, nil
 }
 
+// lockPermissionTree 通过更新单例状态行串行化整树写入，并在锁内检查预期版本。
 func lockPermissionTree(ctx context.Context, tx *ent.Tx, expected *int64) (*ent.PermissionTreeState, error) {
 	// UPDATE 即使只改 updated_at 也会取得该单例行的排他锁，使所有树写入串行。
 	state, err := tx.PermissionTreeState.UpdateOneID(1).SetUpdatedAt(time.Now()).Save(ctx)

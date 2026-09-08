@@ -23,6 +23,9 @@ paths:
         post:
             tags:
                 - AuthService
+            description: |-
+                Logout 使用当前刷新凭证撤销对应会话；无效或已撤销的凭证返回错误。
+                 已签发的 access token 在自身有效期内仍可通过资源服务验签。
             operationId: AuthService_Logout
             requestBody:
                 content:
@@ -42,7 +45,8 @@ paths:
             tags:
                 - AuthService
             description: |-
-                SocialLogin 接收客户端从 Google/Apple SDK 获得的 ID Token。
+                SocialLogin 校验 Google/Apple ID Token 和 nonce，为对应 Eagle 账号创建会话并返回令牌。
+                 同一第三方身份复用已有账号；每次成功登录创建独立会话，停用账号不能登录。
                  buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
                  buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 预生产既有响应契约，保持客户端 wire/source 兼容。
             operationId: AuthService_SocialLogin
@@ -64,7 +68,9 @@ paths:
             tags:
                 - AuthService
             description: |-
-                buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
+                RefreshToken 轮换刷新凭证并签发新的 access token，成功后旧刷新凭证不可再次使用。
+                 签发失败时回滚轮换；无效、过期或已撤销的刷新凭证不能刷新，停用账号不能刷新。
+                 buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
                  buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 预生产既有响应契约，保持客户端 wire/source 兼容。
             operationId: AuthService_RefreshToken
             requestBody:
@@ -84,28 +90,34 @@ paths:
         get:
             tags:
                 - DictService
+            description: ListDictData 按类型、标签关键字和状态筛选，按 dict_type、sort、id 升序分页返回字典项及总数。
             operationId: DictService_ListDictData
             parameters:
                 - name: page
                   in: query
+                  description: 从 0 开始的页码，未传或传 0 均表示第一页。
                   schema:
                     type: integer
                     format: int32
                 - name: pageSize
                   in: query
+                  description: 每页条数；未传或传 0 使用 20，最多 200。
                   schema:
                     type: integer
                     format: int32
                 - name: dictType
                   in: query
+                  description: 未传时不筛选类型；显式传空字符串时按空类型键筛选。
                   schema:
                     type: string
                 - name: keyword
                   in: query
+                  description: 按字典项标签做不区分大小写的包含匹配；空值不筛选。
                   schema:
                     type: string
                 - name: status
                   in: query
+                  description: 0=停用，1=启用；未传时不筛选。
                   schema:
                     type: integer
                     format: int32
@@ -119,6 +131,7 @@ paths:
         post:
             tags:
                 - DictService
+            description: CreateDictData 在已有类型下创建字典项；同一类型内 value 唯一，重复时返回冲突错误。
             operationId: DictService_CreateDictData
             requestBody:
                 content:
@@ -138,8 +151,8 @@ paths:
             tags:
                 - DictService
             description: |-
-                按类型取字典项，供前端渲染下拉框。任何登录用户都要用，
-                 所以不挂权限码，只校验登录态；结果直接读取权威数据库。
+                GetDictDataByType 按 sort、id 升序返回指定类型下已启用的字典项，供前端渲染下拉框。
+                 类型不存在或无已启用项时返回空列表；筛选仅依据字典项状态，不检查类型的启用状态。
             operationId: DictService_GetDictDataByType
             parameters:
                 - name: dictType
@@ -158,6 +171,7 @@ paths:
         put:
             tags:
                 - DictService
+            description: UpdateDictData 全量更新字典项的可变字段，零值也会覆盖原值；所属类型保持不变。
             operationId: DictService_UpdateDictData
             parameters:
                 - name: id
@@ -181,6 +195,7 @@ paths:
         delete:
             tags:
                 - DictService
+            description: DeleteDictData 删除单个字典项；不存在时返回未找到错误。
             operationId: DictService_DeleteDictData
             parameters:
                 - name: id
@@ -199,24 +214,29 @@ paths:
         get:
             tags:
                 - DictService
+            description: ListDictTypes 按关键字和状态筛选，按 id 升序分页返回字典类型及过滤后的总数。
             operationId: DictService_ListDictTypes
             parameters:
                 - name: page
                   in: query
+                  description: 从 0 开始的页码，未传或传 0 均表示第一页。
                   schema:
                     type: integer
                     format: int32
                 - name: pageSize
                   in: query
+                  description: 每页条数；未传或传 0 使用 20，最多 200。
                   schema:
                     type: integer
                     format: int32
                 - name: keyword
                   in: query
+                  description: 按类型名称或业务键做不区分大小写的包含匹配；空值不筛选。
                   schema:
                     type: string
                 - name: status
                   in: query
+                  description: 0=停用，1=启用；未传时不筛选。
                   schema:
                     type: integer
                     format: int32
@@ -230,6 +250,7 @@ paths:
         post:
             tags:
                 - DictService
+            description: CreateDictType 创建字典类型；type 是唯一且创建后不可变的业务键，重复时返回冲突错误。
             operationId: DictService_CreateDictType
             requestBody:
                 content:
@@ -248,6 +269,7 @@ paths:
         put:
             tags:
                 - DictService
+            description: UpdateDictType 全量更新类型的名称、状态和备注，零值也会覆盖原值；type 保持不变。
             operationId: DictService_UpdateDictType
             parameters:
                 - name: id
@@ -271,6 +293,7 @@ paths:
         delete:
             tags:
                 - DictService
+            description: DeleteDictType 删除类型并级联删除其全部字典项；类型不存在时返回未找到错误。
             operationId: DictService_DeleteDictType
             parameters:
                 - name: id
@@ -289,16 +312,18 @@ paths:
         get:
             tags:
                 - PermissionService
-            description: 平铺返回全部权限，树结构由调用方按 parent_id 拼装
+            description: ListPermissions 按条件平铺返回节点，按 parent_id、sort、id 升序排列；调用方按 parent_id 组装树。
             operationId: PermissionService_ListPermissions
             parameters:
                 - name: status
                   in: query
+                  description: 0=停用，1=启用；未传时不筛选。
                   schema:
                     type: integer
                     format: int32
                 - name: type
                   in: query
+                  description: 1=目录，2=菜单，3=按钮。未传时不筛选。
                   schema:
                     type: integer
                     format: int32
@@ -312,6 +337,7 @@ paths:
         post:
             tags:
                 - PermissionService
+            description: CreatePermission 创建节点；非根父节点必须存在，非空权限码必须已登记、启用且未被其他节点引用。
             operationId: PermissionService_CreatePermission
             requestBody:
                 content:
@@ -331,8 +357,8 @@ paths:
             tags:
                 - PermissionService
             description: |-
-                当前登录用户的菜单树与权限码，供前端渲染路由和按钮级控制。
-                 只需登录，无需额外权限码——查的就是自己的东西。
+                GetMyMenus 按当前主体的 Eagle 角色返回菜单列表与权限码，供前端渲染导航和控制按钮显隐。
+                 菜单平铺返回，补全授权节点的祖先并排除按钮；权限码展开继承，保留通配码。
             operationId: PermissionService_GetMyMenus
             responses:
                 "200":
@@ -345,6 +371,7 @@ paths:
         get:
             tags:
                 - PermissionService
+            description: GetPermission 查询单个节点及读取到的整树版本；节点不存在时返回未找到错误。
             operationId: PermissionService_GetPermission
             parameters:
                 - name: id
@@ -362,6 +389,9 @@ paths:
         put:
             tags:
                 - PermissionService
+            description: |-
+                UpdatePermission 全量更新节点的可变字段，字段零值也会覆盖原值；校验父节点、环和权限码引用约束。
+                 提供 expected_revision 时在写入事务内校验整树版本，不匹配则拒绝更新。
             operationId: PermissionService_UpdatePermission
             parameters:
                 - name: id
@@ -385,6 +415,9 @@ paths:
         delete:
             tags:
                 - PermissionService
+            description: |-
+                DeletePermission 删除叶子节点；有子节点、节点不存在或提供的整树版本不匹配时返回错误。
+                 删除导航节点不会删除权限目录中的定义或角色的权限绑定。
             operationId: PermissionService_DeletePermission
             parameters:
                 - name: id
@@ -394,6 +427,7 @@ paths:
                     type: string
                 - name: expectedRevision
                   in: query
+                  description: 预期的整棵权限树版本；未传时不检查，传入时不匹配则拒绝写入。
                   schema:
                     type: string
             responses:
@@ -408,8 +442,8 @@ paths:
             tags:
                 - RoleBindingService
             description: |-
-                列出本库中已配置过权限的角色。
-                 注意这不是 IdP 的角色全集——从未分配过权限的角色不会出现。
+                ListBoundRoles 按角色键升序列出当前有直接授权的角色及一致的全局策略版本。
+                 没有直接授权、仅通过继承获得权限的角色不在列表中。
             operationId: RoleBindingService_ListBoundRoles
             responses:
                 "200":
@@ -422,7 +456,9 @@ paths:
         post:
             tags:
                 - RoleBindingService
-            description: 建立角色继承：child 自动获得 parent 的全部权限。
+            description: |-
+                AddRoleInheritance 建立 child 到 parent 的继承，child 获得 parent 的权限。
+                 禁止自继承和环；版本校验通过后，重复添加已有关系成功返回且不推进版本。
             operationId: RoleBindingService_AddRoleInheritance
             requestBody:
                 content:
@@ -441,7 +477,9 @@ paths:
         get:
             tags:
                 - RoleBindingService
-            description: 当前登录者自己的权限码，供前端做按钮级显隐。只需登录。
+            description: |-
+                GetMyPermissions 按当前主体的 Eagle 角色汇总权限，展开继承并去重，保留权限通配码。
+                 结果来自本实例已加载的策略，供前端控制按钮显隐。
             operationId: RoleBindingService_GetMyPermissions
             responses:
                 "200":
@@ -454,6 +492,7 @@ paths:
         get:
             tags:
                 - RoleBindingService
+            description: GetRolePermissions 查询角色的直接权限，不展开继承；没有直接授权时返回角色未绑定错误。
             operationId: RoleBindingService_GetRolePermissions
             parameters:
                 - name: role
@@ -471,7 +510,9 @@ paths:
         put:
             tags:
                 - RoleBindingService
-            description: 全量覆盖某个角色的权限码集合，变更立即生效。
+            description: |-
+                SetRolePermissions 全量覆盖角色的直接权限，自动去重；具体权限码必须已登记且启用。
+                 空集合清除直接授权，继承关系保留；每次成功写入都会推进全局策略版本。
             operationId: RoleBindingService_SetRolePermissions
             parameters:
                 - name: role
@@ -496,6 +537,7 @@ paths:
         get:
             tags:
                 - RoleBindingService
+            description: ListRoleInheritances 按 child、parent 升序列出继承关系及一致的全局策略版本。
             operationId: RoleBindingService_ListRoleInheritances
             responses:
                 "200":
@@ -508,6 +550,9 @@ paths:
         delete:
             tags:
                 - RoleBindingService
+            description: |-
+                DeleteRoleInheritance 删除一条继承关系，保留角色的直接授权。
+                 版本校验通过后，关系不存在也成功返回且不推进版本。
             operationId: RoleBindingService_DeleteRoleInheritance
             parameters:
                 - name: child
@@ -522,6 +567,7 @@ paths:
                     type: string
                 - name: expectedVersion
                   in: query
+                  description: 预期的全局策略版本；未传时不检查，传入时必须与当前版本一致，否则拒绝写入。
                   schema:
                     type: string
             responses:
@@ -542,22 +588,27 @@ components:
                     type: string
                 expectedVersion:
                     type: string
+                    description: 预期的全局策略版本；未传时不检查，传入时必须与当前版本一致，否则拒绝写入。
         eagle.access.v1.AddRoleInheritanceResponse:
             type: object
             properties:
                 policyVersion:
                     type: string
+                    description: 操作完成后的全局策略版本，可用于后续写入的并发检查。
         eagle.access.v1.CreatePermissionRequest:
             type: object
             properties:
                 parentId:
                     type: string
+                    description: 父节点 ID；0 表示顶级节点。
                 name:
                     type: string
                 code:
                     type: string
+                    description: 引用已登记且启用的具体权限码；目录或菜单可为空，按钮必填，不允许通配。
                 type:
                     type: integer
+                    description: 1=目录，2=菜单，3=按钮。
                     format: int32
                 path:
                     type: string
@@ -567,11 +618,14 @@ components:
                     type: string
                 sort:
                     type: integer
+                    description: 同一父节点下按值升序排列，相同值按 id 升序排列。
                     format: int32
                 visible:
                     type: boolean
+                    description: 供前端使用的显示标记；GetMyMenus 不按此字段过滤，创建或更新时未传为 false。
                 status:
                     type: integer
+                    description: 0=停用，1=启用；创建或更新时未传按 0 处理。
                     format: int32
         eagle.access.v1.CreatePermissionResponse:
             type: object
@@ -586,6 +640,7 @@ components:
             properties:
                 policyVersion:
                     type: string
+                    description: 操作完成后的全局策略版本，可用于后续写入的并发检查。
         eagle.access.v1.GetMyMenusResponse:
             type: object
             properties:
@@ -631,6 +686,7 @@ components:
                         $ref: '#/components/schemas/eagle.access.v1.RoleBinding'
                 policyVersion:
                     type: string
+                    description: 与返回列表一致的全局策略版本，空列表也返回版本。
         eagle.access.v1.ListPermissionsResponse:
             type: object
             properties:
@@ -647,6 +703,7 @@ components:
                         $ref: '#/components/schemas/eagle.access.v1.RoleInheritance'
                 policyVersion:
                     type: string
+                    description: 与返回列表一致的全局策略版本，空列表也返回版本。
         eagle.access.v1.Permission:
             type: object
             properties:
@@ -654,6 +711,7 @@ components:
                     type: string
                 parentId:
                     type: string
+                    description: 父节点 ID；0 表示顶级节点。
                 name:
                     type: string
                 code:
@@ -671,11 +729,14 @@ components:
                     type: string
                 sort:
                     type: integer
+                    description: 同一父节点下按值升序排列，相同值按 id 升序排列。
                     format: int32
                 visible:
                     type: boolean
+                    description: 供前端使用的显示标记；GetMyMenus 不按此字段过滤。
                 status:
                     type: integer
+                    description: 0=停用，1=启用。
                     format: int32
                 createdAt:
                     type: string
@@ -696,8 +757,10 @@ components:
                     type: array
                     items:
                         type: string
+                    description: 角色的直接权限码，不展开继承；可包含末段通配码。
                 revision:
                     type: string
+                    description: 读取此绑定时的全局策略版本，可用作写入时的 expected_version。
             description: RoleBinding 是一个角色及其被授予的权限码。
         eagle.access.v1.RoleInheritance:
             type: object
@@ -715,14 +778,16 @@ components:
                     type: array
                     items:
                         type: string
-                    description: 全量覆盖。传空数组表示收回该角色的全部权限。
+                    description: 全量覆盖直接权限；未传或传空数组均清除直接授权，通过继承获得的权限保留。
                 expectedVersion:
                     type: string
+                    description: 预期的全局策略版本；未传时不检查，传入时必须与当前版本一致，否则拒绝写入。
         eagle.access.v1.SetRolePermissionsResponse:
             type: object
             properties:
                 policyVersion:
                     type: string
+                    description: 操作完成后的全局策略版本，可用于后续写入的并发检查。
         eagle.access.v1.UpdatePermissionRequest:
             type: object
             properties:
@@ -730,12 +795,15 @@ components:
                     type: string
                 parentId:
                     type: string
+                    description: 父节点 ID；0 表示顶级节点。
                 name:
                     type: string
                 code:
                     type: string
+                    description: 引用已登记且启用的具体权限码；目录或菜单可为空，按钮必填，不允许通配。
                 type:
                     type: integer
+                    description: 1=目录，2=菜单，3=按钮。
                     format: int32
                 path:
                     type: string
@@ -745,14 +813,18 @@ components:
                     type: string
                 sort:
                     type: integer
+                    description: 同一父节点下按值升序排列，相同值按 id 升序排列。
                     format: int32
                 visible:
                     type: boolean
+                    description: 供前端使用的显示标记；GetMyMenus 不按此字段过滤，创建或更新时未传为 false。
                 status:
                     type: integer
+                    description: 0=停用，1=启用；创建或更新时未传按 0 处理。
                     format: int32
                 expectedRevision:
                     type: string
+                    description: 预期的整棵权限树版本；未传时不检查，传入时不匹配则拒绝写入。
         eagle.access.v1.UpdatePermissionResponse:
             type: object
             properties:
@@ -770,27 +842,37 @@ components:
             properties:
                 kty:
                     type: string
+                    description: 公钥类型：EC 或 RSA。
                 use:
                     type: string
+                    description: 公钥用途，sig 表示签名验证。
                 alg:
                     type: string
+                    description: 签名算法：ES256 或 RS256。
                 kid:
                     type: string
+                    description: 密钥标识，与 access token 头部的 kid 对应。
                 crv:
                     type: string
+                    description: EC 公钥的曲线名称；RSA 公钥不使用此字段。
                 x:
                     type: string
+                    description: EC 公钥 x 坐标的 Base64URL 编码；RSA 公钥不使用此字段。
                 y:
                     type: string
+                    description: EC 公钥 y 坐标的 Base64URL 编码；RSA 公钥不使用此字段。
                 n:
                     type: string
+                    description: RSA 公钥模数的 Base64URL 编码；EC 公钥不使用此字段。
                 e:
                     type: string
+                    description: RSA 公钥指数的 Base64URL 编码；EC 公钥不使用此字段。
         eagle.auth.v1.LogoutRequest:
             type: object
             properties:
                 refreshToken:
                     type: string
+                    description: 待撤销会话当前的刷新凭证；轮换前的旧凭证不能用于撤销。
         eagle.auth.v1.LogoutResponse:
             type: object
             properties: {}
@@ -799,6 +881,7 @@ components:
             properties:
                 refreshToken:
                     type: string
+                    description: 当前会话最近一次签发的刷新凭证，成功刷新后须保存响应中的新凭证。
         eagle.auth.v1.SocialLoginRequest:
             type: object
             properties:
@@ -807,6 +890,7 @@ components:
                     format: enum
                 idToken:
                     type: string
+                    description: 第三方 SDK 返回的 ID Token；服务端验证后签发 Eagle 令牌。
                 nonce:
                     type: string
                     description: 发起第三方登录时使用的原始 nonce。Apple 原生 SDK 会在 token 中返回其 SHA-256 值。
@@ -818,12 +902,16 @@ components:
             properties:
                 accessToken:
                     type: string
+                    description: Eagle 签发的访问令牌，供业务请求使用。
                 refreshToken:
                     type: string
+                    description: 当前会话的刷新凭证；刷新成功后替换本地保存的旧凭证。
                 tokenType:
                     type: string
+                    description: 认证方案，固定为 Bearer。
                 expiresIn:
                     type: string
+                    description: access token 的有效期，单位为秒。
                 user:
                     $ref: '#/components/schemas/eagle.auth.v1.User'
         eagle.auth.v1.User:
@@ -831,8 +919,10 @@ components:
             properties:
                 subject:
                     type: string
+                    description: 与登录提供商无关、不可变且不透明的 Eagle 账号 ID，与 access token 的 sub 一致。
                 provider:
                     type: integer
+                    description: 本次会话使用的登录提供商。
                     format: enum
                 email:
                     type: string
@@ -846,24 +936,30 @@ components:
                     type: array
                     items:
                         type: string
+                    description: Eagle 为该账号在当前 audience 下分配的角色，供授权判定使用。
         eagle.dictionary.v1.CreateDictDataRequest:
             type: object
             properties:
                 dictType:
                     type: string
+                    description: 所属类型的业务键，必须已存在，创建后不可修改。
                 label:
                     type: string
                 value:
                     type: string
+                    description: 字典项业务值，同一类型内唯一。
                 sort:
                     type: integer
+                    description: 同一类型内按值升序排列，相同值按 id 升序排列。
                     format: int32
                 cssClass:
                     type: string
                 isDefault:
                     type: boolean
+                    description: 供前端选择默认项的标记，未传为 false；服务端不保证同一类型只有一个默认项。
                 status:
                     type: integer
+                    description: 0=停用，1=启用；创建或更新时未传按 0 处理。
                     format: int32
                 remark:
                     type: string
@@ -879,8 +975,10 @@ components:
                     type: string
                 type:
                     type: string
+                    description: 唯一的类型业务键，创建后不可修改。
                 status:
                     type: integer
+                    description: 0=停用，1=启用；创建或更新时未传按 0 处理。
                     format: int32
                 remark:
                     type: string
@@ -902,19 +1000,24 @@ components:
                     type: string
                 dictType:
                     type: string
+                    description: 所属类型的业务键，创建后不可修改。
                 label:
                     type: string
                 value:
                     type: string
+                    description: 字典项业务值，同一类型内唯一。
                 sort:
                     type: integer
+                    description: 同一类型内按值升序排列，相同值按 id 升序排列。
                     format: int32
                 cssClass:
                     type: string
                 isDefault:
                     type: boolean
+                    description: 供前端选择默认项的标记；服务端不保证同一类型只有一个默认项。
                 status:
                     type: integer
+                    description: 0=停用，1=启用。
                     format: int32
                 remark:
                     type: string
@@ -933,8 +1036,10 @@ components:
                     type: string
                 type:
                     type: string
+                    description: 创建后不可变的类型业务键，字典项通过 dict_type 引用。
                 status:
                     type: integer
+                    description: 0=停用，1=启用。
                     format: int32
                 remark:
                     type: string
@@ -960,6 +1065,7 @@ components:
                         $ref: '#/components/schemas/eagle.dictionary.v1.DictData'
                 total:
                     type: string
+                    description: 满足筛选条件的总条数；与当页数据分别查询，并发写入时可能变化。
         eagle.dictionary.v1.ListDictTypesResponse:
             type: object
             properties:
@@ -969,6 +1075,7 @@ components:
                         $ref: '#/components/schemas/eagle.dictionary.v1.DictType'
                 total:
                     type: string
+                    description: 满足筛选条件的总条数；与当页数据分别查询，并发写入时可能变化。
         eagle.dictionary.v1.UpdateDictDataRequest:
             type: object
             properties:
@@ -978,15 +1085,19 @@ components:
                     type: string
                 value:
                     type: string
+                    description: 字典项业务值，同一类型内唯一。
                 sort:
                     type: integer
+                    description: 同一类型内按值升序排列，相同值按 id 升序排列。
                     format: int32
                 cssClass:
                     type: string
                 isDefault:
                     type: boolean
+                    description: 供前端选择默认项的标记，未传为 false；服务端不保证同一类型只有一个默认项。
                 status:
                     type: integer
+                    description: 0=停用，1=启用；创建或更新时未传按 0 处理。
                     format: int32
                 remark:
                     type: string
@@ -1004,6 +1115,7 @@ components:
                     type: string
                 status:
                     type: integer
+                    description: 0=停用，1=启用；创建或更新时未传按 0 处理。
                     format: int32
                 remark:
                     type: string
@@ -1014,18 +1126,16 @@ components:
                     $ref: '#/components/schemas/eagle.dictionary.v1.DictType'
 tags:
     - name: AuthService
+      description: AuthService 将第三方身份映射到 Eagle 账号，签发、刷新令牌并提供验签公钥。
     - name: DictService
       description: |-
         DictService 管理数据字典。字典类型（sys_common_status）下挂若干字典项，
          前端下拉框、状态标签统一从这里取，避免枚举值散落在各处代码里。
     - name: PermissionService
+      description: PermissionService 管理目录、菜单和按钮节点，引用已有权限码，并提供当前主体的导航视图。
     - name: RoleBindingService
       description: |-
-        RoleBindingService 管理「角色 → 权限码」的映射，即 Casbin 的 p 策略。
-
-         角色本身不在这里创建或删除——它由外部 IdP 维护，随 token 的
-         已配置角色 claim 下发。本服务只回答「这个角色能调哪些接口」。
-
-         这样切分的原因：把用户到角色的归属也放进本库，就等于与 IdP
-         双写同一份数据，必然漂移；而把权限映射放进 IdP，则每次
-         授权判定都要跨网络调用，且权限配置只能在 IdP 后台改。
+        RoleBindingService 管理 Eagle 角色的直接权限与继承关系。
+         用户到角色的归属由 auth 模块维护，并通过 Eagle token 携带。
+         策略写入成功后同步重载本实例，其他实例通过后台对账同步。
+         若提交后本实例重载失败，请求会返回错误，但策略写入已生效于存储，应重新查询确认。

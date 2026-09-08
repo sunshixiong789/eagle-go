@@ -11,12 +11,15 @@ import (
 	"github.com/eagle-go/eagle/internal/auth/domain"
 )
 
+// AuthService 提供 Eagle 登录、令牌刷新、退出和验签公钥的 HTTP 入口。
 type AuthService struct {
 	uc   *application.Usecase
 	keys publicKeySetProvider
 }
 
+// publicKeySetProvider 提供可公开发布的 Eagle 验签密钥集合。
 type publicKeySetProvider interface {
+	// PublicKeySet 返回仅含公钥的 JWKS，不得包含私钥材料。
 	PublicKeySet() jose.JSONWebKeySet
 }
 
@@ -24,6 +27,7 @@ func NewAuthService(uc *application.Usecase, keys publicKeySetProvider) *AuthSer
 	return &AuthService{uc: uc, keys: keys}
 }
 
+// GetJSONWebKeySet 返回 Eagle access token 的验签公钥。
 func (s *AuthService) GetJSONWebKeySet(context.Context, *v1.GetJSONWebKeySetRequest) (*v1.GetJSONWebKeySetResponse, error) {
 	out := &v1.GetJSONWebKeySetResponse{}
 	for _, key := range s.keys.PublicKeySet().Keys {
@@ -53,6 +57,7 @@ func (s *AuthService) GetJSONWebKeySet(context.Context, *v1.GetJSONWebKeySetRequ
 	return out, nil
 }
 
+// SocialLogin 将第三方登录请求交给认证用例，返回 Eagle 令牌和账号资料。
 func (s *AuthService) SocialLogin(ctx context.Context, req *v1.SocialLoginRequest) (*v1.TokenResponse, error) {
 	var provider domain.Provider
 	switch req.GetProvider() {
@@ -70,6 +75,7 @@ func (s *AuthService) SocialLogin(ctx context.Context, req *v1.SocialLoginReques
 	return toTokenResponse(tokens), nil
 }
 
+// RefreshToken 轮换会话的刷新凭证并返回新的 Eagle 令牌。
 func (s *AuthService) RefreshToken(ctx context.Context, req *v1.RefreshTokenRequest) (*v1.TokenResponse, error) {
 	tokens, err := s.uc.Refresh(ctx, req.GetRefreshToken())
 	if err != nil {
@@ -78,6 +84,7 @@ func (s *AuthService) RefreshToken(ctx context.Context, req *v1.RefreshTokenRequ
 	return toTokenResponse(tokens), nil
 }
 
+// Logout 撤销刷新凭证对应的会话。
 func (s *AuthService) Logout(ctx context.Context, req *v1.LogoutRequest) (*v1.LogoutResponse, error) {
 	if err := s.uc.Logout(ctx, req.GetRefreshToken()); err != nil {
 		return nil, err

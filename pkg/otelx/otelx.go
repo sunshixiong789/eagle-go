@@ -225,6 +225,7 @@ func startMetricsServer(addr string) func(context.Context) error {
 	}
 
 	mux := http.NewServeMux()
+	// /metrics 暴露 Prometheus 指标，供采集器抓取。
 	mux.Handle("/metrics", promhttp.Handler())
 	writeLive := func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -233,6 +234,7 @@ func startMetricsServer(addr string) func(context.Context) error {
 	// 存活只回答进程是否仍在提供 HTTP；依赖故障不应触发重启风暴。
 	mux.HandleFunc("/livez", writeLive)
 	mux.HandleFunc("/healthz", writeLive) // 兼容旧部署
+	// /readyz 在初始化完成且全部已注册依赖检查通过时返回 200，否则返回 503。
 	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()

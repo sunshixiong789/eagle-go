@@ -76,7 +76,8 @@ func (SocialProvider) EnumDescriptor() ([]byte, []int) {
 type SocialLoginRequest struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	Provider SocialProvider         `protobuf:"varint,1,opt,name=provider,proto3,enum=eagle.auth.v1.SocialProvider" json:"provider,omitempty"`
-	IdToken  string                 `protobuf:"bytes,2,opt,name=id_token,json=idToken,proto3" json:"id_token,omitempty"`
+	// 第三方 SDK 返回的 ID Token；服务端验证后签发 Eagle 令牌。
+	IdToken string `protobuf:"bytes,2,opt,name=id_token,json=idToken,proto3" json:"id_token,omitempty"`
 	// 发起第三方登录时使用的原始 nonce。Apple 原生 SDK 会在 token 中返回其 SHA-256 值。
 	Nonce string `protobuf:"bytes,3,opt,name=nonce,proto3" json:"nonce,omitempty"`
 	// Apple 仅在首次授权返回姓名，客户端应在首次交换时一并提交。
@@ -144,8 +145,9 @@ func (x *SocialLoginRequest) GetDisplayName() string {
 }
 
 type RefreshTokenRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RefreshToken  string                 `protobuf:"bytes,1,opt,name=refresh_token,json=refreshToken,proto3" json:"refresh_token,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 当前会话最近一次签发的刷新凭证，成功刷新后须保存响应中的新凭证。
+	RefreshToken  string `protobuf:"bytes,1,opt,name=refresh_token,json=refreshToken,proto3" json:"refresh_token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -188,8 +190,9 @@ func (x *RefreshTokenRequest) GetRefreshToken() string {
 }
 
 type LogoutRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RefreshToken  string                 `protobuf:"bytes,1,opt,name=refresh_token,json=refreshToken,proto3" json:"refresh_token,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 待撤销会话当前的刷新凭证；轮换前的旧凭证不能用于撤销。
+	RefreshToken  string `protobuf:"bytes,1,opt,name=refresh_token,json=refreshToken,proto3" json:"refresh_token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -268,14 +271,17 @@ func (*LogoutResponse) Descriptor() ([]byte, []int) {
 }
 
 type User struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Subject       string                 `protobuf:"bytes,1,opt,name=subject,proto3" json:"subject,omitempty"`
-	Provider      SocialProvider         `protobuf:"varint,2,opt,name=provider,proto3,enum=eagle.auth.v1.SocialProvider" json:"provider,omitempty"`
-	Email         string                 `protobuf:"bytes,3,opt,name=email,proto3" json:"email,omitempty"`
-	EmailVerified bool                   `protobuf:"varint,4,opt,name=email_verified,json=emailVerified,proto3" json:"email_verified,omitempty"`
-	DisplayName   string                 `protobuf:"bytes,5,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
-	AvatarUrl     string                 `protobuf:"bytes,6,opt,name=avatar_url,json=avatarUrl,proto3" json:"avatar_url,omitempty"`
-	Roles         []string               `protobuf:"bytes,7,rep,name=roles,proto3" json:"roles,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 与登录提供商无关、不可变且不透明的 Eagle 账号 ID，与 access token 的 sub 一致。
+	Subject string `protobuf:"bytes,1,opt,name=subject,proto3" json:"subject,omitempty"`
+	// 本次会话使用的登录提供商。
+	Provider      SocialProvider `protobuf:"varint,2,opt,name=provider,proto3,enum=eagle.auth.v1.SocialProvider" json:"provider,omitempty"`
+	Email         string         `protobuf:"bytes,3,opt,name=email,proto3" json:"email,omitempty"`
+	EmailVerified bool           `protobuf:"varint,4,opt,name=email_verified,json=emailVerified,proto3" json:"email_verified,omitempty"`
+	DisplayName   string         `protobuf:"bytes,5,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	AvatarUrl     string         `protobuf:"bytes,6,opt,name=avatar_url,json=avatarUrl,proto3" json:"avatar_url,omitempty"`
+	// Eagle 为该账号在当前 audience 下分配的角色，供授权判定使用。
+	Roles         []string `protobuf:"bytes,7,rep,name=roles,proto3" json:"roles,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -360,12 +366,16 @@ func (x *User) GetRoles() []string {
 }
 
 type TokenResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	AccessToken   string                 `protobuf:"bytes,1,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"`
-	RefreshToken  string                 `protobuf:"bytes,2,opt,name=refresh_token,json=refreshToken,proto3" json:"refresh_token,omitempty"`
-	TokenType     string                 `protobuf:"bytes,3,opt,name=token_type,json=tokenType,proto3" json:"token_type,omitempty"`
-	ExpiresIn     int64                  `protobuf:"varint,4,opt,name=expires_in,json=expiresIn,proto3" json:"expires_in,omitempty"`
-	User          *User                  `protobuf:"bytes,5,opt,name=user,proto3" json:"user,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Eagle 签发的访问令牌，供业务请求使用。
+	AccessToken string `protobuf:"bytes,1,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"`
+	// 当前会话的刷新凭证；刷新成功后替换本地保存的旧凭证。
+	RefreshToken string `protobuf:"bytes,2,opt,name=refresh_token,json=refreshToken,proto3" json:"refresh_token,omitempty"`
+	// 认证方案，固定为 Bearer。
+	TokenType string `protobuf:"bytes,3,opt,name=token_type,json=tokenType,proto3" json:"token_type,omitempty"`
+	// access token 的有效期，单位为秒。
+	ExpiresIn     int64 `protobuf:"varint,4,opt,name=expires_in,json=expiresIn,proto3" json:"expires_in,omitempty"`
+	User          *User `protobuf:"bytes,5,opt,name=user,proto3" json:"user,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -516,16 +526,25 @@ func (x *GetJSONWebKeySetResponse) GetKeys() []*JSONWebKey {
 }
 
 type JSONWebKey struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Kty           string                 `protobuf:"bytes,1,opt,name=kty,proto3" json:"kty,omitempty"`
-	Use           string                 `protobuf:"bytes,2,opt,name=use,proto3" json:"use,omitempty"`
-	Alg           string                 `protobuf:"bytes,3,opt,name=alg,proto3" json:"alg,omitempty"`
-	Kid           string                 `protobuf:"bytes,4,opt,name=kid,proto3" json:"kid,omitempty"`
-	Crv           string                 `protobuf:"bytes,5,opt,name=crv,proto3" json:"crv,omitempty"`
-	X             string                 `protobuf:"bytes,6,opt,name=x,proto3" json:"x,omitempty"`
-	Y             string                 `protobuf:"bytes,7,opt,name=y,proto3" json:"y,omitempty"`
-	N             string                 `protobuf:"bytes,8,opt,name=n,proto3" json:"n,omitempty"`
-	E             string                 `protobuf:"bytes,9,opt,name=e,proto3" json:"e,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 公钥类型：EC 或 RSA。
+	Kty string `protobuf:"bytes,1,opt,name=kty,proto3" json:"kty,omitempty"`
+	// 公钥用途，sig 表示签名验证。
+	Use string `protobuf:"bytes,2,opt,name=use,proto3" json:"use,omitempty"`
+	// 签名算法：ES256 或 RS256。
+	Alg string `protobuf:"bytes,3,opt,name=alg,proto3" json:"alg,omitempty"`
+	// 密钥标识，与 access token 头部的 kid 对应。
+	Kid string `protobuf:"bytes,4,opt,name=kid,proto3" json:"kid,omitempty"`
+	// EC 公钥的曲线名称；RSA 公钥不使用此字段。
+	Crv string `protobuf:"bytes,5,opt,name=crv,proto3" json:"crv,omitempty"`
+	// EC 公钥 x 坐标的 Base64URL 编码；RSA 公钥不使用此字段。
+	X string `protobuf:"bytes,6,opt,name=x,proto3" json:"x,omitempty"`
+	// EC 公钥 y 坐标的 Base64URL 编码；RSA 公钥不使用此字段。
+	Y string `protobuf:"bytes,7,opt,name=y,proto3" json:"y,omitempty"`
+	// RSA 公钥模数的 Base64URL 编码；EC 公钥不使用此字段。
+	N string `protobuf:"bytes,8,opt,name=n,proto3" json:"n,omitempty"`
+	// RSA 公钥指数的 Base64URL 编码；EC 公钥不使用此字段。
+	E             string `protobuf:"bytes,9,opt,name=e,proto3" json:"e,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }

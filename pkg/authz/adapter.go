@@ -20,8 +20,12 @@ type StoredPolicy struct {
 	Values []string
 }
 
+// PolicySource 提供权威策略及其单调递增版本，供加载器检测读取期间的并发变更。
+// 策略变更与版本递增必须在同一事务内提交。
 type PolicySource interface {
+	// LoadPolicyRows 返回全部角色授权和继承规则；空结果表示没有策略。
 	LoadPolicyRows(context.Context) ([]StoredPolicy, error)
+	// PolicyVersion 返回当前已提交的全局策略版本；加载器通过读取前后版本相等确认快照稳定。
 	PolicyVersion(context.Context) (int64, error)
 }
 
@@ -41,6 +45,8 @@ func (a *StorageAdapter) LoadPolicy(m model.Model) error {
 	return a.LoadPolicyContext(context.Background(), m)
 }
 
+// LoadPolicyContext 在读取前后核对版本，取得稳定快照后才填充模型并记录已加载版本。
+// 连续五次读取均发生版本变化时返回 ErrPolicyChangedDuringLoad。
 func (a *StorageAdapter) LoadPolicyContext(ctx context.Context, m model.Model) error {
 	var rows []StoredPolicy
 	var version int64

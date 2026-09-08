@@ -25,14 +25,20 @@ const OperationPermissionServiceListPermissions = "/eagle.access.v1.PermissionSe
 const OperationPermissionServiceUpdatePermission = "/eagle.access.v1.PermissionService/UpdatePermission"
 
 type PermissionServiceHTTPServer interface {
+	// CreatePermission CreatePermission 创建节点；非根父节点必须存在，非空权限码必须已登记、启用且未被其他节点引用。
 	CreatePermission(context.Context, *CreatePermissionRequest) (*CreatePermissionResponse, error)
+	// DeletePermission DeletePermission 删除叶子节点；有子节点、节点不存在或提供的整树版本不匹配时返回错误。
+	// 删除导航节点不会删除权限目录中的定义或角色的权限绑定。
 	DeletePermission(context.Context, *DeletePermissionRequest) (*DeletePermissionResponse, error)
-	// GetMyMenus 当前登录用户的菜单树与权限码，供前端渲染路由和按钮级控制。
-	// 只需登录，无需额外权限码——查的就是自己的东西。
+	// GetMyMenus GetMyMenus 按当前主体的 Eagle 角色返回菜单列表与权限码，供前端渲染导航和控制按钮显隐。
+	// 菜单平铺返回，补全授权节点的祖先并排除按钮；权限码展开继承，保留通配码。
 	GetMyMenus(context.Context, *GetMyMenusRequest) (*GetMyMenusResponse, error)
+	// GetPermission GetPermission 查询单个节点及读取到的整树版本；节点不存在时返回未找到错误。
 	GetPermission(context.Context, *GetPermissionRequest) (*GetPermissionResponse, error)
-	// ListPermissions 平铺返回全部权限，树结构由调用方按 parent_id 拼装
+	// ListPermissions ListPermissions 按条件平铺返回节点，按 parent_id、sort、id 升序排列；调用方按 parent_id 组装树。
 	ListPermissions(context.Context, *ListPermissionsRequest) (*ListPermissionsResponse, error)
+	// UpdatePermission UpdatePermission 全量更新节点的可变字段，字段零值也会覆盖原值；校验父节点、环和权限码引用约束。
+	// 提供 expected_revision 时在写入事务内校验整树版本，不匹配则拒绝更新。
 	UpdatePermission(context.Context, *UpdatePermissionRequest) (*UpdatePermissionResponse, error)
 }
 
@@ -170,14 +176,20 @@ func _PermissionService_GetMyMenus0_HTTP_Handler(srv PermissionServiceHTTPServer
 }
 
 type PermissionServiceHTTPClient interface {
+	// CreatePermission CreatePermission 创建节点；非根父节点必须存在，非空权限码必须已登记、启用且未被其他节点引用。
 	CreatePermission(ctx context.Context, req *CreatePermissionRequest, opts ...http.CallOption) (rsp *CreatePermissionResponse, err error)
+	// DeletePermission DeletePermission 删除叶子节点；有子节点、节点不存在或提供的整树版本不匹配时返回错误。
+	// 删除导航节点不会删除权限目录中的定义或角色的权限绑定。
 	DeletePermission(ctx context.Context, req *DeletePermissionRequest, opts ...http.CallOption) (rsp *DeletePermissionResponse, err error)
-	// GetMyMenus 当前登录用户的菜单树与权限码，供前端渲染路由和按钮级控制。
-	// 只需登录，无需额外权限码——查的就是自己的东西。
+	// GetMyMenus GetMyMenus 按当前主体的 Eagle 角色返回菜单列表与权限码，供前端渲染导航和控制按钮显隐。
+	// 菜单平铺返回，补全授权节点的祖先并排除按钮；权限码展开继承，保留通配码。
 	GetMyMenus(ctx context.Context, req *GetMyMenusRequest, opts ...http.CallOption) (rsp *GetMyMenusResponse, err error)
+	// GetPermission GetPermission 查询单个节点及读取到的整树版本；节点不存在时返回未找到错误。
 	GetPermission(ctx context.Context, req *GetPermissionRequest, opts ...http.CallOption) (rsp *GetPermissionResponse, err error)
-	// ListPermissions 平铺返回全部权限，树结构由调用方按 parent_id 拼装
+	// ListPermissions ListPermissions 按条件平铺返回节点，按 parent_id、sort、id 升序排列；调用方按 parent_id 组装树。
 	ListPermissions(ctx context.Context, req *ListPermissionsRequest, opts ...http.CallOption) (rsp *ListPermissionsResponse, err error)
+	// UpdatePermission UpdatePermission 全量更新节点的可变字段，字段零值也会覆盖原值；校验父节点、环和权限码引用约束。
+	// 提供 expected_revision 时在写入事务内校验整树版本，不匹配则拒绝更新。
 	UpdatePermission(ctx context.Context, req *UpdatePermissionRequest, opts ...http.CallOption) (rsp *UpdatePermissionResponse, err error)
 }
 
@@ -189,6 +201,7 @@ func NewPermissionServiceHTTPClient(client *http.Client) PermissionServiceHTTPCl
 	return &PermissionServiceHTTPClientImpl{client}
 }
 
+// CreatePermission CreatePermission 创建节点；非根父节点必须存在，非空权限码必须已登记、启用且未被其他节点引用。
 func (c *PermissionServiceHTTPClientImpl) CreatePermission(ctx context.Context, in *CreatePermissionRequest, opts ...http.CallOption) (*CreatePermissionResponse, error) {
 	var out CreatePermissionResponse
 	pattern := "/v1/system/permissions"
@@ -206,6 +219,8 @@ func (c *PermissionServiceHTTPClientImpl) CreatePermission(ctx context.Context, 
 	return &out, nil
 }
 
+// DeletePermission DeletePermission 删除叶子节点；有子节点、节点不存在或提供的整树版本不匹配时返回错误。
+// 删除导航节点不会删除权限目录中的定义或角色的权限绑定。
 func (c *PermissionServiceHTTPClientImpl) DeletePermission(ctx context.Context, in *DeletePermissionRequest, opts ...http.CallOption) (*DeletePermissionResponse, error) {
 	var out DeletePermissionResponse
 	pattern := "/v1/system/permissions/{id}"
@@ -222,8 +237,8 @@ func (c *PermissionServiceHTTPClientImpl) DeletePermission(ctx context.Context, 
 	return &out, nil
 }
 
-// GetMyMenus 当前登录用户的菜单树与权限码，供前端渲染路由和按钮级控制。
-// 只需登录，无需额外权限码——查的就是自己的东西。
+// GetMyMenus GetMyMenus 按当前主体的 Eagle 角色返回菜单列表与权限码，供前端渲染导航和控制按钮显隐。
+// 菜单平铺返回，补全授权节点的祖先并排除按钮；权限码展开继承，保留通配码。
 func (c *PermissionServiceHTTPClientImpl) GetMyMenus(ctx context.Context, in *GetMyMenusRequest, opts ...http.CallOption) (*GetMyMenusResponse, error) {
 	var out GetMyMenusResponse
 	pattern := "/v1/system/permissions/me/menus"
@@ -240,6 +255,7 @@ func (c *PermissionServiceHTTPClientImpl) GetMyMenus(ctx context.Context, in *Ge
 	return &out, nil
 }
 
+// GetPermission GetPermission 查询单个节点及读取到的整树版本；节点不存在时返回未找到错误。
 func (c *PermissionServiceHTTPClientImpl) GetPermission(ctx context.Context, in *GetPermissionRequest, opts ...http.CallOption) (*GetPermissionResponse, error) {
 	var out GetPermissionResponse
 	pattern := "/v1/system/permissions/{id}"
@@ -256,7 +272,7 @@ func (c *PermissionServiceHTTPClientImpl) GetPermission(ctx context.Context, in 
 	return &out, nil
 }
 
-// ListPermissions 平铺返回全部权限，树结构由调用方按 parent_id 拼装
+// ListPermissions ListPermissions 按条件平铺返回节点，按 parent_id、sort、id 升序排列；调用方按 parent_id 组装树。
 func (c *PermissionServiceHTTPClientImpl) ListPermissions(ctx context.Context, in *ListPermissionsRequest, opts ...http.CallOption) (*ListPermissionsResponse, error) {
 	var out ListPermissionsResponse
 	pattern := "/v1/system/permissions"
@@ -273,6 +289,8 @@ func (c *PermissionServiceHTTPClientImpl) ListPermissions(ctx context.Context, i
 	return &out, nil
 }
 
+// UpdatePermission UpdatePermission 全量更新节点的可变字段，字段零值也会覆盖原值；校验父节点、环和权限码引用约束。
+// 提供 expected_revision 时在写入事务内校验整树版本，不匹配则拒绝更新。
 func (c *PermissionServiceHTTPClientImpl) UpdatePermission(ctx context.Context, in *UpdatePermissionRequest, opts ...http.CallOption) (*UpdatePermissionResponse, error) {
 	var out UpdatePermissionResponse
 	pattern := "/v1/system/permissions/{id}"

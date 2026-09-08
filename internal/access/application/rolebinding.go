@@ -82,6 +82,7 @@ func (uc *RoleBindingUsecase) ListRoleInheritances(ctx context.Context) ([]domai
 	return uc.policy.ListInheritances(ctx)
 }
 
+// DeleteRoleInheritance 校验角色与继承关系，再交给仓储按可选版本删除。
 func (uc *RoleBindingUsecase) DeleteRoleInheritance(ctx context.Context, childName, parentName string, expectedVersion *int64) (int64, error) {
 	child, err := domain.NewRole(childName)
 	if err != nil {

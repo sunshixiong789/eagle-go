@@ -28,11 +28,13 @@ const (
 type RoleBinding struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Eagle 分配的稳定角色键，如 user、admin、support-agent。
-	Role            string   `protobuf:"bytes,1,opt,name=role,proto3" json:"role,omitempty"`
+	Role string `protobuf:"bytes,1,opt,name=role,proto3" json:"role,omitempty"`
+	// 角色的直接权限码，不展开继承；可包含末段通配码。
 	PermissionCodes []string `protobuf:"bytes,2,rep,name=permission_codes,json=permissionCodes,proto3" json:"permission_codes,omitempty"`
-	Revision        int64    `protobuf:"varint,3,opt,name=revision,proto3" json:"revision,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// 读取此绑定时的全局策略版本，可用作写入时的 expected_version。
+	Revision      int64 `protobuf:"varint,3,opt,name=revision,proto3" json:"revision,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RoleBinding) Reset() {
@@ -123,9 +125,10 @@ func (*ListBoundRolesRequest) Descriptor() ([]byte, []int) {
 }
 
 type ListBoundRolesResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Bindings      []*RoleBinding         `protobuf:"bytes,1,rep,name=bindings,proto3" json:"bindings,omitempty"`
-	PolicyVersion int64                  `protobuf:"varint,2,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Bindings []*RoleBinding         `protobuf:"bytes,1,rep,name=bindings,proto3" json:"bindings,omitempty"`
+	// 与返回列表一致的全局策略版本，空列表也返回版本。
+	PolicyVersion int64 `protobuf:"varint,2,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -265,9 +268,10 @@ func (x *GetRolePermissionsResponse) GetBinding() *RoleBinding {
 type SetRolePermissionsRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Role  string                 `protobuf:"bytes,1,opt,name=role,proto3" json:"role,omitempty"`
-	// 全量覆盖。传空数组表示收回该角色的全部权限。
+	// 全量覆盖直接权限；未传或传空数组均清除直接授权，通过继承获得的权限保留。
 	PermissionCodes []string `protobuf:"bytes,2,rep,name=permission_codes,json=permissionCodes,proto3" json:"permission_codes,omitempty"`
-	ExpectedVersion *int64   `protobuf:"varint,3,opt,name=expected_version,json=expectedVersion,proto3,oneof" json:"expected_version,omitempty"`
+	// 预期的全局策略版本；未传时不检查，传入时必须与当前版本一致，否则拒绝写入。
+	ExpectedVersion *int64 `protobuf:"varint,3,opt,name=expected_version,json=expectedVersion,proto3,oneof" json:"expected_version,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -324,8 +328,9 @@ func (x *SetRolePermissionsRequest) GetExpectedVersion() int64 {
 }
 
 type SetRolePermissionsResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PolicyVersion int64                  `protobuf:"varint,1,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 操作完成后的全局策略版本，可用于后续写入的并发检查。
+	PolicyVersion int64 `protobuf:"varint,1,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -368,10 +373,11 @@ func (x *SetRolePermissionsResponse) GetPolicyVersion() int64 {
 }
 
 type AddRoleInheritanceRequest struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	Child           string                 `protobuf:"bytes,1,opt,name=child,proto3" json:"child,omitempty"`
-	Parent          string                 `protobuf:"bytes,2,opt,name=parent,proto3" json:"parent,omitempty"`
-	ExpectedVersion *int64                 `protobuf:"varint,3,opt,name=expected_version,json=expectedVersion,proto3,oneof" json:"expected_version,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Child  string                 `protobuf:"bytes,1,opt,name=child,proto3" json:"child,omitempty"`
+	Parent string                 `protobuf:"bytes,2,opt,name=parent,proto3" json:"parent,omitempty"`
+	// 预期的全局策略版本；未传时不检查，传入时必须与当前版本一致，否则拒绝写入。
+	ExpectedVersion *int64 `protobuf:"varint,3,opt,name=expected_version,json=expectedVersion,proto3,oneof" json:"expected_version,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -428,8 +434,9 @@ func (x *AddRoleInheritanceRequest) GetExpectedVersion() int64 {
 }
 
 type AddRoleInheritanceResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PolicyVersion int64                  `protobuf:"varint,1,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 操作完成后的全局策略版本，可用于后续写入的并发检查。
+	PolicyVersion int64 `protobuf:"varint,1,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -560,9 +567,10 @@ func (*ListRoleInheritancesRequest) Descriptor() ([]byte, []int) {
 }
 
 type ListRoleInheritancesResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Inheritances  []*RoleInheritance     `protobuf:"bytes,1,rep,name=inheritances,proto3" json:"inheritances,omitempty"`
-	PolicyVersion int64                  `protobuf:"varint,2,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	Inheritances []*RoleInheritance     `protobuf:"bytes,1,rep,name=inheritances,proto3" json:"inheritances,omitempty"`
+	// 与返回列表一致的全局策略版本，空列表也返回版本。
+	PolicyVersion int64 `protobuf:"varint,2,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -612,10 +620,11 @@ func (x *ListRoleInheritancesResponse) GetPolicyVersion() int64 {
 }
 
 type DeleteRoleInheritanceRequest struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	Child           string                 `protobuf:"bytes,1,opt,name=child,proto3" json:"child,omitempty"`
-	Parent          string                 `protobuf:"bytes,2,opt,name=parent,proto3" json:"parent,omitempty"`
-	ExpectedVersion *int64                 `protobuf:"varint,3,opt,name=expected_version,json=expectedVersion,proto3,oneof" json:"expected_version,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Child  string                 `protobuf:"bytes,1,opt,name=child,proto3" json:"child,omitempty"`
+	Parent string                 `protobuf:"bytes,2,opt,name=parent,proto3" json:"parent,omitempty"`
+	// 预期的全局策略版本；未传时不检查，传入时必须与当前版本一致，否则拒绝写入。
+	ExpectedVersion *int64 `protobuf:"varint,3,opt,name=expected_version,json=expectedVersion,proto3,oneof" json:"expected_version,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -672,8 +681,9 @@ func (x *DeleteRoleInheritanceRequest) GetExpectedVersion() int64 {
 }
 
 type DeleteRoleInheritanceResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PolicyVersion int64                  `protobuf:"varint,1,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 操作完成后的全局策略版本，可用于后续写入的并发检查。
+	PolicyVersion int64 `protobuf:"varint,1,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }

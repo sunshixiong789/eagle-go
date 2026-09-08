@@ -26,17 +26,24 @@ const OperationRoleBindingServiceListRoleInheritances = "/eagle.access.v1.RoleBi
 const OperationRoleBindingServiceSetRolePermissions = "/eagle.access.v1.RoleBindingService/SetRolePermissions"
 
 type RoleBindingServiceHTTPServer interface {
-	// AddRoleInheritance 建立角色继承：child 自动获得 parent 的全部权限。
+	// AddRoleInheritance AddRoleInheritance 建立 child 到 parent 的继承，child 获得 parent 的权限。
+	// 禁止自继承和环；版本校验通过后，重复添加已有关系成功返回且不推进版本。
 	AddRoleInheritance(context.Context, *AddRoleInheritanceRequest) (*AddRoleInheritanceResponse, error)
+	// DeleteRoleInheritance DeleteRoleInheritance 删除一条继承关系，保留角色的直接授权。
+	// 版本校验通过后，关系不存在也成功返回且不推进版本。
 	DeleteRoleInheritance(context.Context, *DeleteRoleInheritanceRequest) (*DeleteRoleInheritanceResponse, error)
-	// GetMyPermissions 当前登录者自己的权限码，供前端做按钮级显隐。只需登录。
+	// GetMyPermissions GetMyPermissions 按当前主体的 Eagle 角色汇总权限，展开继承并去重，保留权限通配码。
+	// 结果来自本实例已加载的策略，供前端控制按钮显隐。
 	GetMyPermissions(context.Context, *GetMyPermissionsRequest) (*GetMyPermissionsResponse, error)
+	// GetRolePermissions GetRolePermissions 查询角色的直接权限，不展开继承；没有直接授权时返回角色未绑定错误。
 	GetRolePermissions(context.Context, *GetRolePermissionsRequest) (*GetRolePermissionsResponse, error)
-	// ListBoundRoles 列出本库中已配置过权限的角色。
-	// 注意这不是 IdP 的角色全集——从未分配过权限的角色不会出现。
+	// ListBoundRoles ListBoundRoles 按角色键升序列出当前有直接授权的角色及一致的全局策略版本。
+	// 没有直接授权、仅通过继承获得权限的角色不在列表中。
 	ListBoundRoles(context.Context, *ListBoundRolesRequest) (*ListBoundRolesResponse, error)
+	// ListRoleInheritances ListRoleInheritances 按 child、parent 升序列出继承关系及一致的全局策略版本。
 	ListRoleInheritances(context.Context, *ListRoleInheritancesRequest) (*ListRoleInheritancesResponse, error)
-	// SetRolePermissions 全量覆盖某个角色的权限码集合，变更立即生效。
+	// SetRolePermissions SetRolePermissions 全量覆盖角色的直接权限，自动去重；具体权限码必须已登记且启用。
+	// 空集合清除直接授权，继承关系保留；每次成功写入都会推进全局策略版本。
 	SetRolePermissions(context.Context, *SetRolePermissionsRequest) (*SetRolePermissionsResponse, error)
 }
 
@@ -194,17 +201,24 @@ func _RoleBindingService_GetMyPermissions0_HTTP_Handler(srv RoleBindingServiceHT
 }
 
 type RoleBindingServiceHTTPClient interface {
-	// AddRoleInheritance 建立角色继承：child 自动获得 parent 的全部权限。
+	// AddRoleInheritance AddRoleInheritance 建立 child 到 parent 的继承，child 获得 parent 的权限。
+	// 禁止自继承和环；版本校验通过后，重复添加已有关系成功返回且不推进版本。
 	AddRoleInheritance(ctx context.Context, req *AddRoleInheritanceRequest, opts ...http.CallOption) (rsp *AddRoleInheritanceResponse, err error)
+	// DeleteRoleInheritance DeleteRoleInheritance 删除一条继承关系，保留角色的直接授权。
+	// 版本校验通过后，关系不存在也成功返回且不推进版本。
 	DeleteRoleInheritance(ctx context.Context, req *DeleteRoleInheritanceRequest, opts ...http.CallOption) (rsp *DeleteRoleInheritanceResponse, err error)
-	// GetMyPermissions 当前登录者自己的权限码，供前端做按钮级显隐。只需登录。
+	// GetMyPermissions GetMyPermissions 按当前主体的 Eagle 角色汇总权限，展开继承并去重，保留权限通配码。
+	// 结果来自本实例已加载的策略，供前端控制按钮显隐。
 	GetMyPermissions(ctx context.Context, req *GetMyPermissionsRequest, opts ...http.CallOption) (rsp *GetMyPermissionsResponse, err error)
+	// GetRolePermissions GetRolePermissions 查询角色的直接权限，不展开继承；没有直接授权时返回角色未绑定错误。
 	GetRolePermissions(ctx context.Context, req *GetRolePermissionsRequest, opts ...http.CallOption) (rsp *GetRolePermissionsResponse, err error)
-	// ListBoundRoles 列出本库中已配置过权限的角色。
-	// 注意这不是 IdP 的角色全集——从未分配过权限的角色不会出现。
+	// ListBoundRoles ListBoundRoles 按角色键升序列出当前有直接授权的角色及一致的全局策略版本。
+	// 没有直接授权、仅通过继承获得权限的角色不在列表中。
 	ListBoundRoles(ctx context.Context, req *ListBoundRolesRequest, opts ...http.CallOption) (rsp *ListBoundRolesResponse, err error)
+	// ListRoleInheritances ListRoleInheritances 按 child、parent 升序列出继承关系及一致的全局策略版本。
 	ListRoleInheritances(ctx context.Context, req *ListRoleInheritancesRequest, opts ...http.CallOption) (rsp *ListRoleInheritancesResponse, err error)
-	// SetRolePermissions 全量覆盖某个角色的权限码集合，变更立即生效。
+	// SetRolePermissions SetRolePermissions 全量覆盖角色的直接权限，自动去重；具体权限码必须已登记且启用。
+	// 空集合清除直接授权，继承关系保留；每次成功写入都会推进全局策略版本。
 	SetRolePermissions(ctx context.Context, req *SetRolePermissionsRequest, opts ...http.CallOption) (rsp *SetRolePermissionsResponse, err error)
 }
 
@@ -216,7 +230,8 @@ func NewRoleBindingServiceHTTPClient(client *http.Client) RoleBindingServiceHTTP
 	return &RoleBindingServiceHTTPClientImpl{client}
 }
 
-// AddRoleInheritance 建立角色继承：child 自动获得 parent 的全部权限。
+// AddRoleInheritance AddRoleInheritance 建立 child 到 parent 的继承，child 获得 parent 的权限。
+// 禁止自继承和环；版本校验通过后，重复添加已有关系成功返回且不推进版本。
 func (c *RoleBindingServiceHTTPClientImpl) AddRoleInheritance(ctx context.Context, in *AddRoleInheritanceRequest, opts ...http.CallOption) (*AddRoleInheritanceResponse, error) {
 	var out AddRoleInheritanceResponse
 	pattern := "/v1/system/role-bindings/inheritance"
@@ -234,6 +249,8 @@ func (c *RoleBindingServiceHTTPClientImpl) AddRoleInheritance(ctx context.Contex
 	return &out, nil
 }
 
+// DeleteRoleInheritance DeleteRoleInheritance 删除一条继承关系，保留角色的直接授权。
+// 版本校验通过后，关系不存在也成功返回且不推进版本。
 func (c *RoleBindingServiceHTTPClientImpl) DeleteRoleInheritance(ctx context.Context, in *DeleteRoleInheritanceRequest, opts ...http.CallOption) (*DeleteRoleInheritanceResponse, error) {
 	var out DeleteRoleInheritanceResponse
 	pattern := "/v1/system/role-inheritances/{child}/{parent}"
@@ -250,7 +267,8 @@ func (c *RoleBindingServiceHTTPClientImpl) DeleteRoleInheritance(ctx context.Con
 	return &out, nil
 }
 
-// GetMyPermissions 当前登录者自己的权限码，供前端做按钮级显隐。只需登录。
+// GetMyPermissions GetMyPermissions 按当前主体的 Eagle 角色汇总权限，展开继承并去重，保留权限通配码。
+// 结果来自本实例已加载的策略，供前端控制按钮显隐。
 func (c *RoleBindingServiceHTTPClientImpl) GetMyPermissions(ctx context.Context, in *GetMyPermissionsRequest, opts ...http.CallOption) (*GetMyPermissionsResponse, error) {
 	var out GetMyPermissionsResponse
 	pattern := "/v1/system/role-bindings/me/permissions"
@@ -267,6 +285,7 @@ func (c *RoleBindingServiceHTTPClientImpl) GetMyPermissions(ctx context.Context,
 	return &out, nil
 }
 
+// GetRolePermissions GetRolePermissions 查询角色的直接权限，不展开继承；没有直接授权时返回角色未绑定错误。
 func (c *RoleBindingServiceHTTPClientImpl) GetRolePermissions(ctx context.Context, in *GetRolePermissionsRequest, opts ...http.CallOption) (*GetRolePermissionsResponse, error) {
 	var out GetRolePermissionsResponse
 	pattern := "/v1/system/role-bindings/{role}"
@@ -283,8 +302,8 @@ func (c *RoleBindingServiceHTTPClientImpl) GetRolePermissions(ctx context.Contex
 	return &out, nil
 }
 
-// ListBoundRoles 列出本库中已配置过权限的角色。
-// 注意这不是 IdP 的角色全集——从未分配过权限的角色不会出现。
+// ListBoundRoles ListBoundRoles 按角色键升序列出当前有直接授权的角色及一致的全局策略版本。
+// 没有直接授权、仅通过继承获得权限的角色不在列表中。
 func (c *RoleBindingServiceHTTPClientImpl) ListBoundRoles(ctx context.Context, in *ListBoundRolesRequest, opts ...http.CallOption) (*ListBoundRolesResponse, error) {
 	var out ListBoundRolesResponse
 	pattern := "/v1/system/role-bindings"
@@ -301,6 +320,7 @@ func (c *RoleBindingServiceHTTPClientImpl) ListBoundRoles(ctx context.Context, i
 	return &out, nil
 }
 
+// ListRoleInheritances ListRoleInheritances 按 child、parent 升序列出继承关系及一致的全局策略版本。
 func (c *RoleBindingServiceHTTPClientImpl) ListRoleInheritances(ctx context.Context, in *ListRoleInheritancesRequest, opts ...http.CallOption) (*ListRoleInheritancesResponse, error) {
 	var out ListRoleInheritancesResponse
 	pattern := "/v1/system/role-inheritances"
@@ -317,7 +337,8 @@ func (c *RoleBindingServiceHTTPClientImpl) ListRoleInheritances(ctx context.Cont
 	return &out, nil
 }
 
-// SetRolePermissions 全量覆盖某个角色的权限码集合，变更立即生效。
+// SetRolePermissions SetRolePermissions 全量覆盖角色的直接权限，自动去重；具体权限码必须已登记且启用。
+// 空集合清除直接授权，继承关系保留；每次成功写入都会推进全局策略版本。
 func (c *RoleBindingServiceHTTPClientImpl) SetRolePermissions(ctx context.Context, in *SetRolePermissionsRequest, opts ...http.CallOption) (*SetRolePermissionsResponse, error) {
 	var out SetRolePermissionsResponse
 	pattern := "/v1/system/role-bindings/{role}"

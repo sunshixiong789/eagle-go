@@ -7,7 +7,7 @@ import (
 )
 
 // PermissionUsecase 编排权限用例：构造/变更实体后交给仓储落库。
-// 防环、父节点存在、无子节点才能删——这些检查在 data 的树锁里做，避免 TOCTOU。
+// 父节点、环和子节点检查由 infrastructure 在持有树锁的事务内完成，避免检查与写入之间状态变化。
 type PermissionUsecase struct {
 	repo   domain.PermissionRepo
 	policy domain.PolicyRepo
@@ -17,6 +17,7 @@ func NewPermissionUsecase(repo domain.PermissionRepo, policy domain.PolicyRepo) 
 	return &PermissionUsecase{repo: repo, policy: policy}
 }
 
+// CreatePermission 构造并校验节点的业务不变量，再交给仓储检查树约束并保存。
 func (uc *PermissionUsecase) CreatePermission(ctx context.Context, params domain.NewPermissionParams) (*domain.Permission, error) {
 	perm, err := domain.NewPermission(params)
 	if err != nil {
@@ -33,6 +34,7 @@ func (uc *PermissionUsecase) ListPermissions(ctx context.Context, q domain.ListP
 	return uc.repo.List(ctx, q)
 }
 
+// UpdatePermission 加载节点、校验并应用字段变更，再由仓储在写入事务内检查整树版本与结构约束。
 func (uc *PermissionUsecase) UpdatePermission(ctx context.Context, id int64, params domain.NewPermissionParams, expectedRevision *int64) (*domain.Permission, error) {
 	current, err := uc.repo.GetByID(ctx, id)
 	if err != nil {
@@ -48,10 +50,8 @@ func (uc *PermissionUsecase) DeletePermission(ctx context.Context, id int64, exp
 	return uc.repo.Delete(ctx, id, expectedRevision)
 }
 
-// GetMenusForRoles 返回给定角色可见的菜单与全部权限码。
-//
-// 菜单与鉴权判定共用同一份 Casbin 策略，因此不会出现
-// 「菜单看得见但点了 403」这种前后端权限口径不一致的情况。
+// GetMenusForRoles 汇总本实例策略中的角色权限，再筛选菜单并补全祖先，返回平铺列表与权限码。
+// 两次读取不构成原子快照；结果用于前端展示，后续请求仍由中间件独立授权。
 func (uc *PermissionUsecase) GetMenusForRoles(ctx context.Context, roleNames []string) ([]*domain.Permission, []domain.PermissionCode, error) {
 	roles, err := toRoles(roleNames)
 	if err != nil {

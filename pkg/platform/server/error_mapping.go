@@ -8,7 +8,11 @@ import (
 	"github.com/go-kratos/kratos/v3/middleware"
 )
 
-type errorReason interface{ String() string }
+// errorReason 提供传输错误使用的稳定原因码，通常由 Proto 错误枚举实现。
+type errorReason interface {
+	// String 返回客户端可用于分支判断的原因码，不返回本地化错误消息。
+	String() string
+}
 
 // ErrorMappingRule keeps transport error ownership in each service composition
 // root while the conversion mechanism remains shared.

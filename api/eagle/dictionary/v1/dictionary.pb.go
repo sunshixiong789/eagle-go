@@ -26,10 +26,12 @@ const (
 )
 
 type DictType struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Type          string                 `protobuf:"bytes,3,opt,name=type,proto3" json:"type,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name  string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// 创建后不可变的类型业务键，字典项通过 dict_type 引用。
+	Type string `protobuf:"bytes,3,opt,name=type,proto3" json:"type,omitempty"`
+	// 0=停用，1=启用。
 	Status        int32                  `protobuf:"varint,4,opt,name=status,proto3" json:"status,omitempty"`
 	Remark        string                 `protobuf:"bytes,5,opt,name=remark,proto3" json:"remark,omitempty"`
 	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
@@ -118,14 +120,19 @@ func (x *DictType) GetUpdatedAt() *timestamppb.Timestamp {
 }
 
 type DictData struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	DictType      string                 `protobuf:"bytes,2,opt,name=dict_type,json=dictType,proto3" json:"dict_type,omitempty"`
-	Label         string                 `protobuf:"bytes,3,opt,name=label,proto3" json:"label,omitempty"`
-	Value         string                 `protobuf:"bytes,4,opt,name=value,proto3" json:"value,omitempty"`
-	Sort          int32                  `protobuf:"varint,5,opt,name=sort,proto3" json:"sort,omitempty"`
-	CssClass      string                 `protobuf:"bytes,6,opt,name=css_class,json=cssClass,proto3" json:"css_class,omitempty"`
-	IsDefault     bool                   `protobuf:"varint,7,opt,name=is_default,json=isDefault,proto3" json:"is_default,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	// 所属类型的业务键，创建后不可修改。
+	DictType string `protobuf:"bytes,2,opt,name=dict_type,json=dictType,proto3" json:"dict_type,omitempty"`
+	Label    string `protobuf:"bytes,3,opt,name=label,proto3" json:"label,omitempty"`
+	// 字典项业务值，同一类型内唯一。
+	Value string `protobuf:"bytes,4,opt,name=value,proto3" json:"value,omitempty"`
+	// 同一类型内按值升序排列，相同值按 id 升序排列。
+	Sort     int32  `protobuf:"varint,5,opt,name=sort,proto3" json:"sort,omitempty"`
+	CssClass string `protobuf:"bytes,6,opt,name=css_class,json=cssClass,proto3" json:"css_class,omitempty"`
+	// 供前端选择默认项的标记；服务端不保证同一类型只有一个默认项。
+	IsDefault bool `protobuf:"varint,7,opt,name=is_default,json=isDefault,proto3" json:"is_default,omitempty"`
+	// 0=停用，1=启用。
 	Status        int32                  `protobuf:"varint,8,opt,name=status,proto3" json:"status,omitempty"`
 	Remark        string                 `protobuf:"bytes,9,opt,name=remark,proto3" json:"remark,omitempty"`
 	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
@@ -242,11 +249,13 @@ func (x *DictData) GetUpdatedAt() *timestamppb.Timestamp {
 }
 
 type CreateDictTypeRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Type          string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
-	Status        int32                  `protobuf:"varint,3,opt,name=status,proto3" json:"status,omitempty"`
-	Remark        string                 `protobuf:"bytes,4,opt,name=remark,proto3" json:"remark,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// 唯一的类型业务键，创建后不可修改。
+	Type string `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
+	// 0=停用，1=启用；创建或更新时未传按 0 处理。
+	Status        int32  `protobuf:"varint,3,opt,name=status,proto3" json:"status,omitempty"`
+	Remark        string `protobuf:"bytes,4,opt,name=remark,proto3" json:"remark,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -354,11 +363,15 @@ func (x *CreateDictTypeResponse) GetDictType() *DictType {
 }
 
 type ListDictTypesRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Page          int32                  `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty"`
-	PageSize      int32                  `protobuf:"varint,2,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
-	Keyword       string                 `protobuf:"bytes,3,opt,name=keyword,proto3" json:"keyword,omitempty"`
-	Status        *int32                 `protobuf:"varint,4,opt,name=status,proto3,oneof" json:"status,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 从 0 开始的页码，未传或传 0 均表示第一页。
+	Page int32 `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty"`
+	// 每页条数；未传或传 0 使用 20，最多 200。
+	PageSize int32 `protobuf:"varint,2,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	// 按类型名称或业务键做不区分大小写的包含匹配；空值不筛选。
+	Keyword string `protobuf:"bytes,3,opt,name=keyword,proto3" json:"keyword,omitempty"`
+	// 0=停用，1=启用；未传时不筛选。
+	Status        *int32 `protobuf:"varint,4,opt,name=status,proto3,oneof" json:"status,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -422,9 +435,10 @@ func (x *ListDictTypesRequest) GetStatus() int32 {
 }
 
 type ListDictTypesResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	DictTypes     []*DictType            `protobuf:"bytes,1,rep,name=dict_types,json=dictTypes,proto3" json:"dict_types,omitempty"`
-	Total         int64                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	DictTypes []*DictType            `protobuf:"bytes,1,rep,name=dict_types,json=dictTypes,proto3" json:"dict_types,omitempty"`
+	// 满足筛选条件的总条数；与当页数据分别查询，并发写入时可能变化。
+	Total         int64 `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -474,11 +488,12 @@ func (x *ListDictTypesResponse) GetTotal() int64 {
 }
 
 type UpdateDictTypeRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Status        int32                  `protobuf:"varint,3,opt,name=status,proto3" json:"status,omitempty"`
-	Remark        string                 `protobuf:"bytes,4,opt,name=remark,proto3" json:"remark,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name  string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// 0=停用，1=启用；创建或更新时未传按 0 处理。
+	Status        int32  `protobuf:"varint,3,opt,name=status,proto3" json:"status,omitempty"`
+	Remark        string `protobuf:"bytes,4,opt,name=remark,proto3" json:"remark,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -666,15 +681,20 @@ func (*DeleteDictTypeResponse) Descriptor() ([]byte, []int) {
 }
 
 type CreateDictDataRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	DictType      string                 `protobuf:"bytes,1,opt,name=dict_type,json=dictType,proto3" json:"dict_type,omitempty"`
-	Label         string                 `protobuf:"bytes,2,opt,name=label,proto3" json:"label,omitempty"`
-	Value         string                 `protobuf:"bytes,3,opt,name=value,proto3" json:"value,omitempty"`
-	Sort          int32                  `protobuf:"varint,4,opt,name=sort,proto3" json:"sort,omitempty"`
-	CssClass      string                 `protobuf:"bytes,5,opt,name=css_class,json=cssClass,proto3" json:"css_class,omitempty"`
-	IsDefault     bool                   `protobuf:"varint,6,opt,name=is_default,json=isDefault,proto3" json:"is_default,omitempty"`
-	Status        int32                  `protobuf:"varint,7,opt,name=status,proto3" json:"status,omitempty"`
-	Remark        string                 `protobuf:"bytes,8,opt,name=remark,proto3" json:"remark,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 所属类型的业务键，必须已存在，创建后不可修改。
+	DictType string `protobuf:"bytes,1,opt,name=dict_type,json=dictType,proto3" json:"dict_type,omitempty"`
+	Label    string `protobuf:"bytes,2,opt,name=label,proto3" json:"label,omitempty"`
+	// 字典项业务值，同一类型内唯一。
+	Value string `protobuf:"bytes,3,opt,name=value,proto3" json:"value,omitempty"`
+	// 同一类型内按值升序排列，相同值按 id 升序排列。
+	Sort     int32  `protobuf:"varint,4,opt,name=sort,proto3" json:"sort,omitempty"`
+	CssClass string `protobuf:"bytes,5,opt,name=css_class,json=cssClass,proto3" json:"css_class,omitempty"`
+	// 供前端选择默认项的标记，未传为 false；服务端不保证同一类型只有一个默认项。
+	IsDefault bool `protobuf:"varint,6,opt,name=is_default,json=isDefault,proto3" json:"is_default,omitempty"`
+	// 0=停用，1=启用；创建或更新时未传按 0 处理。
+	Status        int32  `protobuf:"varint,7,opt,name=status,proto3" json:"status,omitempty"`
+	Remark        string `protobuf:"bytes,8,opt,name=remark,proto3" json:"remark,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -810,12 +830,17 @@ func (x *CreateDictDataResponse) GetDictData() *DictData {
 }
 
 type ListDictDataRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Page          int32                  `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty"`
-	PageSize      int32                  `protobuf:"varint,2,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
-	DictType      *string                `protobuf:"bytes,3,opt,name=dict_type,json=dictType,proto3,oneof" json:"dict_type,omitempty"`
-	Keyword       string                 `protobuf:"bytes,4,opt,name=keyword,proto3" json:"keyword,omitempty"`
-	Status        *int32                 `protobuf:"varint,5,opt,name=status,proto3,oneof" json:"status,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 从 0 开始的页码，未传或传 0 均表示第一页。
+	Page int32 `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty"`
+	// 每页条数；未传或传 0 使用 20，最多 200。
+	PageSize int32 `protobuf:"varint,2,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	// 未传时不筛选类型；显式传空字符串时按空类型键筛选。
+	DictType *string `protobuf:"bytes,3,opt,name=dict_type,json=dictType,proto3,oneof" json:"dict_type,omitempty"`
+	// 按字典项标签做不区分大小写的包含匹配；空值不筛选。
+	Keyword string `protobuf:"bytes,4,opt,name=keyword,proto3" json:"keyword,omitempty"`
+	// 0=停用，1=启用；未传时不筛选。
+	Status        *int32 `protobuf:"varint,5,opt,name=status,proto3,oneof" json:"status,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -886,9 +911,10 @@ func (x *ListDictDataRequest) GetStatus() int32 {
 }
 
 type ListDictDataResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	DictData      []*DictData            `protobuf:"bytes,1,rep,name=dict_data,json=dictData,proto3" json:"dict_data,omitempty"`
-	Total         int64                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	DictData []*DictData            `protobuf:"bytes,1,rep,name=dict_data,json=dictData,proto3" json:"dict_data,omitempty"`
+	// 满足筛选条件的总条数；与当页数据分别查询，并发写入时可能变化。
+	Total         int64 `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -938,15 +964,19 @@ func (x *ListDictDataResponse) GetTotal() int64 {
 }
 
 type UpdateDictDataRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Label         string                 `protobuf:"bytes,2,opt,name=label,proto3" json:"label,omitempty"`
-	Value         string                 `protobuf:"bytes,3,opt,name=value,proto3" json:"value,omitempty"`
-	Sort          int32                  `protobuf:"varint,4,opt,name=sort,proto3" json:"sort,omitempty"`
-	CssClass      string                 `protobuf:"bytes,5,opt,name=css_class,json=cssClass,proto3" json:"css_class,omitempty"`
-	IsDefault     bool                   `protobuf:"varint,6,opt,name=is_default,json=isDefault,proto3" json:"is_default,omitempty"`
-	Status        int32                  `protobuf:"varint,7,opt,name=status,proto3" json:"status,omitempty"`
-	Remark        string                 `protobuf:"bytes,8,opt,name=remark,proto3" json:"remark,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Label string                 `protobuf:"bytes,2,opt,name=label,proto3" json:"label,omitempty"`
+	// 字典项业务值，同一类型内唯一。
+	Value string `protobuf:"bytes,3,opt,name=value,proto3" json:"value,omitempty"`
+	// 同一类型内按值升序排列，相同值按 id 升序排列。
+	Sort     int32  `protobuf:"varint,4,opt,name=sort,proto3" json:"sort,omitempty"`
+	CssClass string `protobuf:"bytes,5,opt,name=css_class,json=cssClass,proto3" json:"css_class,omitempty"`
+	// 供前端选择默认项的标记，未传为 false；服务端不保证同一类型只有一个默认项。
+	IsDefault bool `protobuf:"varint,6,opt,name=is_default,json=isDefault,proto3" json:"is_default,omitempty"`
+	// 0=停用，1=启用；创建或更新时未传按 0 处理。
+	Status        int32  `protobuf:"varint,7,opt,name=status,proto3" json:"status,omitempty"`
+	Remark        string `protobuf:"bytes,8,opt,name=remark,proto3" json:"remark,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }

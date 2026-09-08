@@ -11,7 +11,9 @@ import (
 	"github.com/go-kratos/kratos/v3/transport"
 )
 
+// logRedacter 允许请求类型提供适合写入日志的脱敏摘要。
 type logRedacter interface {
+	// Redact 返回脱敏后的请求摘要，不得暴露凭证或其他敏感字段原文。
 	Redact() string
 }
 

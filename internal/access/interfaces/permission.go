@@ -119,10 +119,7 @@ func (s *PermissionService) DeletePermission(ctx context.Context, req *v1.Delete
 	return &v1.DeletePermissionResponse{}, nil
 }
 
-// GetMyMenus 返回当前登录者的菜单树与权限码。
-//
-// 角色取自 token 而非请求参数：让调用方传角色就等于允许任何人
-// 查看任意角色的菜单，进而摸清整个系统的功能边界。
+// GetMyMenus 根据上下文中的已认证主体返回平铺菜单列表与权限码。
 func (s *PermissionService) GetMyMenus(ctx context.Context, _ *v1.GetMyMenusRequest) (*v1.GetMyMenusResponse, error) {
 	p, ok := identity.FromContext(ctx)
 	if !ok {

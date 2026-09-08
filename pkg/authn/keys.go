@@ -17,9 +17,10 @@ import (
 
 var ErrSigningKeyNotFound = errors.New("authn: signing key not found")
 
-// KeySource resolves a public verification key by both kid and algorithm.
-// Implementations must never fall back to an arbitrary key when kid is unknown.
+// KeySource 根据令牌中的 kid 和签名算法查找验签公钥。
 type KeySource interface {
+	// Key 返回匹配 kid、兼容指定算法且可用于验签的唯一公钥；kid 未知时禁止退回任意其他密钥。
+	// 密钥集合中无匹配或存在多个匹配时返回 ErrSigningKeyNotFound；远程加载失败可返回底层错误。
 	Key(context.Context, string, string) (jose.JSONWebKey, error)
 }
 
@@ -71,6 +72,8 @@ func NewRemoteKeySet(rawURL string, client *http.Client, cacheTTL, maxStale time
 	return &RemoteKeySet{url: rawURL, client: client, cacheTTL: cacheTTL, maxStale: maxStale}, nil
 }
 
+// Key 串行执行缓存查找与刷新，缓存过期或未命中时重新加载 JWKS。
+// 刷新失败时仅允许回退到 maxStale 时间内的匹配旧公钥。
 func (r *RemoteKeySet) Key(ctx context.Context, kid, algorithm string) (jose.JSONWebKey, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

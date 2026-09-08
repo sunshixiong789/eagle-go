@@ -28,16 +28,24 @@ const OperationDictServiceUpdateDictData = "/eagle.dictionary.v1.DictService/Upd
 const OperationDictServiceUpdateDictType = "/eagle.dictionary.v1.DictService/UpdateDictType"
 
 type DictServiceHTTPServer interface {
+	// CreateDictData CreateDictData 在已有类型下创建字典项；同一类型内 value 唯一，重复时返回冲突错误。
 	CreateDictData(context.Context, *CreateDictDataRequest) (*CreateDictDataResponse, error)
+	// CreateDictType CreateDictType 创建字典类型；type 是唯一且创建后不可变的业务键，重复时返回冲突错误。
 	CreateDictType(context.Context, *CreateDictTypeRequest) (*CreateDictTypeResponse, error)
+	// DeleteDictData DeleteDictData 删除单个字典项；不存在时返回未找到错误。
 	DeleteDictData(context.Context, *DeleteDictDataRequest) (*DeleteDictDataResponse, error)
+	// DeleteDictType DeleteDictType 删除类型并级联删除其全部字典项；类型不存在时返回未找到错误。
 	DeleteDictType(context.Context, *DeleteDictTypeRequest) (*DeleteDictTypeResponse, error)
-	// GetDictDataByType 按类型取字典项，供前端渲染下拉框。任何登录用户都要用，
-	// 所以不挂权限码，只校验登录态；结果直接读取权威数据库。
+	// GetDictDataByType GetDictDataByType 按 sort、id 升序返回指定类型下已启用的字典项，供前端渲染下拉框。
+	// 类型不存在或无已启用项时返回空列表；筛选仅依据字典项状态，不检查类型的启用状态。
 	GetDictDataByType(context.Context, *GetDictDataByTypeRequest) (*GetDictDataByTypeResponse, error)
+	// ListDictData ListDictData 按类型、标签关键字和状态筛选，按 dict_type、sort、id 升序分页返回字典项及总数。
 	ListDictData(context.Context, *ListDictDataRequest) (*ListDictDataResponse, error)
+	// ListDictTypes ListDictTypes 按关键字和状态筛选，按 id 升序分页返回字典类型及过滤后的总数。
 	ListDictTypes(context.Context, *ListDictTypesRequest) (*ListDictTypesResponse, error)
+	// UpdateDictData UpdateDictData 全量更新字典项的可变字段，零值也会覆盖原值；所属类型保持不变。
 	UpdateDictData(context.Context, *UpdateDictDataRequest) (*UpdateDictDataResponse, error)
+	// UpdateDictType UpdateDictType 全量更新类型的名称、状态和备注，零值也会覆盖原值；type 保持不变。
 	UpdateDictType(context.Context, *UpdateDictTypeRequest) (*UpdateDictTypeResponse, error)
 }
 
@@ -241,16 +249,24 @@ func _DictService_GetDictDataByType0_HTTP_Handler(srv DictServiceHTTPServer) fun
 }
 
 type DictServiceHTTPClient interface {
+	// CreateDictData CreateDictData 在已有类型下创建字典项；同一类型内 value 唯一，重复时返回冲突错误。
 	CreateDictData(ctx context.Context, req *CreateDictDataRequest, opts ...http.CallOption) (rsp *CreateDictDataResponse, err error)
+	// CreateDictType CreateDictType 创建字典类型；type 是唯一且创建后不可变的业务键，重复时返回冲突错误。
 	CreateDictType(ctx context.Context, req *CreateDictTypeRequest, opts ...http.CallOption) (rsp *CreateDictTypeResponse, err error)
+	// DeleteDictData DeleteDictData 删除单个字典项；不存在时返回未找到错误。
 	DeleteDictData(ctx context.Context, req *DeleteDictDataRequest, opts ...http.CallOption) (rsp *DeleteDictDataResponse, err error)
+	// DeleteDictType DeleteDictType 删除类型并级联删除其全部字典项；类型不存在时返回未找到错误。
 	DeleteDictType(ctx context.Context, req *DeleteDictTypeRequest, opts ...http.CallOption) (rsp *DeleteDictTypeResponse, err error)
-	// GetDictDataByType 按类型取字典项，供前端渲染下拉框。任何登录用户都要用，
-	// 所以不挂权限码，只校验登录态；结果直接读取权威数据库。
+	// GetDictDataByType GetDictDataByType 按 sort、id 升序返回指定类型下已启用的字典项，供前端渲染下拉框。
+	// 类型不存在或无已启用项时返回空列表；筛选仅依据字典项状态，不检查类型的启用状态。
 	GetDictDataByType(ctx context.Context, req *GetDictDataByTypeRequest, opts ...http.CallOption) (rsp *GetDictDataByTypeResponse, err error)
+	// ListDictData ListDictData 按类型、标签关键字和状态筛选，按 dict_type、sort、id 升序分页返回字典项及总数。
 	ListDictData(ctx context.Context, req *ListDictDataRequest, opts ...http.CallOption) (rsp *ListDictDataResponse, err error)
+	// ListDictTypes ListDictTypes 按关键字和状态筛选，按 id 升序分页返回字典类型及过滤后的总数。
 	ListDictTypes(ctx context.Context, req *ListDictTypesRequest, opts ...http.CallOption) (rsp *ListDictTypesResponse, err error)
+	// UpdateDictData UpdateDictData 全量更新字典项的可变字段，零值也会覆盖原值；所属类型保持不变。
 	UpdateDictData(ctx context.Context, req *UpdateDictDataRequest, opts ...http.CallOption) (rsp *UpdateDictDataResponse, err error)
+	// UpdateDictType UpdateDictType 全量更新类型的名称、状态和备注，零值也会覆盖原值；type 保持不变。
 	UpdateDictType(ctx context.Context, req *UpdateDictTypeRequest, opts ...http.CallOption) (rsp *UpdateDictTypeResponse, err error)
 }
 
@@ -262,6 +278,7 @@ func NewDictServiceHTTPClient(client *http.Client) DictServiceHTTPClient {
 	return &DictServiceHTTPClientImpl{client}
 }
 
+// CreateDictData CreateDictData 在已有类型下创建字典项；同一类型内 value 唯一，重复时返回冲突错误。
 func (c *DictServiceHTTPClientImpl) CreateDictData(ctx context.Context, in *CreateDictDataRequest, opts ...http.CallOption) (*CreateDictDataResponse, error) {
 	var out CreateDictDataResponse
 	pattern := "/v1/system/dict/data"
@@ -279,6 +296,7 @@ func (c *DictServiceHTTPClientImpl) CreateDictData(ctx context.Context, in *Crea
 	return &out, nil
 }
 
+// CreateDictType CreateDictType 创建字典类型；type 是唯一且创建后不可变的业务键，重复时返回冲突错误。
 func (c *DictServiceHTTPClientImpl) CreateDictType(ctx context.Context, in *CreateDictTypeRequest, opts ...http.CallOption) (*CreateDictTypeResponse, error) {
 	var out CreateDictTypeResponse
 	pattern := "/v1/system/dict/types"
@@ -296,6 +314,7 @@ func (c *DictServiceHTTPClientImpl) CreateDictType(ctx context.Context, in *Crea
 	return &out, nil
 }
 
+// DeleteDictData DeleteDictData 删除单个字典项；不存在时返回未找到错误。
 func (c *DictServiceHTTPClientImpl) DeleteDictData(ctx context.Context, in *DeleteDictDataRequest, opts ...http.CallOption) (*DeleteDictDataResponse, error) {
 	var out DeleteDictDataResponse
 	pattern := "/v1/system/dict/data/{id}"
@@ -312,6 +331,7 @@ func (c *DictServiceHTTPClientImpl) DeleteDictData(ctx context.Context, in *Dele
 	return &out, nil
 }
 
+// DeleteDictType DeleteDictType 删除类型并级联删除其全部字典项；类型不存在时返回未找到错误。
 func (c *DictServiceHTTPClientImpl) DeleteDictType(ctx context.Context, in *DeleteDictTypeRequest, opts ...http.CallOption) (*DeleteDictTypeResponse, error) {
 	var out DeleteDictTypeResponse
 	pattern := "/v1/system/dict/types/{id}"
@@ -328,8 +348,8 @@ func (c *DictServiceHTTPClientImpl) DeleteDictType(ctx context.Context, in *Dele
 	return &out, nil
 }
 
-// GetDictDataByType 按类型取字典项，供前端渲染下拉框。任何登录用户都要用，
-// 所以不挂权限码，只校验登录态；结果直接读取权威数据库。
+// GetDictDataByType GetDictDataByType 按 sort、id 升序返回指定类型下已启用的字典项，供前端渲染下拉框。
+// 类型不存在或无已启用项时返回空列表；筛选仅依据字典项状态，不检查类型的启用状态。
 func (c *DictServiceHTTPClientImpl) GetDictDataByType(ctx context.Context, in *GetDictDataByTypeRequest, opts ...http.CallOption) (*GetDictDataByTypeResponse, error) {
 	var out GetDictDataByTypeResponse
 	pattern := "/v1/system/dict/data/type/{dict_type}"
@@ -346,6 +366,7 @@ func (c *DictServiceHTTPClientImpl) GetDictDataByType(ctx context.Context, in *G
 	return &out, nil
 }
 
+// ListDictData ListDictData 按类型、标签关键字和状态筛选，按 dict_type、sort、id 升序分页返回字典项及总数。
 func (c *DictServiceHTTPClientImpl) ListDictData(ctx context.Context, in *ListDictDataRequest, opts ...http.CallOption) (*ListDictDataResponse, error) {
 	var out ListDictDataResponse
 	pattern := "/v1/system/dict/data"
@@ -362,6 +383,7 @@ func (c *DictServiceHTTPClientImpl) ListDictData(ctx context.Context, in *ListDi
 	return &out, nil
 }
 
+// ListDictTypes ListDictTypes 按关键字和状态筛选，按 id 升序分页返回字典类型及过滤后的总数。
 func (c *DictServiceHTTPClientImpl) ListDictTypes(ctx context.Context, in *ListDictTypesRequest, opts ...http.CallOption) (*ListDictTypesResponse, error) {
 	var out ListDictTypesResponse
 	pattern := "/v1/system/dict/types"
@@ -378,6 +400,7 @@ func (c *DictServiceHTTPClientImpl) ListDictTypes(ctx context.Context, in *ListD
 	return &out, nil
 }
 
+// UpdateDictData UpdateDictData 全量更新字典项的可变字段，零值也会覆盖原值；所属类型保持不变。
 func (c *DictServiceHTTPClientImpl) UpdateDictData(ctx context.Context, in *UpdateDictDataRequest, opts ...http.CallOption) (*UpdateDictDataResponse, error) {
 	var out UpdateDictDataResponse
 	pattern := "/v1/system/dict/data/{id}"
@@ -395,6 +418,7 @@ func (c *DictServiceHTTPClientImpl) UpdateDictData(ctx context.Context, in *Upda
 	return &out, nil
 }
 
+// UpdateDictType UpdateDictType 全量更新类型的名称、状态和备注，零值也会覆盖原值；type 保持不变。
 func (c *DictServiceHTTPClientImpl) UpdateDictType(ctx context.Context, in *UpdateDictTypeRequest, opts ...http.CallOption) (*UpdateDictTypeResponse, error) {
 	var out UpdateDictTypeResponse
 	pattern := "/v1/system/dict/types/{id}"

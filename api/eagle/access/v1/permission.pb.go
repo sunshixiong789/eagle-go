@@ -26,19 +26,23 @@ const (
 )
 
 type Permission struct {
-	state    protoimpl.MessageState `protogen:"open.v1"`
-	Id       int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	ParentId int64                  `protobuf:"varint,2,opt,name=parent_id,json=parentId,proto3" json:"parent_id,omitempty"`
-	Name     string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	// 父节点 ID；0 表示顶级节点。
+	ParentId int64  `protobuf:"varint,2,opt,name=parent_id,json=parentId,proto3" json:"parent_id,omitempty"`
+	Name     string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
 	// 权限码，如 system:dict:add。目录/菜单可为空，按钮必填
 	Code string `protobuf:"bytes,4,opt,name=code,proto3" json:"code,omitempty"`
 	// 1=目录 2=菜单 3=按钮
-	Type      int32                  `protobuf:"varint,5,opt,name=type,proto3" json:"type,omitempty"`
-	Path      string                 `protobuf:"bytes,6,opt,name=path,proto3" json:"path,omitempty"`
-	Component string                 `protobuf:"bytes,7,opt,name=component,proto3" json:"component,omitempty"`
-	Icon      string                 `protobuf:"bytes,8,opt,name=icon,proto3" json:"icon,omitempty"`
-	Sort      int32                  `protobuf:"varint,9,opt,name=sort,proto3" json:"sort,omitempty"`
-	Visible   bool                   `protobuf:"varint,10,opt,name=visible,proto3" json:"visible,omitempty"`
+	Type      int32  `protobuf:"varint,5,opt,name=type,proto3" json:"type,omitempty"`
+	Path      string `protobuf:"bytes,6,opt,name=path,proto3" json:"path,omitempty"`
+	Component string `protobuf:"bytes,7,opt,name=component,proto3" json:"component,omitempty"`
+	Icon      string `protobuf:"bytes,8,opt,name=icon,proto3" json:"icon,omitempty"`
+	// 同一父节点下按值升序排列，相同值按 id 升序排列。
+	Sort int32 `protobuf:"varint,9,opt,name=sort,proto3" json:"sort,omitempty"`
+	// 供前端使用的显示标记；GetMyMenus 不按此字段过滤。
+	Visible bool `protobuf:"varint,10,opt,name=visible,proto3" json:"visible,omitempty"`
+	// 0=停用，1=启用。
 	Status    int32                  `protobuf:"varint,11,opt,name=status,proto3" json:"status,omitempty"`
 	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
@@ -177,17 +181,23 @@ func (x *Permission) GetRevision() int64 {
 }
 
 type CreatePermissionRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ParentId      int64                  `protobuf:"varint,1,opt,name=parent_id,json=parentId,proto3" json:"parent_id,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Code          string                 `protobuf:"bytes,3,opt,name=code,proto3" json:"code,omitempty"`
-	Type          int32                  `protobuf:"varint,4,opt,name=type,proto3" json:"type,omitempty"`
-	Path          string                 `protobuf:"bytes,5,opt,name=path,proto3" json:"path,omitempty"`
-	Component     string                 `protobuf:"bytes,6,opt,name=component,proto3" json:"component,omitempty"`
-	Icon          string                 `protobuf:"bytes,7,opt,name=icon,proto3" json:"icon,omitempty"`
-	Sort          int32                  `protobuf:"varint,8,opt,name=sort,proto3" json:"sort,omitempty"`
-	Visible       bool                   `protobuf:"varint,9,opt,name=visible,proto3" json:"visible,omitempty"`
-	Status        int32                  `protobuf:"varint,10,opt,name=status,proto3" json:"status,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 父节点 ID；0 表示顶级节点。
+	ParentId int64  `protobuf:"varint,1,opt,name=parent_id,json=parentId,proto3" json:"parent_id,omitempty"`
+	Name     string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// 引用已登记且启用的具体权限码；目录或菜单可为空，按钮必填，不允许通配。
+	Code string `protobuf:"bytes,3,opt,name=code,proto3" json:"code,omitempty"`
+	// 1=目录，2=菜单，3=按钮。
+	Type      int32  `protobuf:"varint,4,opt,name=type,proto3" json:"type,omitempty"`
+	Path      string `protobuf:"bytes,5,opt,name=path,proto3" json:"path,omitempty"`
+	Component string `protobuf:"bytes,6,opt,name=component,proto3" json:"component,omitempty"`
+	Icon      string `protobuf:"bytes,7,opt,name=icon,proto3" json:"icon,omitempty"`
+	// 同一父节点下按值升序排列，相同值按 id 升序排列。
+	Sort int32 `protobuf:"varint,8,opt,name=sort,proto3" json:"sort,omitempty"`
+	// 供前端使用的显示标记；GetMyMenus 不按此字段过滤，创建或更新时未传为 false。
+	Visible bool `protobuf:"varint,9,opt,name=visible,proto3" json:"visible,omitempty"`
+	// 0=停用，1=启用；创建或更新时未传按 0 处理。
+	Status        int32 `protobuf:"varint,10,opt,name=status,proto3" json:"status,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -425,9 +435,11 @@ func (x *GetPermissionResponse) GetPermission() *Permission {
 }
 
 type ListPermissionsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Status        *int32                 `protobuf:"varint,1,opt,name=status,proto3,oneof" json:"status,omitempty"`
-	Type          *int32                 `protobuf:"varint,2,opt,name=type,proto3,oneof" json:"type,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 0=停用，1=启用；未传时不筛选。
+	Status *int32 `protobuf:"varint,1,opt,name=status,proto3,oneof" json:"status,omitempty"`
+	// 1=目录，2=菜单，3=按钮。未传时不筛选。
+	Type          *int32 `protobuf:"varint,2,opt,name=type,proto3,oneof" json:"type,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -521,19 +533,26 @@ func (x *ListPermissionsResponse) GetPermissions() []*Permission {
 }
 
 type UpdatePermissionRequest struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	Id               int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	ParentId         int64                  `protobuf:"varint,2,opt,name=parent_id,json=parentId,proto3" json:"parent_id,omitempty"`
-	Name             string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	Code             string                 `protobuf:"bytes,4,opt,name=code,proto3" json:"code,omitempty"`
-	Type             int32                  `protobuf:"varint,5,opt,name=type,proto3" json:"type,omitempty"`
-	Path             string                 `protobuf:"bytes,6,opt,name=path,proto3" json:"path,omitempty"`
-	Component        string                 `protobuf:"bytes,7,opt,name=component,proto3" json:"component,omitempty"`
-	Icon             string                 `protobuf:"bytes,8,opt,name=icon,proto3" json:"icon,omitempty"`
-	Sort             int32                  `protobuf:"varint,9,opt,name=sort,proto3" json:"sort,omitempty"`
-	Visible          bool                   `protobuf:"varint,10,opt,name=visible,proto3" json:"visible,omitempty"`
-	Status           int32                  `protobuf:"varint,11,opt,name=status,proto3" json:"status,omitempty"`
-	ExpectedRevision *int64                 `protobuf:"varint,12,opt,name=expected_revision,json=expectedRevision,proto3,oneof" json:"expected_revision,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	// 父节点 ID；0 表示顶级节点。
+	ParentId int64  `protobuf:"varint,2,opt,name=parent_id,json=parentId,proto3" json:"parent_id,omitempty"`
+	Name     string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	// 引用已登记且启用的具体权限码；目录或菜单可为空，按钮必填，不允许通配。
+	Code string `protobuf:"bytes,4,opt,name=code,proto3" json:"code,omitempty"`
+	// 1=目录，2=菜单，3=按钮。
+	Type      int32  `protobuf:"varint,5,opt,name=type,proto3" json:"type,omitempty"`
+	Path      string `protobuf:"bytes,6,opt,name=path,proto3" json:"path,omitempty"`
+	Component string `protobuf:"bytes,7,opt,name=component,proto3" json:"component,omitempty"`
+	Icon      string `protobuf:"bytes,8,opt,name=icon,proto3" json:"icon,omitempty"`
+	// 同一父节点下按值升序排列，相同值按 id 升序排列。
+	Sort int32 `protobuf:"varint,9,opt,name=sort,proto3" json:"sort,omitempty"`
+	// 供前端使用的显示标记；GetMyMenus 不按此字段过滤，创建或更新时未传为 false。
+	Visible bool `protobuf:"varint,10,opt,name=visible,proto3" json:"visible,omitempty"`
+	// 0=停用，1=启用；创建或更新时未传按 0 处理。
+	Status int32 `protobuf:"varint,11,opt,name=status,proto3" json:"status,omitempty"`
+	// 预期的整棵权限树版本；未传时不检查，传入时不匹配则拒绝写入。
+	ExpectedRevision *int64 `protobuf:"varint,12,opt,name=expected_revision,json=expectedRevision,proto3,oneof" json:"expected_revision,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -697,9 +716,10 @@ func (x *UpdatePermissionResponse) GetPermission() *Permission {
 }
 
 type DeletePermissionRequest struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	Id               int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	ExpectedRevision *int64                 `protobuf:"varint,2,opt,name=expected_revision,json=expectedRevision,proto3,oneof" json:"expected_revision,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	// 预期的整棵权限树版本；未传时不检查，传入时不匹配则拒绝写入。
+	ExpectedRevision *int64 `protobuf:"varint,2,opt,name=expected_revision,json=expectedRevision,proto3,oneof" json:"expected_revision,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }

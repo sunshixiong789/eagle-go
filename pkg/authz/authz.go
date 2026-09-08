@@ -4,13 +4,13 @@
 // 从方法描述符读出并交给 Casbin 判定，业务 handler 里不出现任何鉴权代码。
 //
 // 职责边界：
-//   - IdP 负责「你是谁、你有哪些角色」，角色随 token 下发
+//   - Eagle 认证中心负责账号身份和角色，随 Eagle token 下发
 //   - Casbin 负责「这个角色能不能调这个接口」，策略存在本库
 //
 // 判定顺序：
-//  1. public 方法直接放行
+//  1. 未知方法或无效访问策略拒绝，public 方法直接放行
 //  2. 无主体 -> 401
-//  3. 未声明权限码 -> 已登录即可
+//  3. authenticated 方法 -> 已登录即可
 //  4. 交 Casbin 按角色判定
 package authz
 
@@ -38,6 +38,8 @@ type options struct {
 // Authorizer 是中间件依赖的策略判定端口，由组合根注入
 // 数据库支撑的 Casbin enforcer。
 type Authorizer interface {
+	// AllowContext 判断任一角色是否直接或通过继承获得指定权限，支持权限码的末段通配。
+	// 无角色或无授权返回 false、nil；判定失败返回错误，由中间件拒绝请求。
 	AllowContext(context.Context, []string, string) (bool, error)
 }
 
@@ -109,7 +111,7 @@ func (o *options) check(ctx context.Context, p *identity.Principal, perm string)
 		return errors.Forbidden(ReasonForbidden, "鉴权未正确装配：缺少判定器")
 	}
 
-	// 判定基于 IdP 下发的角色，不区分令牌来源。
+	// 判定基于已验证的 Eagle token 中的角色。
 	allowed, err := o.authorizer.AllowContext(ctx, p.Roles, perm)
 	if err != nil {
 		// 判定失败时拒绝。放行会让策略存储抖动直接变成越权。

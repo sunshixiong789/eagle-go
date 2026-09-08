@@ -65,6 +65,7 @@ type policyMutationMeta struct {
 	traceID      string
 }
 
+// ReplaceRolePermissions 持有策略状态锁，校验权限目录后在同一事务中替换授权、推进版本并记录审计。
 func (s *PolicyStore) ReplaceRolePermissions(
 	ctx context.Context,
 	role string,
@@ -127,6 +128,7 @@ func (s *PolicyStore) ReplaceRolePermissions(
 	return version, nil
 }
 
+// AddRoleInheritance 在策略状态锁内检查继承图并写入，防止并发添加形成环；已有关系不推进版本。
 func (s *PolicyStore) AddRoleInheritance(
 	ctx context.Context,
 	child, parent string,
@@ -186,6 +188,7 @@ func (s *PolicyStore) AddRoleInheritance(
 	return version, nil
 }
 
+// DeleteRoleInheritance 在策略状态锁内检查版本并删除关系，仅在实际删除时推进版本和记录审计。
 func (s *PolicyStore) DeleteRoleInheritance(
 	ctx context.Context,
 	child, parent string,
@@ -226,6 +229,8 @@ func (s *PolicyStore) DeleteRoleInheritance(
 	return version, nil
 }
 
+// stablePolicySnapshot 在读取前后核对版本，避免把不同提交的数据和版本作为同一快照返回。
+// 连续五次均发生并发变更时返回 ErrConcurrentModification。
 func stablePolicySnapshot[T any](
 	ctx context.Context,
 	store *PolicyStore,
@@ -283,6 +288,7 @@ func (s *PolicyStore) RulesSnapshot(ctx context.Context, ptype string) ([]authz.
 	})
 }
 
+// lockPolicyState 更新单例状态行以取得事务级排他锁，再检查可选的预期版本。
 func lockPolicyState(ctx context.Context, tx *ent.Tx, expected *int64) (*ent.PolicyState, error) {
 	state, err := tx.PolicyState.UpdateOneID(1).SetUpdatedAt(time.Now()).Save(ctx)
 	if err != nil {
@@ -294,6 +300,7 @@ func lockPolicyState(ctx context.Context, tx *ent.Tx, expected *int64) (*ent.Pol
 	return state, nil
 }
 
+// recordPolicyMutation 在调用方的写入事务内递增版本并保存变更审计，使两者与策略一起提交或回滚。
 func recordPolicyMutation(
 	ctx context.Context,
 	tx *ent.Tx,
@@ -353,7 +360,7 @@ func rollbackPolicyTxOnPanic(tx *ent.Tx) {
 	}
 }
 
-// 锁住读到的目录行直到绑定提交；迁移或 SQL 更新/删除这些行也会等待。
+// validateBindingCatalog 锁住读到的目录行直到绑定提交；迁移或 SQL 更新/删除这些行也会等待。
 // 目录由迁移维护，新增行不会使已通过的具体权限码校验失效。
 func validateBindingCatalog(ctx context.Context, tx *ent.Tx, role string, perms []string) error {
 	codes, err := domain.ParsePermissionCodes(perms)

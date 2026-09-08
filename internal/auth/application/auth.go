@@ -12,6 +12,7 @@ import (
 	"github.com/eagle-go/eagle/internal/auth/domain"
 )
 
+// Usecase 编排第三方身份验证、刷新凭证生成与会话操作。
 type Usecase struct {
 	providers  domain.ProviderVerifier
 	sessions   domain.SessionRepository
@@ -24,6 +25,8 @@ func NewUsecase(providers domain.ProviderVerifier, sessions domain.SessionReposi
 	return &Usecase{providers: providers, sessions: sessions, accessTTL: accessTTL, refreshTTL: refreshTTL, now: time.Now}
 }
 
+// Login 验证第三方身份并生成账号候选 ID、会话和刷新凭证，再由仓储原子完成账号映射与签发。
+// 第三方未提供显示名时使用客户端补充值；刷新凭证原文仅返回给调用方，仓储只接收哈希。
 func (uc *Usecase) Login(ctx context.Context, provider domain.Provider, idToken, nonce, displayName string) (*domain.Tokens, error) {
 	external, err := uc.providers.Verify(ctx, provider, idToken, nonce)
 	if err != nil {
@@ -52,6 +55,7 @@ func (uc *Usecase) Login(ctx context.Context, provider domain.Provider, idToken,
 	return &domain.Tokens{AccessToken: grant.AccessToken, RefreshToken: refresh, ExpiresIn: uc.accessTTL, Identity: grant.Identity}, nil
 }
 
+// Refresh 生成替换凭证，由仓储原子轮换并签发；仅在仓储成功后返回新凭证原文。
 func (uc *Usecase) Refresh(ctx context.Context, refreshToken string) (*domain.Tokens, error) {
 	refresh, newHash, err := newRefreshToken()
 	if err != nil {

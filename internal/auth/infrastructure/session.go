@@ -73,6 +73,7 @@ func (r *SessionRepository) Create(
 	return &domain.SessionGrant{Identity: principal, AccessToken: access}, nil
 }
 
+// upsertIdentity 通过第三方身份的唯一约束确定账号归属，并在同一事务内清理未使用的候选账号。
 func upsertIdentity(
 	ctx context.Context,
 	tx *ent.Tx,
@@ -112,8 +113,7 @@ func upsertIdentity(
 		return nil, fmt.Errorf("read user identity: %w", err)
 	}
 
-	// A concurrent or returning login resolves to the authoritative account.
-	// Delete the unused candidate in the same transaction so no orphan remains.
+	// 重复或并发登录可能命中已有账号，删除未使用的候选账号，避免留下孤立记录。
 	if row.AccountSubject != newAccountSubject {
 		if err := tx.UserAccount.DeleteOneID(newAccountSubject).Exec(ctx); err != nil {
 			return nil, fmt.Errorf("delete unused candidate account: %w", err)
@@ -132,6 +132,7 @@ func upsertIdentity(
 	return row, nil
 }
 
+// ensureAndLoadRoles 读取账号在指定 audience 下的角色；没有绑定时幂等补入默认 user 角色。
 func ensureAndLoadRoles(ctx context.Context, tx *ent.Tx, subject, audience string) ([]string, error) {
 	exists, err := tx.UserRoleBinding.Query().Where(
 		userrolebinding.AccountSubjectEQ(subject),
@@ -177,6 +178,7 @@ func (r *SessionRepository) Rotate(ctx context.Context, oldHash, newHash string,
 	}
 	defer func() { _ = tx.Rollback() }()
 	now := time.Now()
+	// 条件更新同时检查有效性并消费旧哈希，并发请求只有一次能命中；后续签发失败由事务回滚恢复。
 	affected, err := tx.AuthSession.Update().Where(
 		authsession.RefreshTokenHashEQ(oldHash),
 		authsession.AudienceEQ(r.audience),

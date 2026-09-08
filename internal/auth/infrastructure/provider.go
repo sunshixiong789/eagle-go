@@ -82,6 +82,7 @@ func (v *ProviderVerifier) Verify(ctx context.Context, provider domain.Provider,
 	}, nil
 }
 
+// validNonce 要求凭证与请求的 nonce 一致，并兼容 Apple 返回原始 nonce 的 SHA-256 十六进制值。
 func validNonce(provider domain.Provider, tokenNonce, rawNonce string) bool {
 	if tokenNonce == "" || rawNonce == "" {
 		return false

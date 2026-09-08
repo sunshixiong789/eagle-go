@@ -37,6 +37,7 @@ func NewEnforcer(adapter persist.Adapter) (*Enforcer, error) {
 
 	en := &Enforcer{e: e, adapter: adapter}
 	if versioned, ok := adapter.(interface {
+		// LoadedPolicyVersion 返回适配器最近成功加载的策略版本。
 		LoadedPolicyVersion() int64
 	}); ok {
 		en.loadedVersion.Store(versioned.LoadedPolicyVersion())
@@ -44,7 +45,9 @@ func NewEnforcer(adapter persist.Adapter) (*Enforcer, error) {
 	return en, nil
 }
 
+// contextPolicyLoader 为策略适配器补充可取消的加载能力。
 type contextPolicyLoader interface {
+	// LoadPolicyContext 将完整策略填入给定模型，并响应 context 的取消或超时。
 	LoadPolicyContext(context.Context, model.Model) error
 }
 
@@ -110,8 +113,7 @@ func (en *Enforcer) AllowContext(ctx context.Context, roles []string, perm strin
 	return false, nil
 }
 
-// ReloadPolicy 从存储重新加载全部策略。
-// 后台调整角色权限后调用，使变更立即生效而不必重启服务。
+// ReloadPolicy 从存储构建完整的新判定器后，持锁替换本实例的策略；构建失败保留原策略。
 func (en *Enforcer) ReloadPolicy(ctx context.Context) error {
 	replacement, err := buildCasbinEnforcer(ctx, en.adapter)
 	if err != nil {
@@ -124,6 +126,7 @@ func (en *Enforcer) ReloadPolicy(ctx context.Context) error {
 	en.e = replacement
 
 	if versioned, ok := en.adapter.(interface {
+		// LoadedPolicyVersion 返回适配器最近成功加载的策略版本。
 		LoadedPolicyVersion() int64
 	}); ok {
 		en.loadedVersion.Store(versioned.LoadedPolicyVersion())

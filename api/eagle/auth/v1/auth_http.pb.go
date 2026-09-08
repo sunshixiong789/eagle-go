@@ -25,11 +25,16 @@ const OperationAuthServiceSocialLogin = "/eagle.auth.v1.AuthService/SocialLogin"
 type AuthServiceHTTPServer interface {
 	// GetJSONWebKeySet GetJSONWebKeySet 公开 access token 验签公钥，供网关和资源服务缓存。
 	GetJSONWebKeySet(context.Context, *GetJSONWebKeySetRequest) (*GetJSONWebKeySetResponse, error)
+	// Logout Logout 使用当前刷新凭证撤销对应会话；无效或已撤销的凭证返回错误。
+	// 已签发的 access token 在自身有效期内仍可通过资源服务验签。
 	Logout(context.Context, *LogoutRequest) (*LogoutResponse, error)
-	// RefreshToken buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
+	// RefreshToken RefreshToken 轮换刷新凭证并签发新的 access token，成功后旧刷新凭证不可再次使用。
+	// 签发失败时回滚轮换；无效、过期或已撤销的刷新凭证不能刷新，停用账号不能刷新。
+	// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
 	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 预生产既有响应契约，保持客户端 wire/source 兼容。
 	RefreshToken(context.Context, *RefreshTokenRequest) (*TokenResponse, error)
-	// SocialLogin SocialLogin 接收客户端从 Google/Apple SDK 获得的 ID Token。
+	// SocialLogin SocialLogin 校验 Google/Apple ID Token 和 nonce，为对应 Eagle 账号创建会话并返回令牌。
+	// 同一第三方身份复用已有账号；每次成功登录创建独立会话，停用账号不能登录。
 	// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
 	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 预生产既有响应契约，保持客户端 wire/source 兼容。
 	SocialLogin(context.Context, *SocialLoginRequest) (*TokenResponse, error)
@@ -122,11 +127,16 @@ func _AuthService_Logout0_HTTP_Handler(srv AuthServiceHTTPServer) func(ctx http.
 type AuthServiceHTTPClient interface {
 	// GetJSONWebKeySet GetJSONWebKeySet 公开 access token 验签公钥，供网关和资源服务缓存。
 	GetJSONWebKeySet(ctx context.Context, req *GetJSONWebKeySetRequest, opts ...http.CallOption) (rsp *GetJSONWebKeySetResponse, err error)
+	// Logout Logout 使用当前刷新凭证撤销对应会话；无效或已撤销的凭证返回错误。
+	// 已签发的 access token 在自身有效期内仍可通过资源服务验签。
 	Logout(ctx context.Context, req *LogoutRequest, opts ...http.CallOption) (rsp *LogoutResponse, err error)
-	// RefreshToken buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
+	// RefreshToken RefreshToken 轮换刷新凭证并签发新的 access token，成功后旧刷新凭证不可再次使用。
+	// 签发失败时回滚轮换；无效、过期或已撤销的刷新凭证不能刷新，停用账号不能刷新。
+	// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
 	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 预生产既有响应契约，保持客户端 wire/source 兼容。
 	RefreshToken(ctx context.Context, req *RefreshTokenRequest, opts ...http.CallOption) (rsp *TokenResponse, err error)
-	// SocialLogin SocialLogin 接收客户端从 Google/Apple SDK 获得的 ID Token。
+	// SocialLogin SocialLogin 校验 Google/Apple ID Token 和 nonce，为对应 Eagle 账号创建会话并返回令牌。
+	// 同一第三方身份复用已有账号；每次成功登录创建独立会话，停用账号不能登录。
 	// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
 	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 预生产既有响应契约，保持客户端 wire/source 兼容。
 	SocialLogin(ctx context.Context, req *SocialLoginRequest, opts ...http.CallOption) (rsp *TokenResponse, err error)
@@ -157,6 +167,8 @@ func (c *AuthServiceHTTPClientImpl) GetJSONWebKeySet(ctx context.Context, in *Ge
 	return &out, nil
 }
 
+// Logout Logout 使用当前刷新凭证撤销对应会话；无效或已撤销的凭证返回错误。
+// 已签发的 access token 在自身有效期内仍可通过资源服务验签。
 func (c *AuthServiceHTTPClientImpl) Logout(ctx context.Context, in *LogoutRequest, opts ...http.CallOption) (*LogoutResponse, error) {
 	var out LogoutResponse
 	pattern := "/v1/auth/logout"
@@ -174,7 +186,9 @@ func (c *AuthServiceHTTPClientImpl) Logout(ctx context.Context, in *LogoutReques
 	return &out, nil
 }
 
-// RefreshToken buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
+// RefreshToken RefreshToken 轮换刷新凭证并签发新的 access token，成功后旧刷新凭证不可再次使用。
+// 签发失败时回滚轮换；无效、过期或已撤销的刷新凭证不能刷新，停用账号不能刷新。
+// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
 // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 预生产既有响应契约，保持客户端 wire/source 兼容。
 func (c *AuthServiceHTTPClientImpl) RefreshToken(ctx context.Context, in *RefreshTokenRequest, opts ...http.CallOption) (*TokenResponse, error) {
 	var out TokenResponse
@@ -193,7 +207,8 @@ func (c *AuthServiceHTTPClientImpl) RefreshToken(ctx context.Context, in *Refres
 	return &out, nil
 }
 
-// SocialLogin SocialLogin 接收客户端从 Google/Apple SDK 获得的 ID Token。
+// SocialLogin SocialLogin 校验 Google/Apple ID Token 和 nonce，为对应 Eagle 账号创建会话并返回令牌。
+// 同一第三方身份复用已有账号；每次成功登录创建独立会话，停用账号不能登录。
 // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
 // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 预生产既有响应契约，保持客户端 wire/source 兼容。
 func (c *AuthServiceHTTPClientImpl) SocialLogin(ctx context.Context, in *SocialLoginRequest, opts ...http.CallOption) (*TokenResponse, error) {

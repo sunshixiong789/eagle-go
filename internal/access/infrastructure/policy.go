@@ -108,6 +108,7 @@ func (r *policyRepo) DeleteInheritance(ctx context.Context, ri domain.RoleInheri
 	return r.commitPolicy(ctx, version, err)
 }
 
+// commitPolicy 在存储提交成功后重载本实例；重载失败仍返回已提交版本，后台对账负责后续重试。
 func (r *policyRepo) commitPolicy(ctx context.Context, version int64, err error) (int64, error) {
 	if err != nil {
 		return 0, err
@@ -132,7 +133,7 @@ func mutationMeta(ctx context.Context) policyMutationMeta {
 	return meta
 }
 
-// ListBindings 用一次数据库查询完成全部角色及其直接权限的分组。
+// ListBindings 从版本稳定的策略快照中按角色分组直接权限，避免逐角色查询。
 func (r *policyRepo) ListBindings(ctx context.Context) ([]*domain.RoleBinding, int64, error) {
 	rules, version, err := r.store.RulesSnapshot(ctx, "p")
 	if err != nil {
