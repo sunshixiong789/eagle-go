@@ -115,6 +115,10 @@ make generate
 `make init` 会编译并验证锁定版本的开发工具。`make generate` 依次生成 API、配置和 Ent 代码，再整理依赖。生成文件已经提交到仓库；无源文件变更时，执行后 `git status` 不应
 出现新的差异，CI 会检查这一点。
 
+Buf 只维护一份生成模板：`buf.yaml` 定义模块、依赖和检查规则，`buf.gen.yaml` 定义生成插件，
+`buf.lock` 自动锁定远程 Proto 依赖。`make api` 统一生成 API 与内部配置代码及 OpenAPI；
+`make config` 保留为同一命令的别名。
+
 ### 3. 启动完整本地环境
 
 ```bash

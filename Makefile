@@ -27,7 +27,7 @@ EAGLE_RUNTIME_IMAGE ?= gcr.io/distroless/static-debian12:nonroot
 
 # 工具从 tools module 编译成二进制后在仓库根目录执行。
 # 不用 `go -C tools tool xxx`：那会把工作目录切到 tools/，
-# buf.gen.yaml 里的 `directory: api`、goose 的 -dir 都会解析错。
+# Buf 配置中的相对路径、goose 的 -dir 都会解析错。
 BIN := $(CURDIR)/bin
 BUF := $(BIN)/buf
 ENT := $(BIN)/ent
@@ -68,14 +68,13 @@ init: $(BUF) $(GOOSE) $(GOLANGCI_LINT)
 	$(GOLANGCI_LINT) --version
 
 .PHONY: api
-# 生成对外契约代码（api/ 下的 proto）
+# 生成 API、内部配置的 Protobuf 代码与 OpenAPI
 api: $(BUF)
-	$(BUF) generate --template buf.gen.yaml
+	$(BUF) generate
 
 .PHONY: config
-# 生成进程配置代码（pkg/platform/config）
-config: $(BUF)
-	$(BUF) generate --template buf.gen.config.yaml
+# 兼容原配置生成命令，统一由 api 生成
+config: api
 
 .PHONY: lint-proto
 # proto 风格检查 + 兼容性检查（against master）
@@ -111,7 +110,7 @@ migrate-status: $(GOOSE)
 
 .PHONY: generate
 # 全量生成：对外契约 + 进程配置 + Ent
-generate: api config ent tidy
+generate: api ent tidy
 
 .PHONY: build
 # 编译服务与迁移工具到 bin/

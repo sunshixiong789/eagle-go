@@ -30,7 +30,7 @@ jobs:
 
       # 工具从 tools module 编译到 bin/ 后在仓库根目录执行。
       # 用 `go -C tools tool buf` 会把工作目录切到 tools/，
-      # buf.gen.yaml 里的 `directory: api` 会解析错。
+      # Buf 配置中的相对路径会解析错。
       - name: 编译 buf
         run: go -C tools build -o "$PWD/bin/buf" github.com/bufbuild/buf/cmd/buf
 
