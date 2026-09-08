@@ -12,6 +12,7 @@ option go_package = "github.com/eagle-go/eagle/api/eagle/dictionary/v1;dictionar
 // DictService 管理数据字典。字典类型（sys_common_status）下挂若干字典项，
 // 前端下拉框、状态标签统一从这里取，避免枚举值散落在各处代码里。
 service DictService {
+  // CreateDictType 创建字典类型；type 是唯一且创建后不可变的业务键，重复时返回冲突错误。
   rpc CreateDictType(CreateDictTypeRequest) returns (CreateDictTypeResponse) {
     option (google.api.http) = {
       post: "/v1/system/dict/types"
@@ -21,12 +22,14 @@ service DictService {
     option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
+  // ListDictTypes 按关键字和状态筛选，按 id 升序分页返回字典类型及过滤后的总数。
   rpc ListDictTypes(ListDictTypesRequest) returns (ListDictTypesResponse) {
     option (google.api.http) = {get: "/v1/system/dict/types"};
     option (eagle.annotations.v1.perm) = "system:dict:list";
     option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
+  // UpdateDictType 全量更新类型的名称、状态和备注，零值也会覆盖原值；type 保持不变。
   rpc UpdateDictType(UpdateDictTypeRequest) returns (UpdateDictTypeResponse) {
     option (google.api.http) = {
       put: "/v1/system/dict/types/{id}"
@@ -36,12 +39,14 @@ service DictService {
     option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
+  // DeleteDictType 删除类型并级联删除其全部字典项；类型不存在时返回未找到错误。
   rpc DeleteDictType(DeleteDictTypeRequest) returns (DeleteDictTypeResponse) {
     option (google.api.http) = {delete: "/v1/system/dict/types/{id}"};
     option (eagle.annotations.v1.perm) = "system:dict:remove";
     option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
+  // CreateDictData 在已有类型下创建字典项；同一类型内 value 唯一，重复时返回冲突错误。
   rpc CreateDictData(CreateDictDataRequest) returns (CreateDictDataResponse) {
     option (google.api.http) = {
       post: "/v1/system/dict/data"
@@ -51,12 +56,14 @@ service DictService {
     option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
+  // ListDictData 按类型、标签关键字和状态筛选，按 dict_type、sort、id 升序分页返回字典项及总数。
   rpc ListDictData(ListDictDataRequest) returns (ListDictDataResponse) {
     option (google.api.http) = {get: "/v1/system/dict/data"};
     option (eagle.annotations.v1.perm) = "system:dict:list";
     option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
+  // UpdateDictData 全量更新字典项的可变字段，零值也会覆盖原值；所属类型保持不变。
   rpc UpdateDictData(UpdateDictDataRequest) returns (UpdateDictDataResponse) {
     option (google.api.http) = {
       put: "/v1/system/dict/data/{id}"
@@ -66,14 +73,15 @@ service DictService {
     option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
+  // DeleteDictData 删除单个字典项；不存在时返回未找到错误。
   rpc DeleteDictData(DeleteDictDataRequest) returns (DeleteDictDataResponse) {
     option (google.api.http) = {delete: "/v1/system/dict/data/{id}"};
     option (eagle.annotations.v1.perm) = "system:dict:remove";
     option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
-  // 按类型取字典项，供前端渲染下拉框。任何登录用户都要用，
-  // 所以不挂权限码，只校验登录态；结果直接读取权威数据库。
+  // GetDictDataByType 按 sort、id 升序返回指定类型下已启用的字典项，供前端渲染下拉框。
+  // 类型不存在或无已启用项时返回空列表；筛选仅依据字典项状态，不检查类型的启用状态。
   rpc GetDictDataByType(GetDictDataByTypeRequest) returns (GetDictDataByTypeResponse) {
     option (google.api.http) = {get: "/v1/system/dict/data/type/{dict_type}"};
     option (eagle.annotations.v1.access) = ACCESS_LEVEL_AUTHENTICATED;
@@ -83,7 +91,9 @@ service DictService {
 message DictType {
   int64 id = 1;
   string name = 2;
+  // 创建后不可变的类型业务键，字典项通过 dict_type 引用。
   string type = 3;
+  // 0=停用，1=启用；创建或更新时未传按 0 处理。
   int32 status = 4;
   string remark = 5;
   google.protobuf.Timestamp created_at = 6;
@@ -92,12 +102,17 @@ message DictType {
 
 message DictData {
   int64 id = 1;
+  // 所属类型的业务键，创建后不可修改。
   string dict_type = 2;
   string label = 3;
+  // 字典项业务值，同一类型内唯一。
   string value = 4;
+  // 同一类型内按值升序排列，相同值按 id 升序排列。
   int32 sort = 5;
   string css_class = 6;
+  // 供前端选择默认项的标记，未传为 false；服务端不保证同一类型只有一个默认项。
   bool is_default = 7;
+  // 0=停用，1=启用；创建或更新时未传按 0 处理。
   int32 status = 8;
   string remark = 9;
   google.protobuf.Timestamp created_at = 10;
@@ -109,11 +124,13 @@ message CreateDictTypeRequest {
     min_len: 1
     max_len: 64
   }];
+  // 唯一的类型业务键，创建后不可修改。
   string type = 2 [(buf.validate.field).string = {
     min_len: 2
     max_len: 64
     pattern: "^[a-z][a-z0-9_]*$"
   }];
+  // 0=停用，1=启用；创建或更新时未传按 0 处理。
   int32 status = 3 [(buf.validate.field).int32 = {
     in: [
       0,
@@ -128,12 +145,16 @@ message CreateDictTypeResponse {
 }
 
 message ListDictTypesRequest {
+  // 从 0 开始的页码，未传或传 0 均表示第一页。
   int32 page = 1 [(buf.validate.field).int32.gte = 0];
+  // 每页条数；未传或传 0 使用 20，最多 200。
   int32 page_size = 2 [(buf.validate.field).int32 = {
     gte: 0
     lte: 200
   }];
+  // 按类型名称或业务键做不区分大小写的包含匹配；空值不筛选。
   string keyword = 3 [(buf.validate.field).string.max_len = 64];
+  // 0=停用，1=启用；未传时不筛选。
   optional int32 status = 4 [(buf.validate.field).int32 = {
     in: [
       0,
@@ -144,6 +165,7 @@ message ListDictTypesRequest {
 
 message ListDictTypesResponse {
   repeated DictType dict_types = 1;
+  // 满足筛选条件的总条数；与当页数据分别查询，并发写入时可能变化。
   int64 total = 2;
 }
 
@@ -153,6 +175,7 @@ message UpdateDictTypeRequest {
     min_len: 1
     max_len: 64
   }];
+  // 0=停用，1=启用；创建或更新时未传按 0 处理。
   int32 status = 3 [(buf.validate.field).int32 = {
     in: [
       0,
@@ -173,6 +196,7 @@ message DeleteDictTypeRequest {
 message DeleteDictTypeResponse {}
 
 message CreateDictDataRequest {
+  // 所属类型的业务键，必须已存在，创建后不可修改。
   string dict_type = 1 [(buf.validate.field).string = {
     min_len: 2
     max_len: 64
@@ -181,13 +205,17 @@ message CreateDictDataRequest {
     min_len: 1
     max_len: 128
   }];
+  // 字典项业务值，同一类型内唯一。
   string value = 3 [(buf.validate.field).string = {
     min_len: 1
     max_len: 128
   }];
+  // 同一类型内按值升序排列，相同值按 id 升序排列。
   int32 sort = 4;
   string css_class = 5 [(buf.validate.field).string.max_len = 64];
+  // 供前端选择默认项的标记，未传为 false；服务端不保证同一类型只有一个默认项。
   bool is_default = 6;
+  // 0=停用，1=启用；创建或更新时未传按 0 处理。
   int32 status = 7 [(buf.validate.field).int32 = {
     in: [
       0,
@@ -202,13 +230,18 @@ message CreateDictDataResponse {
 }
 
 message ListDictDataRequest {
+  // 从 0 开始的页码，未传或传 0 均表示第一页。
   int32 page = 1 [(buf.validate.field).int32.gte = 0];
+  // 每页条数；未传或传 0 使用 20，最多 200。
   int32 page_size = 2 [(buf.validate.field).int32 = {
     gte: 0
     lte: 200
   }];
+  // 未传时不筛选类型；显式传空字符串时按空类型键筛选。
   optional string dict_type = 3 [(buf.validate.field).string.max_len = 64];
+  // 按字典项标签做不区分大小写的包含匹配；空值不筛选。
   string keyword = 4 [(buf.validate.field).string.max_len = 64];
+  // 0=停用，1=启用；未传时不筛选。
   optional int32 status = 5 [(buf.validate.field).int32 = {
     in: [
       0,
@@ -219,6 +252,7 @@ message ListDictDataRequest {
 
 message ListDictDataResponse {
   repeated DictData dict_data = 1;
+  // 满足筛选条件的总条数；与当页数据分别查询，并发写入时可能变化。
   int64 total = 2;
 }
 
@@ -228,13 +262,17 @@ message UpdateDictDataRequest {
     min_len: 1
     max_len: 128
   }];
+  // 字典项业务值，同一类型内唯一。
   string value = 3 [(buf.validate.field).string = {
     min_len: 1
     max_len: 128
   }];
+  // 同一类型内按值升序排列，相同值按 id 升序排列。
   int32 sort = 4;
   string css_class = 5 [(buf.validate.field).string.max_len = 64];
+  // 供前端选择默认项的标记，未传为 false；服务端不保证同一类型只有一个默认项。
   bool is_default = 6;
+  // 0=停用，1=启用；创建或更新时未传按 0 处理。
   int32 status = 7 [(buf.validate.field).int32 = {
     in: [
       0,

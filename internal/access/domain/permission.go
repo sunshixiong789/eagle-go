@@ -208,11 +208,19 @@ type ListPermissionsQuery struct {
 	Type   *PermissionType
 }
 
-// PermissionRepo 是权限聚合的仓储接口，由基础设施层实现。
+// PermissionRepo 持久化权限节点，在同一事务内完成树约束检查、写入和整树版本递增。
 type PermissionRepo interface {
+	// Create 创建节点并返回持久化结果；父节点不存在返回 ErrPermissionNotFound，
+	// 权限码未登记或未启用返回 ErrUnknownPermissionCode，重复引用返回 ErrPermissionCodeDuplicated。
 	Create(ctx context.Context, p *Permission) (*Permission, error)
+	// GetByID 查询节点并附带读取到的整树版本；节点不存在时返回 ErrPermissionNotFound。
 	GetByID(ctx context.Context, id int64) (*Permission, error)
+	// List 按父节点、Sort、ID 升序平铺返回节点；可选条件为 nil 时不筛选。
 	List(ctx context.Context, q ListPermissionsQuery) ([]*Permission, error)
+	// Update 全量保存可变字段，检查父节点、环和权限码引用约束。
+	// expectedRevision 为 nil 时不检查版本，否则整树版本不匹配返回 ErrConcurrentModification。
 	Update(ctx context.Context, p *Permission, expectedRevision *int64) (*Permission, error)
+	// Delete 删除叶子节点；不存在返回 ErrPermissionNotFound，有子节点返回 ErrPermissionHasChildren。
+	// expectedRevision 为 nil 时不检查版本，否则整树版本不匹配返回 ErrConcurrentModification。
 	Delete(ctx context.Context, id int64, expectedRevision *int64) error
 }

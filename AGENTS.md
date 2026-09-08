@@ -67,6 +67,7 @@ DDD 用来保护边界和不变量，不用来增加代码量：
 ## 质量底线
 
 - Go 标准库优先，新增生产依赖前先确认现有依赖或 `pkg/` 不能解决；不要引入通用复制、转换、集合辅助库替代几行明确代码。
+- Go 接口及其方法、REST API 必须有注释；其他函数和方法按复杂度补充，具体遵循 `.agents/rules/comments.md`。
 - 测试跟随风险：domain 测不变量，application 测用例编排，infrastructure 测真实适配和事务，interfaces/e2e 测协议、身份与授权边界。
 - 完成后至少对修改过的 Go 文件执行格式化并运行相关包测试。涉及跨层依赖、生成代码、迁移或组合根装配时，再运行对应生成命令、架构测试或 `make lint && make test`。
 - 未实际运行的命令不要声称通过；如果受环境限制无法验证，明确说明未验证项。
@@ -77,9 +78,9 @@ DDD 用来保护边界和不变量，不用来增加代码量：
 
 | 任务 | 先读 |
 |---|---|
-| 新增或修改 API | `README.md` 的“新增或修改 API” + `.agents/rules/api-authz.md` |
+| 新增或修改 API | `README.md` 的“新增或修改 API” + `.agents/rules/api-authz.md` + `.agents/rules/comments.md` |
 | 新增模块或 CRUD | `README.md` 的“新增业务模块或 CRUD” |
 | 判断模块边界或模块间协作 | `docs/architecture.md` |
 | 修改 schema、迁移或 Ent | `.agents/rules/data.md` |
-| 新写 Go 或引入依赖 | `.agents/rules/style.md` |
+| 新增或修改 Go、引入依赖 | `.agents/rules/style.md` + `.agents/rules/comments.md` |
 | 设计或补充测试 | `.agents/rules/testing.md` |

@@ -1,7 +1,7 @@
 # 云效 Flow CI/CD 与部署
 
 发布链路为：**云效质量检查 → Buildx 构建并推送 ACR → 上传发布包 → ECS 迁移 → 应用健康检查**。
-开发、测试环境复用同一个镜像 digest 和发布包，不在 ECS 编译代码。数据库由环境独立管理，
+开发、测试、生产环境复用同一个 Docker 镜像 digest 和发布包，不在 ECS 编译代码。数据库由环境独立管理，
 远端只运行 `eagle` 和发布时的一次性迁移容器。
 
 当前脚本面向 **每个环境一台 Linux ECS + Docker Compose**，原地替换容器会有短暂中断。
@@ -19,6 +19,36 @@
 | `deploy/scripts/deploy.sh` | ECS | 实现环境锁、快照、迁移和失败回滚 |
 
 仓库的 GitHub Actions 只保留 `workflow_dispatch` 手动检查，不再自动触发。
+
+## 环境配置文件
+
+应用交付物是 ACR 中的 Docker 镜像；所有环境复用镜像内的 **`configs/config.yaml` 共用模板**。
+发布包只传递 Compose、脚本和镜像地址，模板随镜像版本固定，不需要按环境复制或挂载 YAML。
+各环境的差异在云效变量组中维护：
+
+| 用途 | 配置来源 | 日志 / trace 采样率建议值 |
+|---|---|---|
+| 本地开发 | 模板开发默认值 | info / 1.0 |
+| 开发 ECS | `eagle-development` 变量组 | debug / 1.0 |
+| 测试 ECS | `eagle-testing` 变量组 | info / 0.1 |
+| 生产 ECS | `eagle-production` 变量组 | info / 0.05 |
+
+每条 CD 流水线只关联自己的变量组，设置 `DEPLOY_ENV`。CD 将该环境的运行变量保存到 `runtime.env`
+并通过 Compose `env_file` 注入容器；应用继续以 `-conf /app/configs` 读取共用模板。
+`DEPLOY_ENV` 只选择部署目录、Compose project 与锁，不负责在云效自动切换变量组。
+未知环境或缺少 DSN、issuer、audience、签名 key ID 时部署失败，禁止远端使用本地身份和数据库默认值。
+
+环境差异通过 `EAGLE_*` 变量注入，优先级为 **显式环境变量 > 共用模板默认值**。
+可选变量未设置时使用模板默认值。`deploy/environments/*.env.example` 是云效变量组的填写示例，
+不作为应用配置加载，也不会进入发布包。调整模板结构或全环境默认值时才修改 `configs/config.yaml`。
+数据库 driver 统一通过 `EAGLE_DATABASE_DRIVER`（默认 postgres）控制，应用和迁移读取同一值。
+JWT audience 必填，建议分别设置为 `eagle-api-development`、`eagle-api-testing`、`eagle-api-production`。
+连接池可设置 `EAGLE_DATABASE_MAX_CONNS`、`EAGLE_DATABASE_MAX_IDLE_CONNS`、
+`EAGLE_DATABASE_MAX_CONN_LIFETIME`、`EAGLE_DATABASE_MAX_CONN_IDLE_TIME`；HTTP 超时使用
+`EAGLE_SERVER_HTTP_TIMEOUT`，时长均用秒格式，例如 `8s`、`3600s`。
+
+回滚会恢复旧镜像（包含旧模板）、运行变量和 Compose，不受当前云效变量组新值影响。
+同机运行多个环境时还要设置不同的宿主机端口、数据库与密钥目录；生产建议独立 ECS。
 
 ## 1. 准备构建环境
 
@@ -129,15 +159,15 @@ release/commit.txt                # 完整 Git SHA
 
 ## 4. 环境与 ECS
 
-| 资源 | development | testing |
-|---|---|---|
-| 计算 | 开发 ECS 主机组，单台主机 | 测试 ECS 主机组，单台主机 |
-| 数据库 | 独立数据库与账号 | 独立数据库与账号 |
-| JWT | 独立密钥、issuer / audience | 独立密钥、issuer / audience |
-| Flow 变量组 | `eagle-development` | `eagle-testing` |
-| 发布入口 | CI 成功后自动 | 开发验证通过后人工触发，选择同一制品版本 |
+| 资源 | development | testing | production |
+|---|---|---|---|
+| 计算 | 开发 ECS，单台 | 测试 ECS，单台 | 生产 ECS，单台 |
+| 数据库 | 开发数据库与账号 | 测试数据库与账号 | 生产数据库与账号 |
+| JWT | 开发密钥、issuer / audience | 测试密钥、issuer / audience | 生产密钥、issuer / audience |
+| Flow 变量组 | `eagle-development` | `eagle-testing` | `eagle-production` |
+| 发布入口 | CI 成功后自动 | 开发验证后人工提升 | 测试验证后人工提升 |
 
-建议分别创建开发、测试 CD 流水线，每条只关联自己的变量组。不要在同一流水线关联两组同名
+建议分别创建开发、测试、生产 CD 流水线，每条只关联自己的变量组。不要在同一流水线关联多组同名
 环境变量并假定它们自动按阶段隔离；Flow 同名变量存在覆盖优先级。
 
 ECS 预装 Docker Engine、Docker Compose v2（支持 `up --wait`）、`flock`（util-linux）、
@@ -162,10 +192,11 @@ chmod 0640 /opt/eagle/secrets/testing-jwt/test-key.pem
 
 | 变量 | 类型 / 说明 |
 |---|---|
-| `DEPLOY_ENV` | `development` 或 `testing` |
+| `DEPLOY_ENV` | `development`、`testing` 或 `production` |
 | `EAGLE_DATABASE_DRIVER` | `postgres`（默认）或 `mysql` |
 | `EAGLE_DATABASE_DSN` | 私密，当前环境 RDS DSN |
-| `EAGLE_AUTH_ISSUER` / `EAGLE_AUTH_AUDIENCE` | 当前环境 JWT issuer / audience |
+| `EAGLE_AUTH_ISSUER` | 当前环境 JWT issuer，必填 |
+| `EAGLE_AUTH_AUDIENCE` | 必填，当前环境独立的 JWT audience |
 | `EAGLE_AUTH_SIGNING_KEY_HOST_DIRECTORY` | ECS 密钥目录的绝对路径 |
 | `EAGLE_AUTH_ACTIVE_SIGNING_KEY_ID` | `<kid>.pem` 的 kid，不含扩展名 |
 | `EAGLE_BIND_ADDRESS` | 默认 `127.0.0.1`，由同机网关反代 |
@@ -173,7 +204,7 @@ chmod 0640 /opt/eagle/secrets/testing-jwt/test-key.pem
 | `EAGLE_DEPLOY_TIMEOUT` | 应用健康检查等待秒数，默认 90 |
 | `EAGLE_DEPLOY_ROOT` | 默认 `/opt/eagle` |
 
-Google/Apple 登录、token TTL、日志与追踪等可选变量见 `deploy/environments/*.env.example`
+Google/Apple 登录、token TTL、日志与追踪等默认值见 `configs/config.yaml`，部署变量示例见 `deploy/environments/*.env.example`
 及 `deploy/scripts/deploy.sh`。变量值不接受原始单引号、CR 或换行；PostgreSQL URL 中的
 用户名/密码按 URL 规则编码，MySQL 使用其驱动 DSN 语法。不要对整条 DSN 进行 URL 编码。
 ACR 登录可使用主机凭据助手，或注入上一节的三个登录变量。
@@ -184,7 +215,7 @@ RDS 仅允许对应 ECS 的私网访问；PostgreSQL 使用 `sslmode=require` �
 ## 5. CD 主机部署任务
 
 开发 CD 选择 CI 的 Flow 流水线制品源，成功后触发；测试 CD 人工选择**开发环境已验证的同一制品版本**，
-不要重新构建或盲选另一次 `lastSuccessfulBuild`。配置方法见
+生产 CD 同样人工提升测试环境已验证的制品版本，不要重新构建或盲选另一次 `lastSuccessfulBuild`。配置方法见
 [流水线源](https://help.aliyun.com/zh/yunxiao/user-guide/pipeline-sources)。
 
 使用 Flow **主机部署**任务，勾选下载制品，指定 `eagle-release` 制品和当前环境主机组。
@@ -207,7 +238,7 @@ sh "$release_dir/deploy/scripts/cd.sh"
 部署顺序：
 
 1. 校验环境、镜像 digest、密钥文件，取得环境文件锁。
-2. 创建新快照，分别保存 Compose 插值变量和 `0600` 的私密运行配置。
+2. 创建新快照，保存固定镜像地址、Compose 插值变量和 `0600` 的私密运行变量。
 3. 校验 Compose，拉取固定 digest，以同一镜像执行迁移。
 4. 替换应用，通过容器 `/app/healthcheck` 检查 metrics 端口的 `/readyz`。
 5. 健康后原子更新 `current` 指针，保留 `previous`；任一步失败让流水线失败。

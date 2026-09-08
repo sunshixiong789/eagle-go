@@ -12,7 +12,7 @@ import (
 	appconfig "github.com/eagle-go/eagle/pkg/platform/config"
 )
 
-// configDir 是仓库根下唯一的配置目录。
+// configDir 返回包含所有环境共用模板的配置目录。
 func configDir(t *testing.T) string {
 	t.Helper()
 

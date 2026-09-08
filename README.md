@@ -433,6 +433,10 @@ sh deploy/scripts/cd.sh rollback    # 恢复上一成功版本，不回退数据
 镜像通过 digest 固定，环境提升复用同一发布包。所需变量、构建环境、云效任务配置与回滚步骤见
 [云效 Flow CI/CD 与部署](docs/aliyun-flow-deployment.md)。GitHub Actions 仅保留手动检查入口。
 
+Docker 部署支持 `DEPLOY_ENV=development|testing|production`，全部使用镜像内同一份
+`configs/config.yaml` 模板，由各云效变量组注入数据库、JWT、日志和采样率等差异。
+CD 保存运行变量快照，回滚时一并恢复旧镜像和旧变量；私钥通过只读 Secret 目录挂载。
+
 多副本部署时有两点要知道：权限策略每 5 秒按版本号对账，正常情况下改完角色绑定约一个周期后在
 所有副本生效；进程启动时校验 proto 声明的权限码与数据库 catalog 一致，不一致直接 fail
 closed，所以**必须先跑迁移再发服务**。

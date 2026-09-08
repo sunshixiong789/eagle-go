@@ -1,7 +1,8 @@
-# eagle 后端服务本地开发配置。
+# eagle 后端服务共用配置模板，随 Docker 镜像发布。
+# 本地使用开发默认值；远端由各云效环境变量组注入 EAGLE_* 覆盖。
 #
-# 生产环境不要直接改这个文件：敏感项（如 DSN 口令）应经由
-# 环境变量或 Secret 注入，本文件只保留结构和安全的默认值。
+# 环境差异和敏感项（如 DSN 口令）经由变量组或 Secret 注入；
+# 修改全环境默认值或配置结构时才调整此模板。以下身份和数据库默认值仅供本地开发。
 #
 # 【时长字段的写法】
 # 所有 duration 都由 google.protobuf.Duration 承载，它只接受
@@ -12,16 +13,16 @@
 server:
   http:
     addr: "${SERVER_HTTP_ADDR:0.0.0.0:8000}"
-    timeout: 5s
+    timeout: "${SERVER_HTTP_TIMEOUT:5s}"
 
 data:
   database:
     driver: "${DATABASE_DRIVER:postgres}"
     dsn: "${DATABASE_DSN:postgres://eagle:eagle@127.0.0.1:5432/eagle?sslmode=disable}"
-    max_conns: 20
-    max_idle_conns: 2
-    max_conn_lifetime: 3600s
-    max_conn_idle_time: 1800s
+    max_conns: "${DATABASE_MAX_CONNS:20}"
+    max_idle_conns: "${DATABASE_MAX_IDLE_CONNS:2}"
+    max_conn_lifetime: "${DATABASE_MAX_CONN_LIFETIME:3600s}"
+    max_conn_idle_time: "${DATABASE_MAX_CONN_IDLE_TIME:1800s}"
 
 auth:
   # Eagle token 的 issuer，必须与 token 里的 iss 完全一致

@@ -221,6 +221,31 @@ class DeploymentTests(unittest.TestCase):
         self.assertIn("base equals HEAD", result.stderr)
         self.assertEqual(self.events(), [])
 
+    def test_each_environment_uses_the_same_image_with_isolated_variables_and_state(self):
+        for environment in ("development", "testing", "production"):
+            self.run_script(DEPLOY_ENV=environment, EAGLE_AUTH_AUDIENCE="eagle-api-" + environment)
+            host = self.root / "host" / environment
+            snapshot = host / "releases" / (host / "current").read_text().strip()
+            self.assertEqual(self.events()[-1]["image"], IMAGE_A)
+            self.assertEqual(self.events()[-1]["runtime"]["EAGLE_AUTH_AUDIENCE"], "eagle-api-" + environment)
+            self.assertIn("eagle-" + environment, self.events()[-1]["args"])
+            self.assertNotIn("EAGLE_OBSERVABILITY_LOG_LEVEL", (snapshot / "runtime.env").read_text())
+
+    def test_missing_required_variables_and_unknown_environment_fail_before_pull(self):
+        self.run_script(success=False, DEPLOY_ENV="../testing")
+        for name in ("EAGLE_DATABASE_DSN", "EAGLE_AUTH_ISSUER", "EAGLE_AUTH_AUDIENCE", "EAGLE_AUTH_ACTIVE_SIGNING_KEY_ID"):
+            self.run_script(success=False, **{name: ""})
+        self.assertEqual(self.events(), [])
+
+    def test_explicit_overrides_are_preserved_in_runtime_snapshot(self):
+        self.run_script(EAGLE_OBSERVABILITY_LOG_LEVEL="warn", EAGLE_OBSERVABILITY_OTLP_ENDPOINT="",
+                        EAGLE_DATABASE_MAX_CONNS="40", EAGLE_SERVER_HTTP_TIMEOUT="8s")
+        runtime = self.events()[-1]["runtime"]
+        self.assertEqual(runtime["EAGLE_OBSERVABILITY_LOG_LEVEL"], "warn")
+        self.assertEqual(runtime["EAGLE_OBSERVABILITY_OTLP_ENDPOINT"], "")
+        self.assertEqual(runtime["EAGLE_DATABASE_MAX_CONNS"], "40")
+        self.assertEqual(runtime["EAGLE_SERVER_HTTP_TIMEOUT"], "8s")
+
 
 if __name__ == "__main__":
     unittest.main()

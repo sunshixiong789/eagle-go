@@ -10,7 +10,8 @@
 - `scripts/deploy.sh`：环境锁、迁移、健康检查和应用快照回滚；
 - `scripts/registry-login.sh`：共享 ACR 登录步骤，支持主机已有凭据；
 - `tests/test_deploy.py`：无 Docker 的发布故障回归，运行 `make test-deploy`；
-- `environments/*.env.example`：开发、测试环境的非敏感变量示例；
+- `environments/*.env.example`：开发、测试、生产环境的部署变量示例；
+- `../configs/config.yaml`：随 Docker 镜像发布的共用配置模板，各环境通过云效变量组注入差异；
 - Google/Apple 登录通过 `EAGLE_AUTH_*` 配置启用；JWT 私钥以只读 Secret 目录挂载，公钥由 JWKS 端点发布。
 
 本地使用见[开发环境部署](../docs/development-deployment.md)，云效配置见

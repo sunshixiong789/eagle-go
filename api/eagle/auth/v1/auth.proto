@@ -8,6 +8,7 @@ import "google/api/annotations.proto";
 
 option go_package = "github.com/eagle-go/eagle/api/eagle/auth/v1;authv1";
 
+// AuthService 将第三方身份映射到 Eagle 账号，签发、刷新令牌并提供验签公钥。
 service AuthService {
   // GetJSONWebKeySet 公开 access token 验签公钥，供网关和资源服务缓存。
   rpc GetJSONWebKeySet(GetJSONWebKeySetRequest) returns (GetJSONWebKeySetResponse) {
@@ -15,7 +16,8 @@ service AuthService {
     option (eagle.annotations.v1.access) = ACCESS_LEVEL_PUBLIC;
   }
 
-  // SocialLogin 接收客户端从 Google/Apple SDK 获得的 ID Token。
+  // SocialLogin 校验 Google/Apple ID Token 和 nonce，为对应 Eagle 账号创建会话并返回令牌。
+  // 同一第三方身份复用已有账号；每次成功登录创建独立会话，停用账号不能登录。
   // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
   // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 预生产既有响应契约，保持客户端 wire/source 兼容。
   rpc SocialLogin(SocialLoginRequest) returns (TokenResponse) {
@@ -26,6 +28,8 @@ service AuthService {
     option (eagle.annotations.v1.access) = ACCESS_LEVEL_PUBLIC;
   }
 
+  // RefreshToken 轮换刷新凭证并签发新的 access token，成功后旧刷新凭证不可再次使用。
+  // 签发失败时回滚轮换；无效、过期或已撤销的刷新凭证不能刷新，停用账号不能刷新。
   // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
   // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 预生产既有响应契约，保持客户端 wire/source 兼容。
   rpc RefreshToken(RefreshTokenRequest) returns (TokenResponse) {
@@ -36,6 +40,8 @@ service AuthService {
     option (eagle.annotations.v1.access) = ACCESS_LEVEL_PUBLIC;
   }
 
+  // Logout 使用当前刷新凭证撤销对应会话；无效或已撤销的凭证返回错误。
+  // 已签发的 access token 在自身有效期内仍可通过资源服务验签。
   rpc Logout(LogoutRequest) returns (LogoutResponse) {
     option (google.api.http) = {
       post: "/v1/auth/logout"
@@ -56,6 +62,7 @@ message SocialLoginRequest {
     defined_only: true
     not_in: [0]
   }];
+  // 第三方 SDK 返回的 ID Token；服务端验证后签发 Eagle 令牌。
   string id_token = 2 [(buf.validate.field).string = {
     min_len: 16
     max_len: 8192
@@ -70,6 +77,7 @@ message SocialLoginRequest {
 }
 
 message RefreshTokenRequest {
+  // 当前会话最近一次签发的刷新凭证，成功刷新后须保存响应中的新凭证。
   string refresh_token = 1 [(buf.validate.field).string = {
     min_len: 32
     max_len: 256
@@ -77,6 +85,7 @@ message RefreshTokenRequest {
 }
 
 message LogoutRequest {
+  // 待撤销会话当前的刷新凭证；轮换前的旧凭证不能用于撤销。
   string refresh_token = 1 [(buf.validate.field).string = {
     min_len: 32
     max_len: 256
@@ -86,19 +95,26 @@ message LogoutRequest {
 message LogoutResponse {}
 
 message User {
+  // 与登录提供商无关、不可变且不透明的 Eagle 账号 ID，与 access token 的 sub 一致。
   string subject = 1;
+  // 本次会话使用的登录提供商。
   SocialProvider provider = 2;
   string email = 3;
   bool email_verified = 4;
   string display_name = 5;
   string avatar_url = 6;
+  // Eagle 为该账号在当前 audience 下分配的角色，供授权判定使用。
   repeated string roles = 7;
 }
 
 message TokenResponse {
+  // Eagle 签发的访问令牌，供业务请求使用。
   string access_token = 1;
+  // 当前会话的刷新凭证；刷新成功后替换本地保存的旧凭证。
   string refresh_token = 2;
+  // 认证方案，固定为 Bearer。
   string token_type = 3;
+  // access token 的有效期，单位为秒。
   int64 expires_in = 4;
   User user = 5;
 }
@@ -110,13 +126,22 @@ message GetJSONWebKeySetResponse {
 }
 
 message JSONWebKey {
+  // 公钥类型：EC 或 RSA。
   string kty = 1;
+  // 公钥用途，sig 表示签名验证。
   string use = 2;
+  // 签名算法：ES256 或 RS256。
   string alg = 3;
+  // 密钥标识，与 access token 头部的 kid 对应。
   string kid = 4;
+  // EC 公钥的曲线名称；RSA 公钥不使用此字段。
   string crv = 5;
+  // EC 公钥 x 坐标的 Base64URL 编码；RSA 公钥不使用此字段。
   string x = 6;
+  // EC 公钥 y 坐标的 Base64URL 编码；RSA 公钥不使用此字段。
   string y = 7;
+  // RSA 公钥模数的 Base64URL 编码；EC 公钥不使用此字段。
   string n = 8;
+  // RSA 公钥指数的 Base64URL 编码；EC 公钥不使用此字段。
   string e = 9;
 }

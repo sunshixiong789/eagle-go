@@ -8,30 +8,28 @@ import "google/api/annotations.proto";
 
 option go_package = "github.com/eagle-go/eagle/api/eagle/access/v1;accessv1";
 
-// RoleBindingService 管理「角色 → 权限码」的映射，即 Casbin 的 p 策略。
-//
-// 角色本身不在这里创建或删除——它由外部 IdP 维护，随 token 的
-// 已配置角色 claim 下发。本服务只回答「这个角色能调哪些接口」。
-//
-// 这样切分的原因：把用户到角色的归属也放进本库，就等于与 IdP
-// 双写同一份数据，必然漂移；而把权限映射放进 IdP，则每次
-// 授权判定都要跨网络调用，且权限配置只能在 IdP 后台改。
+// RoleBindingService 管理 Eagle 角色的直接权限与继承关系。
+// 用户到角色的归属由 auth 模块维护，并通过 Eagle token 携带。
+// 策略写入成功后同步重载本实例，其他实例通过后台对账同步。
+// 若提交后本实例重载失败，请求会返回错误，但策略写入已生效于存储，应重新查询确认。
 service RoleBindingService {
-  // 列出本库中已配置过权限的角色。
-  // 注意这不是 IdP 的角色全集——从未分配过权限的角色不会出现。
+  // ListBoundRoles 按角色键升序列出当前有直接授权的角色及一致的全局策略版本。
+  // 没有直接授权、仅通过继承获得权限的角色不在列表中。
   rpc ListBoundRoles(ListBoundRolesRequest) returns (ListBoundRolesResponse) {
     option (google.api.http) = {get: "/v1/system/role-bindings"};
     option (eagle.annotations.v1.perm) = "system:role:list";
     option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
+  // GetRolePermissions 查询角色的直接权限，不展开继承；没有直接授权时返回角色未绑定错误。
   rpc GetRolePermissions(GetRolePermissionsRequest) returns (GetRolePermissionsResponse) {
     option (google.api.http) = {get: "/v1/system/role-bindings/{role}"};
     option (eagle.annotations.v1.perm) = "system:role:query";
     option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
-  // 全量覆盖某个角色的权限码集合，变更立即生效。
+  // SetRolePermissions 全量覆盖角色的直接权限，自动去重；具体权限码必须已登记且启用。
+  // 空集合清除直接授权，继承关系保留；每次成功写入都会推进全局策略版本。
   rpc SetRolePermissions(SetRolePermissionsRequest) returns (SetRolePermissionsResponse) {
     option (google.api.http) = {
       put: "/v1/system/role-bindings/{role}"
@@ -41,7 +39,8 @@ service RoleBindingService {
     option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
-  // 建立角色继承：child 自动获得 parent 的全部权限。
+  // AddRoleInheritance 建立 child 到 parent 的继承，child 获得 parent 的权限。
+  // 禁止自继承和环；版本校验通过后，重复添加已有关系成功返回且不推进版本。
   rpc AddRoleInheritance(AddRoleInheritanceRequest) returns (AddRoleInheritanceResponse) {
     option (google.api.http) = {
       post: "/v1/system/role-bindings/inheritance"
@@ -51,19 +50,23 @@ service RoleBindingService {
     option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
+  // ListRoleInheritances 按 child、parent 升序列出继承关系及一致的全局策略版本。
   rpc ListRoleInheritances(ListRoleInheritancesRequest) returns (ListRoleInheritancesResponse) {
     option (google.api.http) = {get: "/v1/system/role-inheritances"};
     option (eagle.annotations.v1.perm) = "system:role:query";
     option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
+  // DeleteRoleInheritance 删除一条继承关系，保留角色的直接授权。
+  // 版本校验通过后，关系不存在也成功返回且不推进版本。
   rpc DeleteRoleInheritance(DeleteRoleInheritanceRequest) returns (DeleteRoleInheritanceResponse) {
     option (google.api.http) = {delete: "/v1/system/role-inheritances/{child}/{parent}"};
     option (eagle.annotations.v1.perm) = "system:role:assign";
     option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
-  // 当前登录者自己的权限码，供前端做按钮级显隐。只需登录。
+  // GetMyPermissions 按当前主体的 Eagle 角色汇总权限，展开继承并去重，保留权限通配码。
+  // 结果来自本实例已加载的策略，供前端控制按钮显隐。
   rpc GetMyPermissions(GetMyPermissionsRequest) returns (GetMyPermissionsResponse) {
     option (google.api.http) = {get: "/v1/system/role-bindings/me/permissions"};
     option (eagle.annotations.v1.access) = ACCESS_LEVEL_AUTHENTICATED;
@@ -74,7 +77,9 @@ service RoleBindingService {
 message RoleBinding {
   // Eagle 分配的稳定角色键，如 user、admin、support-agent。
   string role = 1;
+  // 角色的直接权限码，不展开继承；可包含末段通配码。
   repeated string permission_codes = 2;
+  // 读取此绑定时的全局策略版本，可用作写入时的 expected_version。
   int64 revision = 3;
 }
 
@@ -82,6 +87,7 @@ message ListBoundRolesRequest {}
 
 message ListBoundRolesResponse {
   repeated RoleBinding bindings = 1;
+  // 与返回列表一致的全局策略版本，空列表也返回版本。
   int64 policy_version = 2;
 }
 
@@ -103,12 +109,14 @@ message SetRolePermissionsRequest {
     max_len: 64
     pattern: "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"
   }];
-  // 全量覆盖。传空数组表示收回该角色的全部权限。
+  // 全量覆盖直接权限；未传或传空数组均清除直接授权，通过继承获得的权限保留。
   repeated string permission_codes = 2;
+  // 预期的全局策略版本；未传时不检查，传入时必须与当前版本一致，否则拒绝写入。
   optional int64 expected_version = 3 [(buf.validate.field).int64.gt = 0];
 }
 
 message SetRolePermissionsResponse {
+  // 操作完成后的全局策略版本，可用于后续写入的并发检查。
   int64 policy_version = 1;
 }
 
@@ -123,10 +131,12 @@ message AddRoleInheritanceRequest {
     max_len: 64
     pattern: "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"
   }];
+  // 预期的全局策略版本；未传时不检查，传入时必须与当前版本一致，否则拒绝写入。
   optional int64 expected_version = 3 [(buf.validate.field).int64.gt = 0];
 }
 
 message AddRoleInheritanceResponse {
+  // 操作完成后的全局策略版本，可用于后续写入的并发检查。
   int64 policy_version = 1;
 }
 
@@ -139,16 +149,19 @@ message ListRoleInheritancesRequest {}
 
 message ListRoleInheritancesResponse {
   repeated RoleInheritance inheritances = 1;
+  // 与返回列表一致的全局策略版本，空列表也返回版本。
   int64 policy_version = 2;
 }
 
 message DeleteRoleInheritanceRequest {
   string child = 1 [(buf.validate.field).string = {min_len: 1, max_len: 64, pattern: "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"}];
   string parent = 2 [(buf.validate.field).string = {min_len: 1, max_len: 64, pattern: "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"}];
+  // 预期的全局策略版本；未传时不检查，传入时必须与当前版本一致，否则拒绝写入。
   optional int64 expected_version = 3 [(buf.validate.field).int64.gt = 0];
 }
 
 message DeleteRoleInheritanceResponse {
+  // 操作完成后的全局策略版本，可用于后续写入的并发检查。
   int64 policy_version = 1;
 }
 

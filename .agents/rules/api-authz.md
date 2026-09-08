@@ -3,6 +3,7 @@
 仅在修改 Proto、RPC、权限码、当前主体或授权链路时读取。
 
 - 契约顺序：修改 Proto（含 HTTP、校验和 `access`）→ `make api` → 实现模块用例 → 注册新增 Service → 测试。只生成 HTTP，不引入 gRPC 传输。
+- Proto 的 service/RPC 和手写 REST handler 必须有注释，字段的特殊语义在 Proto 说明；具体遵循 `comments.md`。
 - `ACCESS_LEVEL_PERMISSION_REQUIRED` 必须声明 `perm`，其他 access 不声明。可选级别只有 `PUBLIC` / `AUTHENTICATED` / `PERMISSION_REQUIRED`；枚举值 4 是已废弃的 `INTERNAL`，保持 reserved。具体权限码使用 `domain:resource:action` 三段格式；通配只允许最后一段。
 - 权限匹配沿用项目的末段通配语义，禁止改用 Casbin `keyMatch2`；它会把冒号后的权限段误当作 URL 参数。
 - 权限码先进入 `permission_definition`，导航节点只能引用已有且启用的权限码，不能自行创造权限契约。

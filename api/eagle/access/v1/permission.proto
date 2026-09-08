@@ -9,7 +9,9 @@ import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/eagle-go/eagle/api/eagle/access/v1;accessv1";
 
+// PermissionService 管理目录、菜单和按钮节点，引用已有权限码，并提供当前主体的导航视图。
 service PermissionService {
+  // CreatePermission 创建节点；非根父节点必须存在，非空权限码必须已登记、启用且未被其他节点引用。
   rpc CreatePermission(CreatePermissionRequest) returns (CreatePermissionResponse) {
     option (google.api.http) = {
       post: "/v1/system/permissions"
@@ -19,19 +21,22 @@ service PermissionService {
     option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
+  // GetPermission 查询单个节点及读取到的整树版本；节点不存在时返回未找到错误。
   rpc GetPermission(GetPermissionRequest) returns (GetPermissionResponse) {
     option (google.api.http) = {get: "/v1/system/permissions/{id}"};
     option (eagle.annotations.v1.perm) = "system:permission:query";
     option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
-  // 平铺返回全部权限，树结构由调用方按 parent_id 拼装
+  // ListPermissions 按条件平铺返回节点，按 parent_id、sort、id 升序排列；调用方按 parent_id 组装树。
   rpc ListPermissions(ListPermissionsRequest) returns (ListPermissionsResponse) {
     option (google.api.http) = {get: "/v1/system/permissions"};
     option (eagle.annotations.v1.perm) = "system:permission:list";
     option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
+  // UpdatePermission 全量更新节点的可变字段，字段零值也会覆盖原值；校验父节点、环和权限码引用约束。
+  // 提供 expected_revision 时在写入事务内校验整树版本，不匹配则拒绝更新。
   rpc UpdatePermission(UpdatePermissionRequest) returns (UpdatePermissionResponse) {
     option (google.api.http) = {
       put: "/v1/system/permissions/{id}"
@@ -41,14 +46,16 @@ service PermissionService {
     option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
+  // DeletePermission 删除叶子节点；有子节点、节点不存在或提供的整树版本不匹配时返回错误。
+  // 删除导航节点不会删除权限目录中的定义或角色的权限绑定。
   rpc DeletePermission(DeletePermissionRequest) returns (DeletePermissionResponse) {
     option (google.api.http) = {delete: "/v1/system/permissions/{id}"};
     option (eagle.annotations.v1.perm) = "system:permission:remove";
     option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
   }
 
-  // 当前登录用户的菜单树与权限码，供前端渲染路由和按钮级控制。
-  // 只需登录，无需额外权限码——查的就是自己的东西。
+  // GetMyMenus 按当前主体的 Eagle 角色返回菜单列表与权限码，供前端渲染导航和控制按钮显隐。
+  // 菜单平铺返回，补全授权节点的祖先并排除按钮；权限码展开继承，保留通配码。
   rpc GetMyMenus(GetMyMenusRequest) returns (GetMyMenusResponse) {
     option (google.api.http) = {get: "/v1/system/permissions/me/menus"};
     option (eagle.annotations.v1.access) = ACCESS_LEVEL_AUTHENTICATED;
@@ -57,6 +64,7 @@ service PermissionService {
 
 message Permission {
   int64 id = 1;
+  // 父节点 ID；0 表示顶级节点。
   int64 parent_id = 2;
   string name = 3;
   // 权限码，如 system:dict:add。目录/菜单可为空，按钮必填
@@ -66,8 +74,11 @@ message Permission {
   string path = 6;
   string component = 7;
   string icon = 8;
+  // 同一父节点下按值升序排列，相同值按 id 升序排列。
   int32 sort = 9;
+  // 供前端使用的显示标记；GetMyMenus 不按此字段过滤，创建或更新时未传为 false。
   bool visible = 10;
+  // 0=停用，1=启用；创建或更新时未传按 0 处理。
   int32 status = 11;
   google.protobuf.Timestamp created_at = 12;
   google.protobuf.Timestamp updated_at = 13;
@@ -76,11 +87,13 @@ message Permission {
 }
 
 message CreatePermissionRequest {
+  // 父节点 ID；0 表示顶级节点。
   int64 parent_id = 1 [(buf.validate.field).int64.gte = 0];
   string name = 2 [(buf.validate.field).string = {
     min_len: 1
     max_len: 64
   }];
+  // 引用已登记且启用的具体权限码；目录或菜单可为空，按钮必填，不允许通配。
   string code = 3 [
     (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE,
     (buf.validate.field).string = {
@@ -88,6 +101,7 @@ message CreatePermissionRequest {
       pattern: "^[a-zA-Z][a-zA-Z0-9]*(:[a-zA-Z][a-zA-Z0-9]*)+$"
     }
   ];
+  // 1=目录，2=菜单，3=按钮。
   int32 type = 4 [(buf.validate.field).int32 = {
     gte: 1
     lte: 3
@@ -95,8 +109,11 @@ message CreatePermissionRequest {
   string path = 5 [(buf.validate.field).string.max_len = 255];
   string component = 6 [(buf.validate.field).string.max_len = 255];
   string icon = 7 [(buf.validate.field).string.max_len = 64];
+  // 同一父节点下按值升序排列，相同值按 id 升序排列。
   int32 sort = 8;
+  // 供前端使用的显示标记；GetMyMenus 不按此字段过滤，创建或更新时未传为 false。
   bool visible = 9;
+  // 0=停用，1=启用；创建或更新时未传按 0 处理。
   int32 status = 10 [(buf.validate.field).int32 = {
     in: [
       0,
@@ -118,12 +135,14 @@ message GetPermissionResponse {
 }
 
 message ListPermissionsRequest {
+  // 0=停用，1=启用；未传时不筛选。
   optional int32 status = 1 [(buf.validate.field).int32 = {
     in: [
       0,
       1
     ]
   }];
+  // 1=目录，2=菜单，3=按钮。未传时不筛选。
   optional int32 type = 2 [(buf.validate.field).int32 = {
     gte: 1
     lte: 3
@@ -136,11 +155,13 @@ message ListPermissionsResponse {
 
 message UpdatePermissionRequest {
   int64 id = 1 [(buf.validate.field).int64.gt = 0];
+  // 父节点 ID；0 表示顶级节点。
   int64 parent_id = 2 [(buf.validate.field).int64.gte = 0];
   string name = 3 [(buf.validate.field).string = {
     min_len: 1
     max_len: 64
   }];
+  // 引用已登记且启用的具体权限码；目录或菜单可为空，按钮必填，不允许通配。
   string code = 4 [
     (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE,
     (buf.validate.field).string = {
@@ -148,6 +169,7 @@ message UpdatePermissionRequest {
       pattern: "^[a-zA-Z][a-zA-Z0-9]*(:[a-zA-Z][a-zA-Z0-9]*)+$"
     }
   ];
+  // 1=目录，2=菜单，3=按钮。
   int32 type = 5 [(buf.validate.field).int32 = {
     gte: 1
     lte: 3
@@ -155,14 +177,18 @@ message UpdatePermissionRequest {
   string path = 6 [(buf.validate.field).string.max_len = 255];
   string component = 7 [(buf.validate.field).string.max_len = 255];
   string icon = 8 [(buf.validate.field).string.max_len = 64];
+  // 同一父节点下按值升序排列，相同值按 id 升序排列。
   int32 sort = 9;
+  // 供前端使用的显示标记；GetMyMenus 不按此字段过滤，创建或更新时未传为 false。
   bool visible = 10;
+  // 0=停用，1=启用；创建或更新时未传按 0 处理。
   int32 status = 11 [(buf.validate.field).int32 = {
     in: [
       0,
       1
     ]
   }];
+  // 预期的整棵权限树版本；未传时不检查，传入时不匹配则拒绝写入。
   optional int64 expected_revision = 12 [(buf.validate.field).int64.gt = 0];
 }
 
@@ -172,6 +198,7 @@ message UpdatePermissionResponse {
 
 message DeletePermissionRequest {
   int64 id = 1 [(buf.validate.field).int64.gt = 0];
+  // 预期的整棵权限树版本；未传时不检查，传入时不匹配则拒绝写入。
   optional int64 expected_revision = 2 [(buf.validate.field).int64.gt = 0];
 }
 

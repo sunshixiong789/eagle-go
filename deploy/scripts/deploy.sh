@@ -6,7 +6,7 @@ set +x
 fail() { echo "deploy: $*" >&2; exit 1; }
 action=${1:-deploy}
 case "${action}" in deploy|rollback) ;; *) fail 'usage: deploy.sh [deploy|rollback]' ;; esac
-case "${DEPLOY_ENV:-}" in development|testing) ;; *) fail 'DEPLOY_ENV must be development or testing' ;; esac
+case "${DEPLOY_ENV:-}" in development|testing|production) ;; *) fail 'DEPLOY_ENV must be development, testing or production' ;; esac
 deploy_root=${EAGLE_DEPLOY_ROOT:-/opt/eagle}
 case "${deploy_root}" in /*) ;; *) fail 'EAGLE_DEPLOY_ROOT must be absolute' ;; esac
 timeout=${EAGLE_DEPLOY_TIMEOUT:-90}
@@ -104,6 +104,7 @@ if [ "${action}" = rollback ]; then
   candidate=$(read_pointer previous)
   [ -n "${current}" ] && [ -n "${candidate}" ] || fail 'no previous successful release to roll back to'
 else
+  # 远端必须显式提供身份和数据库设置，禁止退回模板里的本地开发默认值。
   required_variables='EAGLE_IMAGE EAGLE_DATABASE_DSN EAGLE_AUTH_ISSUER EAGLE_AUTH_AUDIENCE EAGLE_AUTH_SIGNING_KEY_HOST_DIRECTORY EAGLE_AUTH_ACTIVE_SIGNING_KEY_ID'
   for variable_name in ${required_variables}; do
     eval "variable_value=\${${variable_name}:-}"
@@ -131,16 +132,15 @@ else
     write_env_value EAGLE_AUTH_ISSUER "${EAGLE_AUTH_ISSUER}"
     write_env_value EAGLE_AUTH_AUDIENCE "${EAGLE_AUTH_AUDIENCE}"
     write_env_value EAGLE_AUTH_ACTIVE_SIGNING_KEY_ID "${EAGLE_AUTH_ACTIVE_SIGNING_KEY_ID}"
-    write_env_value EAGLE_AUTH_ACCESS_TOKEN_TTL "${EAGLE_AUTH_ACCESS_TOKEN_TTL:-900s}"
-    write_env_value EAGLE_AUTH_REFRESH_TOKEN_TTL "${EAGLE_AUTH_REFRESH_TOKEN_TTL:-2592000s}"
-    write_env_value EAGLE_AUTH_GOOGLE_ENABLED "${EAGLE_AUTH_GOOGLE_ENABLED:-false}"
-    write_env_value EAGLE_AUTH_GOOGLE_CLIENT_ID "${EAGLE_AUTH_GOOGLE_CLIENT_ID:-}"
-    write_env_value EAGLE_AUTH_APPLE_ENABLED "${EAGLE_AUTH_APPLE_ENABLED:-false}"
-    write_env_value EAGLE_AUTH_APPLE_CLIENT_ID "${EAGLE_AUTH_APPLE_CLIENT_ID:-}"
-    write_env_value EAGLE_OBSERVABILITY_OTLP_ENDPOINT "${EAGLE_OBSERVABILITY_OTLP_ENDPOINT:-}"
-    write_env_value EAGLE_OBSERVABILITY_OTLP_INSECURE "${EAGLE_OBSERVABILITY_OTLP_INSECURE:-true}"
-    write_env_value EAGLE_OBSERVABILITY_TRACE_SAMPLE_RATIO "${EAGLE_OBSERVABILITY_TRACE_SAMPLE_RATIO:-0.1}"
-    write_env_value EAGLE_OBSERVABILITY_LOG_LEVEL "${EAGLE_OBSERVABILITY_LOG_LEVEL:-info}"
+    # 可选覆盖只在 Flow 显式设置时写入，其余值取镜像中的共用模板。
+    optional_variables='EAGLE_SERVER_HTTP_TIMEOUT EAGLE_DATABASE_MAX_CONNS EAGLE_DATABASE_MAX_IDLE_CONNS EAGLE_DATABASE_MAX_CONN_LIFETIME EAGLE_DATABASE_MAX_CONN_IDLE_TIME EAGLE_AUTH_ACCESS_TOKEN_TTL EAGLE_AUTH_REFRESH_TOKEN_TTL EAGLE_AUTH_GOOGLE_ENABLED EAGLE_AUTH_GOOGLE_CLIENT_ID EAGLE_AUTH_APPLE_ENABLED EAGLE_AUTH_APPLE_CLIENT_ID EAGLE_OBSERVABILITY_OTLP_ENDPOINT EAGLE_OBSERVABILITY_OTLP_INSECURE EAGLE_OBSERVABILITY_TRACE_SAMPLE_RATIO EAGLE_OBSERVABILITY_LOG_LEVEL'
+    for variable_name in ${optional_variables}; do
+      eval "variable_set=\${${variable_name}+yes}"
+      if [ "${variable_set}" = yes ]; then
+        eval "variable_value=\${${variable_name}}"
+        write_env_value "${variable_name}" "${variable_value}"
+      fi
+    done
   } >"${candidate}/runtime.env"
 fi
 

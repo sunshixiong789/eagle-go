@@ -7,5 +7,5 @@
 - domain/application 使用标准库错误；框架错误只存在于 interfaces/server 边界。判断错误使用 `errors.Is` / `errors.As`。
 - 值对象只用于能显著防止非法状态或静默错误的业务概念；参数多且同类型易传错时使用明确的 `XxxParams`。
 - 包名表达业务或技术职责，不使用 `utils`、`common`、`helpers`、`models` 作为兜底包。
-- 注释解释不明显的业务约束或设计原因，不复述代码，不添加占位 TODO。
+- Go 接口及其方法必须有注释，普通方法按复杂度补充；写法与维护遵循 `comments.md`。
 - 日志统一使用 `log/slog`；组合根使用显式构造函数，不引入 Wire 或 DI 容器；生成文件通过 Make 目标更新，不直接编辑。
