@@ -35,6 +35,9 @@ func NewMiddlewares(
 	authorizer authz.Authorizer,
 	errorMappings ...ErrorMappingRule,
 ) ([]middleware.Middleware, error) {
+	if logger == nil {
+		logger = slog.Default()
+	}
 	if err := authz.ValidateRegisteredPolicies(nil); err != nil {
 		return nil, err
 	}
@@ -44,7 +47,7 @@ func NewMiddlewares(
 	}
 
 	return []middleware.Middleware{
-		recovery.Recovery(),
+		recovery.Recovery(recovery.WithLogger(slog.New(recoveryLogHandler{Handler: logger.Handler()}))),
 		// tracing 紧贴 recovery：这样后续每一层——包括被拒绝的请求——
 		// 都落在同一个 span 里，排查 403 时能看到完整调用链
 		tracing.Server(),

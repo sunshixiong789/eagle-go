@@ -27,7 +27,7 @@ func (DictType) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("id"),
 
-		field.String("name").MaxLen(64).NotEmpty(),
+		field.String("name").MaxRuneLen(64).NotEmpty(),
 
 		field.String("type").
 			MaxLen(64).
@@ -67,11 +67,11 @@ func (DictData) Fields() []ent.Field {
 			MaxLen(64).
 			Comment("关联 sys_dict_type.type"),
 
-		field.String("label").MaxLen(128).NotEmpty(),
-		field.String("value").MaxLen(128).NotEmpty(),
+		field.String("label").MaxRuneLen(128).NotEmpty(),
+		field.String("value").MaxRuneLen(128).NotEmpty(),
 
 		field.Int32("sort").Default(0),
-		field.String("css_class").MaxLen(64).Default(""),
+		field.String("css_class").MaxRuneLen(64).Default(""),
 		field.Bool("is_default").Default(false),
 		field.Int32("status").Default(1),
 		field.String("remark").Default(""),

@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
 
 	"github.com/casbin/casbin/v2/model"
 )
@@ -93,6 +96,88 @@ func TestReloadPolicyReplacesOldSnapshot(t *testing.T) {
 	if allowed, err := enforcer.Allow([]string{"editor"}, "system:user:add"); err != nil || !allowed {
 		t.Fatalf("last known-good permission = %v, %v", allowed, err)
 	}
+}
+
+// pausedReloadAdapter 在稳定快照加载后暂停第二次调用，模拟发布前被调度挂起。
+type pausedReloadAdapter struct {
+	*StorageAdapter
+	calls  atomic.Int64
+	loaded chan struct{}
+	resume chan struct{}
+}
+
+func (a *pausedReloadAdapter) LoadPolicyContext(ctx context.Context, m model.Model) error {
+	call := a.calls.Add(1)
+	if err := a.StorageAdapter.LoadPolicyContext(ctx, m); err != nil {
+		return err
+	}
+	if call == 2 {
+		close(a.loaded)
+		<-a.resume
+	}
+	return nil
+}
+
+func TestConcurrentReloadPreservesRevocationAndVersion(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx := context.Background()
+		source := &mutablePolicySource{
+			version: 1,
+			rows:    []StoredPolicy{{PType: "p", Values: []string{"editor", "system:user:add"}}},
+		}
+		adapter := &pausedReloadAdapter{
+			StorageAdapter: NewStorageAdapter(source),
+			loaded:         make(chan struct{}), resume: make(chan struct{}),
+		}
+		release := sync.OnceFunc(func() { close(adapter.resume) })
+		defer release()
+		enforcer, err := NewEnforcer(adapter)
+		if err != nil {
+			t.Fatal(err)
+		}
+		source.version = 2
+		first := make(chan error, 1)
+		go func() { first <- enforcer.ReloadPolicy(ctx) }()
+		<-adapter.loaded
+
+		// 模拟数据库提交收权；当前重载仍持有允许访问的版本 2。
+		source.version = 3
+		source.rows = nil
+		second := make(chan error, 1)
+		go func() { second <- enforcer.ReloadPolicy(ctx) }()
+		synctest.Wait()
+		if calls := adapter.calls.Load(); calls != 2 {
+			t.Errorf("another reload read the shared adapter before publication: calls=%d", calls)
+		}
+		// 加载等待期间仍能读取旧快照，不能把数据库延迟传导到全部鉴权请求。
+		if allowed, err := enforcer.Allow([]string{"editor"}, "system:user:add"); err != nil || !allowed {
+			t.Fatalf("decision during reload = %v, %v", allowed, err)
+		}
+
+		canceledCtx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		canceled := make(chan error, 1)
+		go func() { canceled <- enforcer.ReloadPolicy(canceledCtx) }()
+		synctest.Wait()
+		cancel()
+		if err := <-canceled; !errors.Is(err, context.Canceled) {
+			t.Errorf("waiting reload cancellation = %v", err)
+		}
+
+		release()
+		if err := <-first; err != nil {
+			t.Fatal(err)
+		}
+		if err := <-second; err != nil {
+			t.Fatal(err)
+		}
+		if version := enforcer.LoadedPolicyVersion(); version != 3 {
+			t.Fatalf("loaded version = %d, want 3", version)
+		}
+		if allowed, err := enforcer.Allow([]string{"editor"}, "system:user:add"); err != nil || allowed {
+			t.Fatalf("revoked permission after concurrent reload = %v, %v", allowed, err)
+		}
+	})
 }
 
 func TestPersistentEnforcerRejectsDirectMemoryWrites(t *testing.T) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -49,6 +50,34 @@ func TestSessionLifecycle(t *testing.T) {
 	}
 	if _, err := repo.Rotate(context.Background(), "new-hash", "third-hash", time.Now().Add(time.Hour)); !errors.Is(err, domain.ErrInvalidRefreshToken) {
 		t.Fatalf("revoked token error = %v", err)
+	}
+}
+
+func TestSessionPreservesUnicodeProfile(t *testing.T) {
+	if testing.Short() {
+		t.Skip("需要真实数据库")
+	}
+	ctx := context.Background()
+	repo := NewSessionRepository(authTestDB, &testIssuer{}, "eagle-api")
+	t.Cleanup(func() { _ = authTestDB.Client().UserAccount.DeleteOneID("unicode-account-0").Exec(ctx) })
+	for i, character := range []string{"汉", "😀"} {
+		external := &domain.ExternalIdentity{
+			Provider: domain.ProviderGoogle, ProviderID: "unicode-profile-user",
+			DisplayName: strings.Repeat(character, 128),
+			AvatarURL:   "https://example.com/" + strings.Repeat(character, 2000),
+			Email:       strings.Repeat(character, 300) + "@example.com",
+		}
+		grant, err := repo.Create(ctx, external, fmt.Sprintf("unicode-account-%d", i), domain.Session{
+			ID: fmt.Sprintf("unicode-session-%d", i), RefreshTokenHash: fmt.Sprintf("unicode-refresh-%d", i),
+			ExpiresAt: time.Now().Add(time.Hour),
+		})
+		if err != nil {
+			t.Fatalf("save Unicode profile: %v", err)
+		}
+		if grant.Identity.Subject != "unicode-account-0" || grant.Identity.DisplayName != external.DisplayName ||
+			grant.Identity.AvatarURL != external.AvatarURL || grant.Identity.Email != external.Email {
+			t.Fatal("Unicode profile was not preserved during account creation/update")
+		}
 	}
 }
 

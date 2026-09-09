@@ -81,6 +81,61 @@ func TestPermissionRepoCRUD(t *testing.T) {
 	}
 }
 
+func TestPermissionRepoUpdateNullableFields(t *testing.T) {
+	skipIfShort(t)
+	ctx := context.Background()
+	repo := NewPermissionRepo(testDB)
+	const code = "test:nullable:edit"
+	mustCatalogCode(t, code)
+	parent, err := repo.Create(ctx, newPermission(t, domain.NewPermissionParams{
+		Name: "nullable-parent", Type: int32(domain.PermissionTypeDir), Status: 1,
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = repo.Delete(ctx, parent.ID(), nil) })
+	child, err := repo.Create(ctx, newPermission(t, domain.NewPermissionParams{
+		Name: "nullable-child", ParentID: parent.ID(), Code: code, Type: int32(domain.PermissionTypeMenu), Status: 1,
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = repo.Delete(ctx, child.ID(), nil) })
+
+	for _, tc := range []struct {
+		name     string
+		parentID int64
+		code     string
+	}{
+		{"move to root", domain.RootPermissionID, code},
+		{"restore parent and clear code", parent.ID(), ""},
+		{"clear both", domain.RootPermissionID, ""},
+		{"restore both", parent.ID(), code},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			expected := child.Revision()
+			if err := child.Update(domain.NewPermissionParams{
+				Name: "nullable-child", ParentID: tc.parentID, Code: tc.code, Type: int32(domain.PermissionTypeMenu), Status: 1,
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := repo.Update(ctx, child, &expected); err != nil {
+				t.Fatal(err)
+			}
+			child, err = repo.GetByID(ctx, child.ID())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if child.ParentID() != tc.parentID || child.Code().String() != tc.code {
+				t.Fatalf("persisted parent=%d code=%q, want parent=%d code=%q", child.ParentID(), child.Code(), tc.parentID, tc.code)
+			}
+			if child.Revision() != expected+1 {
+				t.Fatalf("revision = %d, want %d", child.Revision(), expected+1)
+			}
+		})
+	}
+}
+
 // newPermission 构造合法的权限聚合根，构造失败直接终止用例。
 func newPermission(t *testing.T, params domain.NewPermissionParams) *domain.Permission {
 	t.Helper()

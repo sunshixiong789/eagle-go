@@ -18,6 +18,7 @@ type logRedacter interface {
 }
 
 // RequestLogging 记录服务端请求，并按 HTTP 语义区分日志级别。
+// 请求内容默认隐藏，仅允许请求类型显式提供脱敏摘要。
 // 401/403 是正常的认证授权决策，不应污染服务端错误告警。
 func RequestLogging(logger *slog.Logger) middleware.Middleware {
 	if logger == nil {
@@ -87,8 +88,21 @@ func requestArgs(req any) string {
 	if redacter, ok := req.(logRedacter); ok {
 		return redacter.Redact()
 	}
-	if stringer, ok := req.(fmt.Stringer); ok {
-		return stringer.String()
-	}
-	return fmt.Sprintf("%+v", req)
+	return "[REDACTED]"
+}
+
+// recoveryLogHandler 仅供 recovery 的专用 logger 使用，拦截框架附加的原始请求。
+// 普通请求日志和 panic 日志沿用同一脱敏规则。
+type recoveryLogHandler struct{ slog.Handler }
+
+func (h recoveryLogHandler) Handle(ctx context.Context, record slog.Record) error {
+	redacted := slog.NewRecord(record.Time, record.Level, record.Message, record.PC)
+	record.Attrs(func(attr slog.Attr) bool {
+		if attr.Key == "request" {
+			attr = slog.String("request", requestArgs(attr.Value.Any()))
+		}
+		redacted.AddAttrs(attr)
+		return true
+	})
+	return h.Handler.Handle(ctx, redacted)
 }

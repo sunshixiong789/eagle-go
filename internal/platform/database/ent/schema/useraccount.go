@@ -20,8 +20,8 @@ func (UserAccount) Annotations() []schema.Annotation {
 func (UserAccount) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("id").StorageKey("subject").MaxLen(32),
-		field.String("display_name").MaxLen(128).Default(""),
-		field.String("avatar_url").MaxLen(2048).Default(""),
+		field.String("display_name").MaxRuneLen(128).Default(""),
+		field.String("avatar_url").MaxRuneLen(2048).Default(""),
 		field.Int32("status").Default(1),
 		field.Time("created_at").Default(time.Now).Immutable(),
 		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),

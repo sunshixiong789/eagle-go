@@ -19,7 +19,10 @@ import (
 type Enforcer struct {
 	// Casbin 的 Enforcer 自身对策略读写有锁，但 LoadPolicy 期间
 	// 会整体替换内存模型，这里再加一层读写锁以保证重载对判定是原子的。
-	mu            sync.RWMutex
+	mu sync.RWMutex
+	// reload 串行化加载到发布的整个过程；等待时可响应 context 取消。
+	// 与判定锁分开，读取数据库期间仍可使用当前快照处理请求。
+	reload        chan struct{}
 	e             *casbin.Enforcer
 	adapter       persist.Adapter
 	loadedVersion atomic.Int64
@@ -35,7 +38,7 @@ func NewEnforcer(adapter persist.Adapter) (*Enforcer, error) {
 		return nil, err
 	}
 
-	en := &Enforcer{e: e, adapter: adapter}
+	en := &Enforcer{e: e, adapter: adapter, reload: make(chan struct{}, 1)}
 	if versioned, ok := adapter.(interface {
 		// LoadedPolicyVersion 返回适配器最近成功加载的策略版本。
 		LoadedPolicyVersion() int64
@@ -113,8 +116,17 @@ func (en *Enforcer) AllowContext(ctx context.Context, roles []string, perm strin
 	return false, nil
 }
 
-// ReloadPolicy 从存储构建完整的新判定器后，持锁替换本实例的策略；构建失败保留原策略。
+// ReloadPolicy 串行加载并发布策略与版本，防止较早开始的重载覆盖新策略。
+// 构建失败保留原策略；加载期间不阻塞授权判定，等待其他重载时响应 context 取消。
 func (en *Enforcer) ReloadPolicy(ctx context.Context) error {
+	select {
+	case en.reload <- struct{}{}:
+		defer func() { <-en.reload }()
+	case <-ctx.Done():
+		recordPolicyReload(ctx, "error")
+		return ctx.Err()
+	}
+
 	replacement, err := buildCasbinEnforcer(ctx, en.adapter)
 	if err != nil {
 		recordPolicyReload(ctx, "error")

@@ -45,7 +45,7 @@ func (Permission) Fields() []ent.Field {
 			Comment("顶级节点在数据库中为 NULL，领域层映射为 0"),
 
 		field.String("name").
-			MaxLen(64).
+			MaxRuneLen(64).
 			NotEmpty(),
 
 		field.String("code").
@@ -58,9 +58,9 @@ func (Permission) Fields() []ent.Field {
 		field.Int32("type").
 			Comment("1=目录 2=菜单 3=按钮"),
 
-		field.String("path").MaxLen(255).Default(""),
-		field.String("component").MaxLen(255).Default(""),
-		field.String("icon").MaxLen(64).Default(""),
+		field.String("path").MaxRuneLen(255).Default(""),
+		field.String("component").MaxRuneLen(255).Default(""),
+		field.String("icon").MaxRuneLen(64).Default(""),
 
 		field.Int32("sort").Default(0),
 		field.Bool("visible").Default(true),

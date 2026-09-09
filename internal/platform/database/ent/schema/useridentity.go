@@ -23,7 +23,7 @@ func (UserIdentity) Fields() []ent.Field {
 		field.String("account_subject").MaxLen(32),
 		field.String("provider").MaxLen(32),
 		field.String("provider_subject").MaxLen(255),
-		field.String("email").MaxLen(320).Default(""),
+		field.String("email").MaxRuneLen(320).Default(""),
 		field.Bool("email_verified").Default(false),
 		field.Time("last_login_at"),
 		field.Time("created_at").Default(time.Now).Immutable(),
