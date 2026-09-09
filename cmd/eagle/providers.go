@@ -75,6 +75,9 @@ func composeApp(bc *config.Bootstrap, logger *slog.Logger) (platformruntime.Comp
 		dictionaryv1.RegisterDictServiceHTTPServer(s, dictionaries)
 		authv1.RegisterAuthServiceHTTPServer(s, login)
 	})
+	if err := server.RegisterSwagger(hs, bc.GetServer().GetSwagger()); err != nil {
+		return platformruntime.Components{}, err
+	}
 	unregisterHealth := accessinfra.RegisterPolicyHealth(store, enforcer)
 	stopReconciler := accessinfra.NewPolicyReconciler(store, enforcer, logger)
 	ready = true

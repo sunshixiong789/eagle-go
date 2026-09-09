@@ -61,6 +61,7 @@ services:
     image: eagle/eagle:dev
     build: *eagle-build
     environment:
+      EAGLE_SERVER_SWAGGER_ENABLED: "true"
       EAGLE_DATABASE_DRIVER: postgres
       EAGLE_DATABASE_DSN: postgres://eagle:eagle@postgres:5432/eagle?sslmode=disable
       EAGLE_AUTH_SIGNING_KEY_DIRECTORY: /run/secrets/eagle-jwt

@@ -178,6 +178,16 @@ make run EAGLE_DATABASE_DRIVER=mysql
 
 ### 5. 启用 Google/Apple 登录并调用接口
 
+开发环境通过 `make run` 或本地 Compose 启动时，Swagger 文档位于
+<http://localhost:8000/swagger>，原始定义位于 `/swagger/openapi.yaml`。
+IDEA 运行配置需添加环境变量 `EAGLE_SERVER_SWAGGER_ENABLED=true`；可通过
+`EAGLE_SERVER_SWAGGER_PATH=/docs` 修改入口，或用 `EAGLE_SERVER_SWAGGER_SPEC_FILE`
+指定 `make api` 生成的 OpenAPI 文件。入口路径不带尾斜杠，不能使用 `/v1` 业务前缀。
+文档页支持输入 Eagle access token 调试受保护接口，Token 不写入浏览器存储。
+Swagger UI 脚本和样式从固定版本的 jsDelivr CDN 加载，浏览器需要能访问该域名。
+共用配置默认关闭文档，生产环境保持 `EAGLE_SERVER_SWAGGER_ENABLED=false`，
+页面和 OpenAPI 下载入口均不注册。
+
 在 Google Cloud 或 Apple Developer 创建客户端，通过 `EAGLE_AUTH_GOOGLE_*` / `EAGLE_AUTH_APPLE_*`
 启用对应方式。客户端 SDK 取得 ID Token 和登录 nonce 后调用 `/v1/auth/social/login`，响应中的
 Eagle access token 用于受保护接口：

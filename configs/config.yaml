@@ -14,6 +14,11 @@ server:
   http:
     addr: "${SERVER_HTTP_ADDR:0.0.0.0:8000}"
     timeout: "${SERVER_HTTP_TIMEOUT:5s}"
+  swagger:
+    # 默认关闭；make run 和本地 Compose 显式开启，正式环境保持关闭。
+    enabled: "${SERVER_SWAGGER_ENABLED:false}"
+    path: "${SERVER_SWAGGER_PATH:/swagger}"
+    spec_file: "${SERVER_SWAGGER_SPEC_FILE:openapi.yaml}"
 
 data:
   database:

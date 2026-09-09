@@ -143,7 +143,7 @@ push-image:
 .PHONY: run
 # 本地直接启动服务（依赖 make up-deps 起好的所选数据库）
 run: dev-key
-	EAGLE_DATABASE_DRIVER="$(EAGLE_DATABASE_DRIVER)" EAGLE_DATABASE_DSN="$(EAGLE_DSN)" go run -ldflags "$(LDFLAGS)" ./cmd/eagle -conf configs
+	EAGLE_SERVER_SWAGGER_ENABLED=true EAGLE_DATABASE_DRIVER="$(EAGLE_DATABASE_DRIVER)" EAGLE_DATABASE_DSN="$(EAGLE_DSN)" go run -ldflags "$(LDFLAGS)" ./cmd/eagle -conf configs
 
 .PHONY: lint
 lint: $(GOLANGCI_LINT)

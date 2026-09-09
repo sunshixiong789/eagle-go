@@ -51,6 +51,8 @@ func TestEnvironmentOverridesSensitiveDefaults(t *testing.T) {
 	t.Setenv("EAGLE_DATABASE_DRIVER", "mysql")
 	t.Setenv("EAGLE_DATABASE_DSN", "runtime:secret@tcp(db.internal:3306)/eagle?parseTime=true&loc=UTC")
 	t.Setenv("EAGLE_SERVER_HTTP_ADDR", "0.0.0.0:18000")
+	t.Setenv("EAGLE_SERVER_SWAGGER_ENABLED", "true")
+	t.Setenv("EAGLE_SERVER_SWAGGER_PATH", "/dev/docs")
 	t.Setenv("EAGLE_AUTH_SIGNING_KEY_DIRECTORY", "/run/secrets/eagle-jwt-keys")
 	t.Setenv("EAGLE_AUTH_ACTIVE_SIGNING_KEY_ID", "runtime-2026-09")
 	t.Setenv("EAGLE_OBSERVABILITY_TRACE_SAMPLE_RATIO", "0.05")
@@ -76,6 +78,9 @@ func TestEnvironmentOverridesSensitiveDefaults(t *testing.T) {
 	if got := bc.GetServer().GetHttp().GetAddr(); got != "0.0.0.0:18000" {
 		t.Fatalf("SERVER_HTTP_ADDR override not applied: %q", got)
 	}
+	if c := bc.GetServer().GetSwagger(); !c.GetEnabled() || c.GetPath() != "/dev/docs" || c.GetSpecFile() != "openapi.yaml" {
+		t.Fatalf("Swagger environment overrides not applied: %v", c)
+	}
 	if got := bc.GetAuth().GetSigningKeyDirectory(); got != "/run/secrets/eagle-jwt-keys" {
 		t.Fatalf("AUTH_SIGNING_KEY_DIRECTORY override not applied: %q", got)
 	}
@@ -92,6 +97,9 @@ func TestEnvironmentOverridesSensitiveDefaults(t *testing.T) {
 
 func TestConfigParses(t *testing.T) {
 	bc := loadConfig(t)
+	if c := bc.GetServer().GetSwagger(); c.GetEnabled() || c.GetPath() != "/swagger" || c.GetSpecFile() != "openapi.yaml" {
+		t.Fatalf("Swagger must default to disabled with the standard path and spec: %v", c)
+	}
 	if err := appconfig.Validate(bc); err != nil {
 		t.Fatalf("配置校验失败: %v", err)
 	}

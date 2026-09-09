@@ -40,6 +40,15 @@ message Server {
   HTTP http = 1;
   // 2 曾是 grpc；单体只对外暴露 HTTP。
   reserved 2;
+  // Swagger 仅在开发环境显式启用；关闭时不注册文档路由。
+  message Swagger {
+    bool enabled = 1;
+    // 文档页绝对路径，如 /swagger；不能占用业务接口前缀。
+    string path = 2;
+    // make api 生成的 OpenAPI 文件路径，相对于进程工作目录。
+    string spec_file = 3;
+  }
+  Swagger swagger = 3;
 }
 
 message Data {

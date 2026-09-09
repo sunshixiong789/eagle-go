@@ -95,6 +95,7 @@ func (x *Bootstrap) GetObservability() *Observability {
 type Server struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Http          *Server_HTTP           `protobuf:"bytes,1,opt,name=http,proto3" json:"http,omitempty"`
+	Swagger       *Server_Swagger        `protobuf:"bytes,3,opt,name=swagger,proto3" json:"swagger,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -132,6 +133,13 @@ func (*Server) Descriptor() ([]byte, []int) {
 func (x *Server) GetHttp() *Server_HTTP {
 	if x != nil {
 		return x.Http
+	}
+	return nil
+}
+
+func (x *Server) GetSwagger() *Server_Swagger {
+	if x != nil {
+		return x.Swagger
 	}
 	return nil
 }
@@ -430,6 +438,69 @@ func (x *Server_HTTP) GetTimeout() *durationpb.Duration {
 	return nil
 }
 
+// Swagger 仅在开发环境显式启用；关闭时不注册文档路由。
+type Server_Swagger struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Enabled bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	// 文档页绝对路径，如 /swagger；不能占用业务接口前缀。
+	Path string `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
+	// make api 生成的 OpenAPI 文件路径，相对于进程工作目录。
+	SpecFile      string `protobuf:"bytes,3,opt,name=spec_file,json=specFile,proto3" json:"spec_file,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Server_Swagger) Reset() {
+	*x = Server_Swagger{}
+	mi := &file_config_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Server_Swagger) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Server_Swagger) ProtoMessage() {}
+
+func (x *Server_Swagger) ProtoReflect() protoreflect.Message {
+	mi := &file_config_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Server_Swagger.ProtoReflect.Descriptor instead.
+func (*Server_Swagger) Descriptor() ([]byte, []int) {
+	return file_config_proto_rawDescGZIP(), []int{1, 1}
+}
+
+func (x *Server_Swagger) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *Server_Swagger) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *Server_Swagger) GetSpecFile() string {
+	if x != nil {
+		return x.SpecFile
+	}
+	return ""
+}
+
 type Data_Database struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 数据库方言：postgres 或 mysql。留空时兼容为 postgres。
@@ -451,7 +522,7 @@ type Data_Database struct {
 
 func (x *Data_Database) Reset() {
 	*x = Data_Database{}
-	mi := &file_config_proto_msgTypes[6]
+	mi := &file_config_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -463,7 +534,7 @@ func (x *Data_Database) String() string {
 func (*Data_Database) ProtoMessage() {}
 
 func (x *Data_Database) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[6]
+	mi := &file_config_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -532,7 +603,7 @@ type Auth_SocialProvider struct {
 
 func (x *Auth_SocialProvider) Reset() {
 	*x = Auth_SocialProvider{}
-	mi := &file_config_proto_msgTypes[7]
+	mi := &file_config_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -544,7 +615,7 @@ func (x *Auth_SocialProvider) String() string {
 func (*Auth_SocialProvider) ProtoMessage() {}
 
 func (x *Auth_SocialProvider) ProtoReflect() protoreflect.Message {
-	mi := &file_config_proto_msgTypes[7]
+	mi := &file_config_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -584,13 +655,18 @@ const file_config_proto_rawDesc = "" +
 	"\x04data\x18\x02 \x01(\v2\x1b.eagle.platform.config.DataR\x04data\x12/\n" +
 	"\x04auth\x18\x03 \x01(\v2\x1b.eagle.platform.config.AuthR\x04auth\x12J\n" +
 	"\robservability\x18\x04 \x01(\v2$.eagle.platform.config.ObservabilityR\robservabilityJ\x04\b\x05\x10\x06J\x04\b\x06\x10\aJ\x04\b\a\x10\bJ\x04\b\b\x10\tJ\x04\b\t\x10\n" +
-	"\"\xb1\x01\n" +
+	"\"\xc8\x02\n" +
 	"\x06Server\x126\n" +
-	"\x04http\x18\x01 \x01(\v2\".eagle.platform.config.Server.HTTPR\x04http\x1ai\n" +
+	"\x04http\x18\x01 \x01(\v2\".eagle.platform.config.Server.HTTPR\x04http\x12?\n" +
+	"\aswagger\x18\x03 \x01(\v2%.eagle.platform.config.Server.SwaggerR\aswagger\x1ai\n" +
 	"\x04HTTP\x12\x18\n" +
 	"\anetwork\x18\x01 \x01(\tR\anetwork\x12\x12\n" +
 	"\x04addr\x18\x02 \x01(\tR\x04addr\x123\n" +
-	"\atimeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\atimeoutJ\x04\b\x02\x10\x03\"\xd7\x02\n" +
+	"\atimeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\atimeout\x1aT\n" +
+	"\aSwagger\x12\x18\n" +
+	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x12\n" +
+	"\x04path\x18\x02 \x01(\tR\x04path\x12\x1b\n" +
+	"\tspec_file\x18\x03 \x01(\tR\bspecFileJ\x04\b\x02\x10\x03\"\xd7\x02\n" +
 	"\x04Data\x12@\n" +
 	"\bdatabase\x18\x01 \x01(\v2$.eagle.platform.config.Data.DatabaseR\bdatabase\x1a\x86\x02\n" +
 	"\bDatabase\x12\x16\n" +
@@ -633,7 +709,7 @@ func file_config_proto_rawDescGZIP() []byte {
 	return file_config_proto_rawDescData
 }
 
-var file_config_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_config_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_config_proto_goTypes = []any{
 	(*Bootstrap)(nil),           // 0: eagle.platform.config.Bootstrap
 	(*Server)(nil),              // 1: eagle.platform.config.Server
@@ -641,9 +717,10 @@ var file_config_proto_goTypes = []any{
 	(*Auth)(nil),                // 3: eagle.platform.config.Auth
 	(*Observability)(nil),       // 4: eagle.platform.config.Observability
 	(*Server_HTTP)(nil),         // 5: eagle.platform.config.Server.HTTP
-	(*Data_Database)(nil),       // 6: eagle.platform.config.Data.Database
-	(*Auth_SocialProvider)(nil), // 7: eagle.platform.config.Auth.SocialProvider
-	(*durationpb.Duration)(nil), // 8: google.protobuf.Duration
+	(*Server_Swagger)(nil),      // 6: eagle.platform.config.Server.Swagger
+	(*Data_Database)(nil),       // 7: eagle.platform.config.Data.Database
+	(*Auth_SocialProvider)(nil), // 8: eagle.platform.config.Auth.SocialProvider
+	(*durationpb.Duration)(nil), // 9: google.protobuf.Duration
 }
 var file_config_proto_depIdxs = []int32{
 	1,  // 0: eagle.platform.config.Bootstrap.server:type_name -> eagle.platform.config.Server
@@ -651,19 +728,20 @@ var file_config_proto_depIdxs = []int32{
 	3,  // 2: eagle.platform.config.Bootstrap.auth:type_name -> eagle.platform.config.Auth
 	4,  // 3: eagle.platform.config.Bootstrap.observability:type_name -> eagle.platform.config.Observability
 	5,  // 4: eagle.platform.config.Server.http:type_name -> eagle.platform.config.Server.HTTP
-	6,  // 5: eagle.platform.config.Data.database:type_name -> eagle.platform.config.Data.Database
-	8,  // 6: eagle.platform.config.Auth.access_token_ttl:type_name -> google.protobuf.Duration
-	8,  // 7: eagle.platform.config.Auth.refresh_token_ttl:type_name -> google.protobuf.Duration
-	7,  // 8: eagle.platform.config.Auth.google:type_name -> eagle.platform.config.Auth.SocialProvider
-	7,  // 9: eagle.platform.config.Auth.apple:type_name -> eagle.platform.config.Auth.SocialProvider
-	8,  // 10: eagle.platform.config.Server.HTTP.timeout:type_name -> google.protobuf.Duration
-	8,  // 11: eagle.platform.config.Data.Database.max_conn_lifetime:type_name -> google.protobuf.Duration
-	8,  // 12: eagle.platform.config.Data.Database.max_conn_idle_time:type_name -> google.protobuf.Duration
-	13, // [13:13] is the sub-list for method output_type
-	13, // [13:13] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	6,  // 5: eagle.platform.config.Server.swagger:type_name -> eagle.platform.config.Server.Swagger
+	7,  // 6: eagle.platform.config.Data.database:type_name -> eagle.platform.config.Data.Database
+	9,  // 7: eagle.platform.config.Auth.access_token_ttl:type_name -> google.protobuf.Duration
+	9,  // 8: eagle.platform.config.Auth.refresh_token_ttl:type_name -> google.protobuf.Duration
+	8,  // 9: eagle.platform.config.Auth.google:type_name -> eagle.platform.config.Auth.SocialProvider
+	8,  // 10: eagle.platform.config.Auth.apple:type_name -> eagle.platform.config.Auth.SocialProvider
+	9,  // 11: eagle.platform.config.Server.HTTP.timeout:type_name -> google.protobuf.Duration
+	9,  // 12: eagle.platform.config.Data.Database.max_conn_lifetime:type_name -> google.protobuf.Duration
+	9,  // 13: eagle.platform.config.Data.Database.max_conn_idle_time:type_name -> google.protobuf.Duration
+	14, // [14:14] is the sub-list for method output_type
+	14, // [14:14] is the sub-list for method input_type
+	14, // [14:14] is the sub-list for extension type_name
+	14, // [14:14] is the sub-list for extension extendee
+	0,  // [0:14] is the sub-list for field type_name
 }
 
 func init() { file_config_proto_init() }
@@ -677,7 +755,7 @@ func file_config_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_config_proto_rawDesc), len(file_config_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -31,6 +31,7 @@ func TestSharedTemplateWithEnvironmentVariables(t *testing.T) {
 			t.Setenv("EAGLE_OBSERVABILITY_TRACE_SAMPLE_RATIO", tt.ratio)
 			t.Setenv("EAGLE_OBSERVABILITY_METRICS_ADDR", "0.0.0.0:9100")
 			t.Setenv("EAGLE_SERVER_HTTP_TIMEOUT", "8s")
+			t.Setenv("EAGLE_SERVER_SWAGGER_ENABLED", strconv.FormatBool(tt.name == "development"))
 			t.Setenv("EAGLE_DATABASE_MAX_CONNS", "40")
 			t.Setenv("EAGLE_DATABASE_MAX_IDLE_CONNS", "4")
 			t.Setenv("EAGLE_DATABASE_MAX_CONN_LIFETIME", "7200s")
@@ -57,6 +58,9 @@ func TestSharedTemplateWithEnvironmentVariables(t *testing.T) {
 					}
 					if err := appconfig.Validate(&bc); err != nil {
 						t.Fatal(err)
+					}
+					if bc.GetServer().GetSwagger().GetEnabled() != (tt.name == "development") {
+						t.Fatal("Swagger must only be enabled in development")
 					}
 					db := bc.GetData().GetDatabase()
 					if db.GetDsn() != dsn || db.GetDriver() != driver || db.GetMaxConns() != 40 || db.GetMaxIdleConns() != 4 {

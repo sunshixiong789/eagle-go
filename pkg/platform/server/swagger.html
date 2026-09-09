@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Eagle API 文档</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.25.3/swagger-ui.css">
+  <style>
+    body { margin: 0; background: #fafafa; }
+    .credentials { max-width: 1400px; margin: 20px auto; padding: 0 20px; font: 14px sans-serif; }
+    .credentials input { box-sizing: border-box; width: 100%; padding: 10px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="credentials">
+    <label for="token">Eagle Bearer Token（仅保留在当前页面，刷新后清空）</label>
+    <input id="token" type="password" autocomplete="off" placeholder="粘贴 access token，可带 Bearer 前缀">
+  </div>
+  <div id="swagger-ui"></div>
+  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.25.3/swagger-ui-bundle.js"></script>
+  <script>
+    window.ui = SwaggerUIBundle({
+      url: {{.SpecURL}},
+      dom_id: '#swagger-ui',
+      deepLinking: true,
+      validatorUrl: null,
+      requestInterceptor: request => {
+        const token = document.getElementById('token').value.trim().replace(/^Bearer\s+/i, '');
+        if (!request.loadSpec && token && new URL(request.url, location.href).origin === location.origin) {
+          request.headers.Authorization = 'Bearer ' + token;
+        }
+        return request;
+      }
+    });
+  </script>
+</body>
+</html>

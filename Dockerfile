@@ -38,6 +38,7 @@ COPY --from=builder /out/migrate /app/migrate
 COPY --from=builder /out/healthcheck /app/healthcheck
 COPY --from=builder /out/migrations /app/migrations
 COPY --from=builder /out/configs /app/configs
+COPY --from=builder /src/openapi.yaml /app/openapi.yaml
 
 WORKDIR /app
 

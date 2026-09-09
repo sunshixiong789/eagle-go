@@ -102,6 +102,17 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(self.events()[-1]["runtime"]["EAGLE_DATABASE_DSN"], self.env["EAGLE_DATABASE_DSN"])
         self.assertFalse((self.host / "previous").exists())
 
+    def test_swagger_is_only_enabled_for_development(self):
+        for environment in ("development", "testing", "production"):
+            with self.subTest(environment=environment):
+                self.run_script(DEPLOY_ENV=environment, EAGLE_SERVER_SWAGGER_ENABLED="true",
+                                EAGLE_SERVER_SWAGGER_PATH="/dev/docs")
+                runtime = self.events()[-1]["runtime"]
+                self.assertEqual(runtime["EAGLE_SERVER_SWAGGER_ENABLED"],
+                                 "true" if environment == "development" else "false")
+                if environment == "development":
+                    self.assertEqual(runtime["EAGLE_SERVER_SWAGGER_PATH"], "/dev/docs")
+
     def test_pull_and_migration_failure_leave_both_success_pointers_intact(self):
         self.run_script()
         self.run_script(EAGLE_IMAGE=IMAGE_B)
