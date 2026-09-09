@@ -27,6 +27,8 @@ services:
   mysql:
     image: mysql:8.4
     profiles: ["mysql"]
+    # 本地迁移需由 eagle 账号创建保护业务约束的触发器。
+    command: ["--log-bin-trust-function-creators=1"]
     environment:
       MYSQL_USER: eagle
       MYSQL_PASSWORD: eagle
