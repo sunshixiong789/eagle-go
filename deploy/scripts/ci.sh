@@ -84,9 +84,10 @@ test_database() (
 )
 
 case "${1:-all}" in
-  all) check; test_go; test_database postgres; test_database mysql ;;
+  all) check; test_go; test_database postgres; test_database mysql; make test-ingress ;;
   check) check ;;
   test) test_go ;;
+  ingress) make test-ingress ;;
   postgres|mysql) test_database "$1" ;;
-  *) echo 'usage: ci.sh [all|check|test|postgres|mysql]' >&2; exit 1 ;;
+  *) echo 'usage: ci.sh [all|check|test|postgres|mysql|ingress]' >&2; exit 1 ;;
 esac

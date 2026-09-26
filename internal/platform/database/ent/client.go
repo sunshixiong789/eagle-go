@@ -14,6 +14,8 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
+	"github.com/eagle-go/eagle/internal/platform/database/ent/accountroleaudit"
+	"github.com/eagle-go/eagle/internal/platform/database/ent/accountrolestate"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/authsession"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/casbinrule"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/dictdata"
@@ -24,6 +26,7 @@ import (
 	"github.com/eagle-go/eagle/internal/platform/database/ent/policyaudit"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/policystate"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/useraccount"
+	"github.com/eagle-go/eagle/internal/platform/database/ent/useraudience"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/useridentity"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/userrolebinding"
 
@@ -35,6 +38,10 @@ type Client struct {
 	config
 	// Schema is the client for creating, migrating and dropping schema.
 	Schema *migrate.Schema
+	// AccountRoleAudit is the client for interacting with the AccountRoleAudit builders.
+	AccountRoleAudit *AccountRoleAuditClient
+	// AccountRoleState is the client for interacting with the AccountRoleState builders.
+	AccountRoleState *AccountRoleStateClient
 	// AuthSession is the client for interacting with the AuthSession builders.
 	AuthSession *AuthSessionClient
 	// CasbinRule is the client for interacting with the CasbinRule builders.
@@ -55,6 +62,8 @@ type Client struct {
 	PolicyState *PolicyStateClient
 	// UserAccount is the client for interacting with the UserAccount builders.
 	UserAccount *UserAccountClient
+	// UserAudience is the client for interacting with the UserAudience builders.
+	UserAudience *UserAudienceClient
 	// UserIdentity is the client for interacting with the UserIdentity builders.
 	UserIdentity *UserIdentityClient
 	// UserRoleBinding is the client for interacting with the UserRoleBinding builders.
@@ -70,6 +79,8 @@ func NewClient(opts ...Option) *Client {
 
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
+	c.AccountRoleAudit = NewAccountRoleAuditClient(c.config)
+	c.AccountRoleState = NewAccountRoleStateClient(c.config)
 	c.AuthSession = NewAuthSessionClient(c.config)
 	c.CasbinRule = NewCasbinRuleClient(c.config)
 	c.DictData = NewDictDataClient(c.config)
@@ -80,6 +91,7 @@ func (c *Client) init() {
 	c.PolicyAudit = NewPolicyAuditClient(c.config)
 	c.PolicyState = NewPolicyStateClient(c.config)
 	c.UserAccount = NewUserAccountClient(c.config)
+	c.UserAudience = NewUserAudienceClient(c.config)
 	c.UserIdentity = NewUserIdentityClient(c.config)
 	c.UserRoleBinding = NewUserRoleBindingClient(c.config)
 }
@@ -174,6 +186,8 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	return &Tx{
 		ctx:                  ctx,
 		config:               cfg,
+		AccountRoleAudit:     NewAccountRoleAuditClient(cfg),
+		AccountRoleState:     NewAccountRoleStateClient(cfg),
 		AuthSession:          NewAuthSessionClient(cfg),
 		CasbinRule:           NewCasbinRuleClient(cfg),
 		DictData:             NewDictDataClient(cfg),
@@ -184,6 +198,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		PolicyAudit:          NewPolicyAuditClient(cfg),
 		PolicyState:          NewPolicyStateClient(cfg),
 		UserAccount:          NewUserAccountClient(cfg),
+		UserAudience:         NewUserAudienceClient(cfg),
 		UserIdentity:         NewUserIdentityClient(cfg),
 		UserRoleBinding:      NewUserRoleBindingClient(cfg),
 	}, nil
@@ -205,6 +220,8 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	return &Tx{
 		ctx:                  ctx,
 		config:               cfg,
+		AccountRoleAudit:     NewAccountRoleAuditClient(cfg),
+		AccountRoleState:     NewAccountRoleStateClient(cfg),
 		AuthSession:          NewAuthSessionClient(cfg),
 		CasbinRule:           NewCasbinRuleClient(cfg),
 		DictData:             NewDictDataClient(cfg),
@@ -215,6 +232,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		PolicyAudit:          NewPolicyAuditClient(cfg),
 		PolicyState:          NewPolicyStateClient(cfg),
 		UserAccount:          NewUserAccountClient(cfg),
+		UserAudience:         NewUserAudienceClient(cfg),
 		UserIdentity:         NewUserIdentityClient(cfg),
 		UserRoleBinding:      NewUserRoleBindingClient(cfg),
 	}, nil
@@ -223,7 +241,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 // Debug returns a new debug-client. It's used to get verbose logging on specific operations.
 //
 //	client.Debug().
-//		AuthSession.
+//		AccountRoleAudit.
 //		Query().
 //		Count(ctx)
 func (c *Client) Debug() *Client {
@@ -246,9 +264,10 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.AuthSession, c.CasbinRule, c.DictData, c.DictType, c.Permission,
-		c.PermissionDefinition, c.PermissionTreeState, c.PolicyAudit, c.PolicyState,
-		c.UserAccount, c.UserIdentity, c.UserRoleBinding,
+		c.AccountRoleAudit, c.AccountRoleState, c.AuthSession, c.CasbinRule, c.DictData,
+		c.DictType, c.Permission, c.PermissionDefinition, c.PermissionTreeState,
+		c.PolicyAudit, c.PolicyState, c.UserAccount, c.UserAudience, c.UserIdentity,
+		c.UserRoleBinding,
 	} {
 		n.Use(hooks...)
 	}
@@ -258,9 +277,10 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.AuthSession, c.CasbinRule, c.DictData, c.DictType, c.Permission,
-		c.PermissionDefinition, c.PermissionTreeState, c.PolicyAudit, c.PolicyState,
-		c.UserAccount, c.UserIdentity, c.UserRoleBinding,
+		c.AccountRoleAudit, c.AccountRoleState, c.AuthSession, c.CasbinRule, c.DictData,
+		c.DictType, c.Permission, c.PermissionDefinition, c.PermissionTreeState,
+		c.PolicyAudit, c.PolicyState, c.UserAccount, c.UserAudience, c.UserIdentity,
+		c.UserRoleBinding,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -269,6 +289,10 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 // Mutate implements the ent.Mutator interface.
 func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
+	case *AccountRoleAuditMutation:
+		return c.AccountRoleAudit.mutate(ctx, m)
+	case *AccountRoleStateMutation:
+		return c.AccountRoleState.mutate(ctx, m)
 	case *AuthSessionMutation:
 		return c.AuthSession.mutate(ctx, m)
 	case *CasbinRuleMutation:
@@ -289,12 +313,280 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.PolicyState.mutate(ctx, m)
 	case *UserAccountMutation:
 		return c.UserAccount.mutate(ctx, m)
+	case *UserAudienceMutation:
+		return c.UserAudience.mutate(ctx, m)
 	case *UserIdentityMutation:
 		return c.UserIdentity.mutate(ctx, m)
 	case *UserRoleBindingMutation:
 		return c.UserRoleBinding.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
+	}
+}
+
+// AccountRoleAuditClient is a client for the AccountRoleAudit schema.
+type AccountRoleAuditClient struct {
+	config
+}
+
+// NewAccountRoleAuditClient returns a client for the AccountRoleAudit from the given config.
+func NewAccountRoleAuditClient(c config) *AccountRoleAuditClient {
+	return &AccountRoleAuditClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `accountroleaudit.Hooks(f(g(h())))`.
+func (c *AccountRoleAuditClient) Use(hooks ...Hook) {
+	c.hooks.AccountRoleAudit = append(c.hooks.AccountRoleAudit, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `accountroleaudit.Intercept(f(g(h())))`.
+func (c *AccountRoleAuditClient) Intercept(interceptors ...Interceptor) {
+	c.inters.AccountRoleAudit = append(c.inters.AccountRoleAudit, interceptors...)
+}
+
+// Create returns a builder for creating a AccountRoleAudit entity.
+func (c *AccountRoleAuditClient) Create() *AccountRoleAuditCreate {
+	mutation := newAccountRoleAuditMutation(c.config, OpCreate)
+	return &AccountRoleAuditCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of AccountRoleAudit entities.
+func (c *AccountRoleAuditClient) CreateBulk(builders ...*AccountRoleAuditCreate) *AccountRoleAuditCreateBulk {
+	return &AccountRoleAuditCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AccountRoleAuditClient) MapCreateBulk(slice any, setFunc func(*AccountRoleAuditCreate, int)) *AccountRoleAuditCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AccountRoleAuditCreateBulk{err: fmt.Errorf("calling to AccountRoleAuditClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AccountRoleAuditCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AccountRoleAuditCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for AccountRoleAudit.
+func (c *AccountRoleAuditClient) Update() *AccountRoleAuditUpdate {
+	mutation := newAccountRoleAuditMutation(c.config, OpUpdate)
+	return &AccountRoleAuditUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AccountRoleAuditClient) UpdateOne(_m *AccountRoleAudit) *AccountRoleAuditUpdateOne {
+	mutation := newAccountRoleAuditMutation(c.config, OpUpdateOne, withAccountRoleAudit(_m))
+	return &AccountRoleAuditUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AccountRoleAuditClient) UpdateOneID(id int64) *AccountRoleAuditUpdateOne {
+	mutation := newAccountRoleAuditMutation(c.config, OpUpdateOne, withAccountRoleAuditID(id))
+	return &AccountRoleAuditUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for AccountRoleAudit.
+func (c *AccountRoleAuditClient) Delete() *AccountRoleAuditDelete {
+	mutation := newAccountRoleAuditMutation(c.config, OpDelete)
+	return &AccountRoleAuditDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AccountRoleAuditClient) DeleteOne(_m *AccountRoleAudit) *AccountRoleAuditDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AccountRoleAuditClient) DeleteOneID(id int64) *AccountRoleAuditDeleteOne {
+	builder := c.Delete().Where(accountroleaudit.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AccountRoleAuditDeleteOne{builder}
+}
+
+// Query returns a query builder for AccountRoleAudit.
+func (c *AccountRoleAuditClient) Query() *AccountRoleAuditQuery {
+	return &AccountRoleAuditQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAccountRoleAudit},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a AccountRoleAudit entity by its id.
+func (c *AccountRoleAuditClient) Get(ctx context.Context, id int64) (*AccountRoleAudit, error) {
+	return c.Query().Where(accountroleaudit.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AccountRoleAuditClient) GetX(ctx context.Context, id int64) *AccountRoleAudit {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *AccountRoleAuditClient) Hooks() []Hook {
+	return c.hooks.AccountRoleAudit
+}
+
+// Interceptors returns the client interceptors.
+func (c *AccountRoleAuditClient) Interceptors() []Interceptor {
+	return c.inters.AccountRoleAudit
+}
+
+func (c *AccountRoleAuditClient) mutate(ctx context.Context, m *AccountRoleAuditMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AccountRoleAuditCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AccountRoleAuditUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AccountRoleAuditUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AccountRoleAuditDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown AccountRoleAudit mutation op: %q", m.Op())
+	}
+}
+
+// AccountRoleStateClient is a client for the AccountRoleState schema.
+type AccountRoleStateClient struct {
+	config
+}
+
+// NewAccountRoleStateClient returns a client for the AccountRoleState from the given config.
+func NewAccountRoleStateClient(c config) *AccountRoleStateClient {
+	return &AccountRoleStateClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `accountrolestate.Hooks(f(g(h())))`.
+func (c *AccountRoleStateClient) Use(hooks ...Hook) {
+	c.hooks.AccountRoleState = append(c.hooks.AccountRoleState, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `accountrolestate.Intercept(f(g(h())))`.
+func (c *AccountRoleStateClient) Intercept(interceptors ...Interceptor) {
+	c.inters.AccountRoleState = append(c.inters.AccountRoleState, interceptors...)
+}
+
+// Create returns a builder for creating a AccountRoleState entity.
+func (c *AccountRoleStateClient) Create() *AccountRoleStateCreate {
+	mutation := newAccountRoleStateMutation(c.config, OpCreate)
+	return &AccountRoleStateCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of AccountRoleState entities.
+func (c *AccountRoleStateClient) CreateBulk(builders ...*AccountRoleStateCreate) *AccountRoleStateCreateBulk {
+	return &AccountRoleStateCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AccountRoleStateClient) MapCreateBulk(slice any, setFunc func(*AccountRoleStateCreate, int)) *AccountRoleStateCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AccountRoleStateCreateBulk{err: fmt.Errorf("calling to AccountRoleStateClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AccountRoleStateCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AccountRoleStateCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for AccountRoleState.
+func (c *AccountRoleStateClient) Update() *AccountRoleStateUpdate {
+	mutation := newAccountRoleStateMutation(c.config, OpUpdate)
+	return &AccountRoleStateUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AccountRoleStateClient) UpdateOne(_m *AccountRoleState) *AccountRoleStateUpdateOne {
+	mutation := newAccountRoleStateMutation(c.config, OpUpdateOne, withAccountRoleState(_m))
+	return &AccountRoleStateUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AccountRoleStateClient) UpdateOneID(id string) *AccountRoleStateUpdateOne {
+	mutation := newAccountRoleStateMutation(c.config, OpUpdateOne, withAccountRoleStateID(id))
+	return &AccountRoleStateUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for AccountRoleState.
+func (c *AccountRoleStateClient) Delete() *AccountRoleStateDelete {
+	mutation := newAccountRoleStateMutation(c.config, OpDelete)
+	return &AccountRoleStateDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AccountRoleStateClient) DeleteOne(_m *AccountRoleState) *AccountRoleStateDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AccountRoleStateClient) DeleteOneID(id string) *AccountRoleStateDeleteOne {
+	builder := c.Delete().Where(accountrolestate.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AccountRoleStateDeleteOne{builder}
+}
+
+// Query returns a query builder for AccountRoleState.
+func (c *AccountRoleStateClient) Query() *AccountRoleStateQuery {
+	return &AccountRoleStateQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAccountRoleState},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a AccountRoleState entity by its id.
+func (c *AccountRoleStateClient) Get(ctx context.Context, id string) (*AccountRoleState, error) {
+	return c.Query().Where(accountrolestate.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AccountRoleStateClient) GetX(ctx context.Context, id string) *AccountRoleState {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *AccountRoleStateClient) Hooks() []Hook {
+	return c.hooks.AccountRoleState
+}
+
+// Interceptors returns the client interceptors.
+func (c *AccountRoleStateClient) Interceptors() []Interceptor {
+	return c.inters.AccountRoleState
+}
+
+func (c *AccountRoleStateClient) mutate(ctx context.Context, m *AccountRoleStateMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AccountRoleStateCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AccountRoleStateUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AccountRoleStateUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AccountRoleStateDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown AccountRoleState mutation op: %q", m.Op())
 	}
 }
 
@@ -1628,6 +1920,139 @@ func (c *UserAccountClient) mutate(ctx context.Context, m *UserAccountMutation) 
 	}
 }
 
+// UserAudienceClient is a client for the UserAudience schema.
+type UserAudienceClient struct {
+	config
+}
+
+// NewUserAudienceClient returns a client for the UserAudience from the given config.
+func NewUserAudienceClient(c config) *UserAudienceClient {
+	return &UserAudienceClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `useraudience.Hooks(f(g(h())))`.
+func (c *UserAudienceClient) Use(hooks ...Hook) {
+	c.hooks.UserAudience = append(c.hooks.UserAudience, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `useraudience.Intercept(f(g(h())))`.
+func (c *UserAudienceClient) Intercept(interceptors ...Interceptor) {
+	c.inters.UserAudience = append(c.inters.UserAudience, interceptors...)
+}
+
+// Create returns a builder for creating a UserAudience entity.
+func (c *UserAudienceClient) Create() *UserAudienceCreate {
+	mutation := newUserAudienceMutation(c.config, OpCreate)
+	return &UserAudienceCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of UserAudience entities.
+func (c *UserAudienceClient) CreateBulk(builders ...*UserAudienceCreate) *UserAudienceCreateBulk {
+	return &UserAudienceCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *UserAudienceClient) MapCreateBulk(slice any, setFunc func(*UserAudienceCreate, int)) *UserAudienceCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &UserAudienceCreateBulk{err: fmt.Errorf("calling to UserAudienceClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*UserAudienceCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &UserAudienceCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for UserAudience.
+func (c *UserAudienceClient) Update() *UserAudienceUpdate {
+	mutation := newUserAudienceMutation(c.config, OpUpdate)
+	return &UserAudienceUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *UserAudienceClient) UpdateOne(_m *UserAudience) *UserAudienceUpdateOne {
+	mutation := newUserAudienceMutation(c.config, OpUpdateOne, withUserAudience(_m))
+	return &UserAudienceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *UserAudienceClient) UpdateOneID(id int64) *UserAudienceUpdateOne {
+	mutation := newUserAudienceMutation(c.config, OpUpdateOne, withUserAudienceID(id))
+	return &UserAudienceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for UserAudience.
+func (c *UserAudienceClient) Delete() *UserAudienceDelete {
+	mutation := newUserAudienceMutation(c.config, OpDelete)
+	return &UserAudienceDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *UserAudienceClient) DeleteOne(_m *UserAudience) *UserAudienceDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *UserAudienceClient) DeleteOneID(id int64) *UserAudienceDeleteOne {
+	builder := c.Delete().Where(useraudience.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &UserAudienceDeleteOne{builder}
+}
+
+// Query returns a query builder for UserAudience.
+func (c *UserAudienceClient) Query() *UserAudienceQuery {
+	return &UserAudienceQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeUserAudience},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a UserAudience entity by its id.
+func (c *UserAudienceClient) Get(ctx context.Context, id int64) (*UserAudience, error) {
+	return c.Query().Where(useraudience.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *UserAudienceClient) GetX(ctx context.Context, id int64) *UserAudience {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *UserAudienceClient) Hooks() []Hook {
+	return c.hooks.UserAudience
+}
+
+// Interceptors returns the client interceptors.
+func (c *UserAudienceClient) Interceptors() []Interceptor {
+	return c.inters.UserAudience
+}
+
+func (c *UserAudienceClient) mutate(ctx context.Context, m *UserAudienceMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&UserAudienceCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&UserAudienceUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&UserAudienceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&UserAudienceDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown UserAudience mutation op: %q", m.Op())
+	}
+}
+
 // UserIdentityClient is a client for the UserIdentity schema.
 type UserIdentityClient struct {
 	config
@@ -1897,13 +2322,15 @@ func (c *UserRoleBindingClient) mutate(ctx context.Context, m *UserRoleBindingMu
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		AuthSession, CasbinRule, DictData, DictType, Permission, PermissionDefinition,
-		PermissionTreeState, PolicyAudit, PolicyState, UserAccount, UserIdentity,
+		AccountRoleAudit, AccountRoleState, AuthSession, CasbinRule, DictData, DictType,
+		Permission, PermissionDefinition, PermissionTreeState, PolicyAudit,
+		PolicyState, UserAccount, UserAudience, UserIdentity,
 		UserRoleBinding []ent.Hook
 	}
 	inters struct {
-		AuthSession, CasbinRule, DictData, DictType, Permission, PermissionDefinition,
-		PermissionTreeState, PolicyAudit, PolicyState, UserAccount, UserIdentity,
+		AccountRoleAudit, AccountRoleState, AuthSession, CasbinRule, DictData, DictType,
+		Permission, PermissionDefinition, PermissionTreeState, PolicyAudit,
+		PolicyState, UserAccount, UserAudience, UserIdentity,
 		UserRoleBinding []ent.Interceptor
 	}
 )

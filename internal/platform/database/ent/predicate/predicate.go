@@ -6,6 +6,12 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
+// AccountRoleAudit is the predicate function for accountroleaudit builders.
+type AccountRoleAudit func(*sql.Selector)
+
+// AccountRoleState is the predicate function for accountrolestate builders.
+type AccountRoleState func(*sql.Selector)
+
 // AuthSession is the predicate function for authsession builders.
 type AuthSession func(*sql.Selector)
 
@@ -35,6 +41,9 @@ type PolicyState func(*sql.Selector)
 
 // UserAccount is the predicate function for useraccount builders.
 type UserAccount func(*sql.Selector)
+
+// UserAudience is the predicate function for useraudience builders.
+type UserAudience func(*sql.Selector)
 
 // UserIdentity is the predicate function for useridentity builders.
 type UserIdentity func(*sql.Selector)

@@ -14,7 +14,7 @@ go-oidc / go-jose、OpenTelemetry、Docker Compose。
 | 模块 | 职责 | 分层 |
 |---|---|---|
 | `access` | 权限码目录、导航节点、角色权限绑定（Casbin） | `interfaces → application → domain ← infrastructure` |
-| `auth` | Google/Apple 身份验证、本地会话与 Eagle token | `interfaces → application → domain ← infrastructure` |
+| `auth` | Google/Apple 身份验证、账号角色、本地会话与 Eagle token | `interfaces → application → domain ← infrastructure` |
 | `dictionary` | 字典 CRUD，作为简单业务的样板 | `interfaces → domain ← infrastructure` |
 
 ```mermaid
@@ -51,10 +51,12 @@ Casbin 判定角色权限。模块边界、数据所有权和
 ```text
 eagle-go/
 ├── api/eagle/<module>/v1/  # Protobuf 契约，HTTP 映射与权限注解的唯一来源
-├── cmd/eagle/              # 进程入口与 显式组合根
+├── cmd/eagle/              # 进程入口与显式组合根
+├── cmd/eagle-admin/        # 一次性管理员初始化命令
 ├── configs/config.yaml     # 默认配置，生产由 EAGLE_* 环境变量覆盖
 ├── internal/
 │   ├── access/             # 权限与角色绑定
+│   ├── auth/               # 账号、登录、角色与会话
 │   ├── dictionary/         # 字典
 │   └── platform/           # 应用配置、启动、HTTP 装配及 database/ 下的 Ent Client
 ├── migrations/             # goose SQL，生产不使用 Ent 自动迁移
@@ -336,7 +338,8 @@ rpc CreatePermission(CreatePermissionRequest) returns (CreatePermissionResponse)
 - `permission_definition` 是后端契约目录；proto 使用的新权限码必须先进入这里。
 - 导航节点用于菜单和按钮展示，只能引用已有权限码，不能创造权限。
 
-角色由 Eagle token 携带，本库保存“角色可以做什么”。角色键是以字母开头、最多 64 字节的稳定键，
+账号角色由 `auth` 管理并在登录/刷新时写入 Eagle token，`access` 保存“角色可以做什么”。
+首次管理员用 `eagle-admin` 初始化；角色管理 API 和生效边界见 [登录与账号管理](docs/social-login.md#管理员初始化与账号角色管理)。角色键是以字母开头、最多 64 字节的稳定键，
 如 `user`、`admin`、`support-agent`。全量覆盖角色权限的示例：
 
 ```bash
@@ -424,8 +427,8 @@ make build
 ```
 
 镜像采用多阶段构建：Go builder 编译，运行阶段使用 distroless。一个镜像同时包含常驻服务
-`/app/eagle`、一次性迁移任务 `/app/migrate` 和健康探针 `/app/healthcheck`，三者同版本，
-不会出现“服务已升级、迁移还没跑”的窗口。
+`/app/eagle`、一次性迁移任务 `/app/migrate`、管理员初始化 `/app/eagle-admin` 和健康探针 `/app/healthcheck`，四者同版本，
+部署流程先执行迁移再启动服务；迁移必须兼容仍在运行和允许回滚的旧应用。
 
 ```bash
 make image VERSION=v1.2.0 REGISTRY=registry.example.com/eagle
@@ -501,3 +504,5 @@ race detector 需要 C 编译器。可在 WSL/Linux 中运行，或安装可用�
 - [AI 编码约束](AGENTS.md)：常驻硬约束；细则在 [`.agents/rules/`](.agents/rules/)
 
 规则文件服务于 AI 协作，不替代面向开发者的 README 和专题文档。
+
+生产入口的就绪探针、HAProxy 样例与真实摘流验收命令见 [摘流验收](docs/ingress-readiness.md)。

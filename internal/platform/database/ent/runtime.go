@@ -5,6 +5,8 @@ package ent
 import (
 	"time"
 
+	"github.com/eagle-go/eagle/internal/platform/database/ent/accountroleaudit"
+	"github.com/eagle-go/eagle/internal/platform/database/ent/accountrolestate"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/authsession"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/casbinrule"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/dictdata"
@@ -16,6 +18,7 @@ import (
 	"github.com/eagle-go/eagle/internal/platform/database/ent/policystate"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/schema"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/useraccount"
+	"github.com/eagle-go/eagle/internal/platform/database/ent/useraudience"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/useridentity"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/userrolebinding"
 )
@@ -24,6 +27,48 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	accountroleauditFields := schema.AccountRoleAudit{}.Fields()
+	_ = accountroleauditFields
+	// accountroleauditDescAudience is the schema descriptor for audience field.
+	accountroleauditDescAudience := accountroleauditFields[1].Descriptor()
+	// accountroleaudit.AudienceValidator is a validator for the "audience" field. It is called by the builders before save.
+	accountroleaudit.AudienceValidator = accountroleauditDescAudience.Validators[0].(func(string) error)
+	// accountroleauditDescAccountSubject is the schema descriptor for account_subject field.
+	accountroleauditDescAccountSubject := accountroleauditFields[3].Descriptor()
+	// accountroleaudit.AccountSubjectValidator is a validator for the "account_subject" field. It is called by the builders before save.
+	accountroleaudit.AccountSubjectValidator = accountroleauditDescAccountSubject.Validators[0].(func(string) error)
+	// accountroleauditDescActorSubject is the schema descriptor for actor_subject field.
+	accountroleauditDescActorSubject := accountroleauditFields[4].Descriptor()
+	// accountroleaudit.ActorSubjectValidator is a validator for the "actor_subject" field. It is called by the builders before save.
+	accountroleaudit.ActorSubjectValidator = accountroleauditDescActorSubject.Validators[0].(func(string) error)
+	// accountroleauditDescAction is the schema descriptor for action field.
+	accountroleauditDescAction := accountroleauditFields[5].Descriptor()
+	// accountroleaudit.ActionValidator is a validator for the "action" field. It is called by the builders before save.
+	accountroleaudit.ActionValidator = accountroleauditDescAction.Validators[0].(func(string) error)
+	// accountroleauditDescCreatedAt is the schema descriptor for created_at field.
+	accountroleauditDescCreatedAt := accountroleauditFields[8].Descriptor()
+	// accountroleaudit.DefaultCreatedAt holds the default value on creation for the created_at field.
+	accountroleaudit.DefaultCreatedAt = accountroleauditDescCreatedAt.Default.(func() time.Time)
+	accountrolestateFields := schema.AccountRoleState{}.Fields()
+	_ = accountrolestateFields
+	// accountrolestateDescRevision is the schema descriptor for revision field.
+	accountrolestateDescRevision := accountrolestateFields[1].Descriptor()
+	// accountrolestate.DefaultRevision holds the default value on creation for the revision field.
+	accountrolestate.DefaultRevision = accountrolestateDescRevision.Default.(int64)
+	// accountrolestateDescAdminInitialized is the schema descriptor for admin_initialized field.
+	accountrolestateDescAdminInitialized := accountrolestateFields[2].Descriptor()
+	// accountrolestate.DefaultAdminInitialized holds the default value on creation for the admin_initialized field.
+	accountrolestate.DefaultAdminInitialized = accountrolestateDescAdminInitialized.Default.(bool)
+	// accountrolestateDescUpdatedAt is the schema descriptor for updated_at field.
+	accountrolestateDescUpdatedAt := accountrolestateFields[3].Descriptor()
+	// accountrolestate.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	accountrolestate.DefaultUpdatedAt = accountrolestateDescUpdatedAt.Default.(func() time.Time)
+	// accountrolestate.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	accountrolestate.UpdateDefaultUpdatedAt = accountrolestateDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// accountrolestateDescID is the schema descriptor for id field.
+	accountrolestateDescID := accountrolestateFields[0].Descriptor()
+	// accountrolestate.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	accountrolestate.IDValidator = accountrolestateDescID.Validators[0].(func(string) error)
 	authsessionFields := schema.AuthSession{}.Fields()
 	_ = authsessionFields
 	// authsessionDescAudience is the schema descriptor for audience field.
@@ -380,6 +425,20 @@ func init() {
 	useraccountDescID := useraccountFields[0].Descriptor()
 	// useraccount.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	useraccount.IDValidator = useraccountDescID.Validators[0].(func(string) error)
+	useraudienceFields := schema.UserAudience{}.Fields()
+	_ = useraudienceFields
+	// useraudienceDescAccountSubject is the schema descriptor for account_subject field.
+	useraudienceDescAccountSubject := useraudienceFields[1].Descriptor()
+	// useraudience.AccountSubjectValidator is a validator for the "account_subject" field. It is called by the builders before save.
+	useraudience.AccountSubjectValidator = useraudienceDescAccountSubject.Validators[0].(func(string) error)
+	// useraudienceDescAudience is the schema descriptor for audience field.
+	useraudienceDescAudience := useraudienceFields[2].Descriptor()
+	// useraudience.AudienceValidator is a validator for the "audience" field. It is called by the builders before save.
+	useraudience.AudienceValidator = useraudienceDescAudience.Validators[0].(func(string) error)
+	// useraudienceDescCreatedAt is the schema descriptor for created_at field.
+	useraudienceDescCreatedAt := useraudienceFields[3].Descriptor()
+	// useraudience.DefaultCreatedAt holds the default value on creation for the created_at field.
+	useraudience.DefaultCreatedAt = useraudienceDescCreatedAt.Default.(func() time.Time)
 	useridentityFields := schema.UserIdentity{}.Fields()
 	_ = useridentityFields
 	// useridentityDescAccountSubject is the schema descriptor for account_subject field.

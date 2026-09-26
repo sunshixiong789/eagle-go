@@ -117,6 +117,7 @@ func TestMain(m *testing.M) {
 
 // testEnv 是一次测试用的完整服务实例。
 type testEnv struct {
+	db       *platformdb.Database
 	http     *httptest.Server
 	enforcer *authz.Enforcer
 	policy   accessdomain.PolicyRepo
@@ -195,12 +196,13 @@ func newTestEnv(t *testing.T) *testEnv {
 		accessv1.RegisterRoleBindingServiceHTTPServer(s, bindingSvc)
 		dictionaryv1.RegisterDictServiceHTTPServer(s, dictSvc)
 		authv1.RegisterAuthServiceHTTPServer(s, authSvc)
+		authv1.RegisterAccountServiceHTTPServer(s, authinterfaces.NewAccountService(authapp.NewAccountUsecase(authinfra.NewAccountRepository(adminDB, testAudience))))
 	})
 
 	ts := httptest.NewServer(srv)
 	t.Cleanup(ts.Close)
 
-	return &testEnv{http: ts, enforcer: enforcer, policy: policyRepo}
+	return &testEnv{db: adminDB, http: ts, enforcer: enforcer, policy: policyRepo}
 }
 
 type providerVerifierStub struct{}
@@ -244,6 +246,10 @@ func e2eErrorMappings() []server.ErrorMappingRule {
 		server.Unauthorized(authdomain.ErrInvalidNonce, authv1.ErrorReason_ERROR_REASON_INVALID_NONCE),
 		server.Unauthorized(authdomain.ErrInvalidRefreshToken, authv1.ErrorReason_ERROR_REASON_INVALID_REFRESH_TOKEN),
 		server.Forbidden(authdomain.ErrAccountDisabled, authv1.ErrorReason_ERROR_REASON_ACCOUNT_DISABLED),
+		server.NotFound(authdomain.ErrAccountNotFound, authv1.ErrorReason_ERROR_REASON_ACCOUNT_NOT_FOUND),
+		server.BadRequest(authdomain.ErrInvalidRoleAssignment, authv1.ErrorReason_ERROR_REASON_INVALID_ROLE_ASSIGNMENT),
+		server.Conflict(authdomain.ErrRoleRevisionConflict, authv1.ErrorReason_ERROR_REASON_ROLE_REVISION_CONFLICT),
+		server.Conflict(authdomain.ErrLastAdmin, authv1.ErrorReason_ERROR_REASON_LAST_ADMIN),
 		server.NotFound(dictionarydomain.ErrDictTypeNotFound, dictionaryv1.ErrorReason_ERROR_REASON_DICT_TYPE_NOT_FOUND),
 		server.Conflict(dictionarydomain.ErrDictTypeDuplicated, dictionaryv1.ErrorReason_ERROR_REASON_DICT_TYPE_DUPLICATED),
 		server.NotFound(dictionarydomain.ErrDictDataNotFound, dictionaryv1.ErrorReason_ERROR_REASON_DICT_DATA_NOT_FOUND),

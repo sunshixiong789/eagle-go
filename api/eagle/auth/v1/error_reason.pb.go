@@ -24,12 +24,16 @@ const (
 type ErrorReason int32
 
 const (
-	ErrorReason_ERROR_REASON_UNSPECIFIED           ErrorReason = 0
-	ErrorReason_ERROR_REASON_PROVIDER_DISABLED     ErrorReason = 10
-	ErrorReason_ERROR_REASON_INVALID_ID_TOKEN      ErrorReason = 11
-	ErrorReason_ERROR_REASON_INVALID_NONCE         ErrorReason = 12
-	ErrorReason_ERROR_REASON_INVALID_REFRESH_TOKEN ErrorReason = 13
-	ErrorReason_ERROR_REASON_ACCOUNT_DISABLED      ErrorReason = 14
+	ErrorReason_ERROR_REASON_UNSPECIFIED             ErrorReason = 0
+	ErrorReason_ERROR_REASON_PROVIDER_DISABLED       ErrorReason = 10
+	ErrorReason_ERROR_REASON_INVALID_ID_TOKEN        ErrorReason = 11
+	ErrorReason_ERROR_REASON_INVALID_NONCE           ErrorReason = 12
+	ErrorReason_ERROR_REASON_INVALID_REFRESH_TOKEN   ErrorReason = 13
+	ErrorReason_ERROR_REASON_ACCOUNT_DISABLED        ErrorReason = 14
+	ErrorReason_ERROR_REASON_ACCOUNT_NOT_FOUND       ErrorReason = 15
+	ErrorReason_ERROR_REASON_INVALID_ROLE_ASSIGNMENT ErrorReason = 16
+	ErrorReason_ERROR_REASON_ROLE_REVISION_CONFLICT  ErrorReason = 17
+	ErrorReason_ERROR_REASON_LAST_ADMIN              ErrorReason = 18
 )
 
 // Enum value maps for ErrorReason.
@@ -41,14 +45,22 @@ var (
 		12: "ERROR_REASON_INVALID_NONCE",
 		13: "ERROR_REASON_INVALID_REFRESH_TOKEN",
 		14: "ERROR_REASON_ACCOUNT_DISABLED",
+		15: "ERROR_REASON_ACCOUNT_NOT_FOUND",
+		16: "ERROR_REASON_INVALID_ROLE_ASSIGNMENT",
+		17: "ERROR_REASON_ROLE_REVISION_CONFLICT",
+		18: "ERROR_REASON_LAST_ADMIN",
 	}
 	ErrorReason_value = map[string]int32{
-		"ERROR_REASON_UNSPECIFIED":           0,
-		"ERROR_REASON_PROVIDER_DISABLED":     10,
-		"ERROR_REASON_INVALID_ID_TOKEN":      11,
-		"ERROR_REASON_INVALID_NONCE":         12,
-		"ERROR_REASON_INVALID_REFRESH_TOKEN": 13,
-		"ERROR_REASON_ACCOUNT_DISABLED":      14,
+		"ERROR_REASON_UNSPECIFIED":             0,
+		"ERROR_REASON_PROVIDER_DISABLED":       10,
+		"ERROR_REASON_INVALID_ID_TOKEN":        11,
+		"ERROR_REASON_INVALID_NONCE":           12,
+		"ERROR_REASON_INVALID_REFRESH_TOKEN":   13,
+		"ERROR_REASON_ACCOUNT_DISABLED":        14,
+		"ERROR_REASON_ACCOUNT_NOT_FOUND":       15,
+		"ERROR_REASON_INVALID_ROLE_ASSIGNMENT": 16,
+		"ERROR_REASON_ROLE_REVISION_CONFLICT":  17,
+		"ERROR_REASON_LAST_ADMIN":              18,
 	}
 )
 
@@ -83,7 +95,7 @@ var File_eagle_auth_v1_error_reason_proto protoreflect.FileDescriptor
 
 const file_eagle_auth_v1_error_reason_proto_rawDesc = "" +
 	"\n" +
-	" eagle/auth/v1/error_reason.proto\x12\reagle.auth.v1*\xdd\x01\n" +
+	" eagle/auth/v1/error_reason.proto\x12\reagle.auth.v1*\xf1\x02\n" +
 	"\vErrorReason\x12\x1c\n" +
 	"\x18ERROR_REASON_UNSPECIFIED\x10\x00\x12\"\n" +
 	"\x1eERROR_REASON_PROVIDER_DISABLED\x10\n" +
@@ -91,7 +103,11 @@ const file_eagle_auth_v1_error_reason_proto_rawDesc = "" +
 	"\x1dERROR_REASON_INVALID_ID_TOKEN\x10\v\x12\x1e\n" +
 	"\x1aERROR_REASON_INVALID_NONCE\x10\f\x12&\n" +
 	"\"ERROR_REASON_INVALID_REFRESH_TOKEN\x10\r\x12!\n" +
-	"\x1dERROR_REASON_ACCOUNT_DISABLED\x10\x0eB4Z2github.com/eagle-go/eagle/api/eagle/auth/v1;authv1b\x06proto3"
+	"\x1dERROR_REASON_ACCOUNT_DISABLED\x10\x0e\x12\"\n" +
+	"\x1eERROR_REASON_ACCOUNT_NOT_FOUND\x10\x0f\x12(\n" +
+	"$ERROR_REASON_INVALID_ROLE_ASSIGNMENT\x10\x10\x12'\n" +
+	"#ERROR_REASON_ROLE_REVISION_CONFLICT\x10\x11\x12\x1b\n" +
+	"\x17ERROR_REASON_LAST_ADMIN\x10\x12B4Z2github.com/eagle-go/eagle/api/eagle/auth/v1;authv1b\x06proto3"
 
 var (
 	file_eagle_auth_v1_error_reason_proto_rawDescOnce sync.Once

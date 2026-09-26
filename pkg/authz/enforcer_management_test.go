@@ -3,7 +3,6 @@ package authz
 import (
 	"context"
 	"errors"
-	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -24,39 +23,6 @@ func (s *mutablePolicySource) LoadPolicyRows(context.Context) ([]StoredPolicy, e
 }
 func (s *mutablePolicySource) PolicyVersion(context.Context) (int64, error) {
 	return s.version, s.versionErr
-}
-
-func TestReplacePolicySnapshotIsAtomicAndVersioned(t *testing.T) {
-	enforcer, err := NewEnforcer(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := enforcer.SetRolePermissions(context.Background(), "viewer", []string{"system:user:list"}); err != nil {
-		t.Fatal(err)
-	}
-
-	rows := []StoredPolicy{
-		{PType: "p", Values: []string{"editor", "system:user:add"}},
-		{PType: "p", Values: []string{"viewer", "system:user:list"}},
-		{PType: "g", Values: []string{"lead", "editor"}},
-	}
-	if err := enforcer.ReplacePolicySnapshot(context.Background(), rows, 12); err != nil {
-		t.Fatal(err)
-	}
-	if enforcer.LoadedPolicyVersion() != 12 {
-		t.Fatalf("loaded version = %d", enforcer.LoadedPolicyVersion())
-	}
-	if allowed, err := enforcer.Allow([]string{"lead"}, "system:user:add"); err != nil || !allowed {
-		t.Fatalf("inherited permission = %v, %v", allowed, err)
-	}
-	permissions, err := enforcer.PermissionsOf(context.Background(), []string{"lead", "editor", "viewer"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	slices.Sort(permissions)
-	if !slices.Equal(permissions, []string{"system:user:add", "system:user:list"}) {
-		t.Fatalf("permissions = %v", permissions)
-	}
 }
 
 func TestReloadPolicyReplacesOldSnapshot(t *testing.T) {

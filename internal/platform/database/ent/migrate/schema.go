@@ -9,6 +9,49 @@ import (
 )
 
 var (
+	// AccountRoleAuditColumns holds the columns for the "account_role_audit" table.
+	AccountRoleAuditColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "audience", Type: field.TypeString, Size: 255},
+		{Name: "revision", Type: field.TypeInt64},
+		{Name: "account_subject", Type: field.TypeString, Size: 32},
+		{Name: "actor_subject", Type: field.TypeString, Size: 128},
+		{Name: "action", Type: field.TypeString, Size: 32},
+		{Name: "before", Type: field.TypeJSON},
+		{Name: "after", Type: field.TypeJSON},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// AccountRoleAuditTable holds the schema information for the "account_role_audit" table.
+	AccountRoleAuditTable = &schema.Table{
+		Name:       "account_role_audit",
+		Columns:    AccountRoleAuditColumns,
+		PrimaryKey: []*schema.Column{AccountRoleAuditColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "accountroleaudit_audience_revision",
+				Unique:  true,
+				Columns: []*schema.Column{AccountRoleAuditColumns[1], AccountRoleAuditColumns[2]},
+			},
+			{
+				Name:    "accountroleaudit_account_subject_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{AccountRoleAuditColumns[3], AccountRoleAuditColumns[8]},
+			},
+		},
+	}
+	// AccountRoleStateColumns holds the columns for the "account_role_state" table.
+	AccountRoleStateColumns = []*schema.Column{
+		{Name: "audience", Type: field.TypeString, Size: 255},
+		{Name: "revision", Type: field.TypeInt64, Default: 1},
+		{Name: "admin_initialized", Type: field.TypeBool, Default: false},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// AccountRoleStateTable holds the schema information for the "account_role_state" table.
+	AccountRoleStateTable = &schema.Table{
+		Name:       "account_role_state",
+		Columns:    AccountRoleStateColumns,
+		PrimaryKey: []*schema.Column{AccountRoleStateColumns[0]},
+	}
 	// AuthSessionColumns holds the columns for the "auth_session" table.
 	AuthSessionColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Size: 32},
@@ -245,6 +288,26 @@ var (
 		Columns:    UserAccountColumns,
 		PrimaryKey: []*schema.Column{UserAccountColumns[0]},
 	}
+	// UserAudienceColumns holds the columns for the "user_audience" table.
+	UserAudienceColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "account_subject", Type: field.TypeString, Size: 32},
+		{Name: "audience", Type: field.TypeString, Size: 255},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// UserAudienceTable holds the schema information for the "user_audience" table.
+	UserAudienceTable = &schema.Table{
+		Name:       "user_audience",
+		Columns:    UserAudienceColumns,
+		PrimaryKey: []*schema.Column{UserAudienceColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "useraudience_account_subject_audience",
+				Unique:  true,
+				Columns: []*schema.Column{UserAudienceColumns[1], UserAudienceColumns[2]},
+			},
+		},
+	}
 	// UserIdentityColumns holds the columns for the "user_identity" table.
 	UserIdentityColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -304,6 +367,8 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		AccountRoleAuditTable,
+		AccountRoleStateTable,
 		AuthSessionTable,
 		CasbinRuleTable,
 		SysDictDataTable,
@@ -314,12 +379,19 @@ var (
 		AuthzPolicyAuditTable,
 		AuthzPolicyStateTable,
 		UserAccountTable,
+		UserAudienceTable,
 		UserIdentityTable,
 		UserRoleBindingTable,
 	}
 )
 
 func init() {
+	AccountRoleAuditTable.Annotation = &entsql.Annotation{
+		Table: "account_role_audit",
+	}
+	AccountRoleStateTable.Annotation = &entsql.Annotation{
+		Table: "account_role_state",
+	}
 	AuthSessionTable.Annotation = &entsql.Annotation{
 		Table: "auth_session",
 	}
@@ -349,6 +421,9 @@ func init() {
 	}
 	UserAccountTable.Annotation = &entsql.Annotation{
 		Table: "user_account",
+	}
+	UserAudienceTable.Annotation = &entsql.Annotation{
+		Table: "user_audience",
 	}
 	UserIdentityTable.Annotation = &entsql.Annotation{
 		Table: "user_identity",

@@ -9,7 +9,7 @@
 | 模块 | 职责 | 拥有的数据 | 外部依赖 |
 |---|---|---|---|
 | `access` | 权限码目录、导航树、角色绑定、Casbin 策略 | `permission_definition`、`casbin_rule`、策略版本 | 无 |
-| `auth` | 账号、Google/Apple 登录身份、Eagle token 与会话 | `user_account`、`user_identity`、`user_role_binding`、`auth_session` | Google/Apple JWKS |
+| `auth` | 账号、Google/Apple 登录身份、Eagle token 与会话 | `user_account`、`user_identity`、`user_role_binding`、`auth_session`、`user_audience`、`account_role_state`、`account_role_audit` | Google/Apple JWKS |
 | `dictionary` | 字典的简单 CRUD，作为新模块的样板 | `dict_type`、`dict_data` | 无 |
 
 Google/Apple 只负责证明第三方身份；Eagle 用不透明 `subject` 表示统一账号，一个账号可以显式绑定多个
@@ -78,17 +78,16 @@ Google/Apple 只负责证明第三方身份；Eagle 用不透明 `subject` 表�
 - 权限要求声明在 proto 的 `access` / `perm` 上，handler 不写鉴权分支。可选级别只有 `PUBLIC` / `AUTHENTICATED` / `PERMISSION_REQUIRED`。
 - Eagle token 使用带 `kid` 的非对称签名；认证服务独占私钥，通过 `/.well-known/jwks.json` 发布公钥。资源服务本地缓存公钥，不逐请求远程 introspection。
 - token 只携带 `sub`、`sid`、`jti`、时间、audience 与角色，不携带邮箱、昵称等资料。角色按 audience 归属，角色能做什么一律由 Casbin 策略决定。
-- 新账号在当前 audience 默认获得 `user`。管理员角色需在 `user_role_binding` 中显式分配，不从客户端请求或第三方资料推断。
+- 新账号在当前 audience 默认获得 `user`。首次管理员通过运维命令显式初始化，后续通过受权限保护的账号角色接口分配；不从登录请求或第三方资料推断。明确清空角色后不会在重新登录时恢复默认角色。
 - 手机号、微信等国内登录是未来可增加的独立验证用例；验证成功后必须复用 `user_account`、`user_identity`、会话和 Eagle token，不把短信验证码或 OAuth code 硬塞进 ID Token 接口。
 
 ### 统一认证中心的拆分路径
 
-当多个应用需要共享账号、认证需要独立发布或区域合规要求出现时，先把 `auth` 及其四张自有表迁到独立
-进程和数据库。网关继续把登录、刷新和 JWKS 路由到认证中心；业务服务保留 `pkg/authn`，通过
-`RemoteKeySet` 缓存认证中心公钥并在本地构造 `Principal`，不逐请求同步调用认证中心。
+当多个应用需要共享账号、认证需要独立发布或区域合规要求出现时，先把 `auth` 及其自有表迁到独立
+进程和数据库。网关继续把登录、刷新和 JWKS 路由到认证中心；业务服务保留 `pkg/authn`，届时实现远程 JWKS 缓存并在本地构造 `Principal`，不逐请求同步调用认证中心。
 
 `access` 可以继续留在业务单体；需要独立治理时再作为策略源拆出，通过版本化快照或事件更新各资源服务
-的本地判定器。`ReplacePolicySnapshot` 保证切换原子性。服务间工作负载身份与 C 端用户会话是两类凭证，
+的本地判定器。届时实现版本快照接收与原子切换。服务间工作负载身份与 C 端用户会话是两类凭证，
 不得复用用户 refresh token。国内与海外需要独立数据域时使用不同 issuer、密钥和账号存储，由网关按区域
 路由；是否允许跨域绑定账号必须经过明确的合规与产品设计。
 
@@ -121,7 +120,7 @@ Google/Apple 只负责证明第三方身份；Eagle 用不透明 `subject` 表�
 权限正常每 5 秒对账，每次对账最多执行 5 秒。readiness 从首次探测到版本落后起容忍 30 秒，
 持续落后即返回失败，追平后自动恢复。数据库读取失败立即使 readiness 失败。
 这不是请求级即时撤权：部署环境必须持续探测并从流量池移除未就绪副本，探测和摘流也有延迟。
-本地 Compose 仅标记容器健康状态，不自动停止向该容器发送请求。
+本地 Compose 仅标记容器健康状态，不自动停止向该容器发送请求。生产样例及真实代理验证见 [摘流验收](ingress-readiness.md)。
 
 策略写入成功响应表示事务已提交，并返回权威版本；同步重载失败记录日志和指标，由后台对账继续重试，不把已提交操作报告为保存失败。响应不保证全部副本已加载该版本。
 健康与指标共用的监听端口必须在启动期间绑定成功，否则应用启动失败。HTTP 服务端错误对外使用稳定的 `INTERNAL_ERROR` 原因码，原始错误只保留在服务端日志中。

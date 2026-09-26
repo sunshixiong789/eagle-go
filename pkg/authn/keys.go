@@ -2,15 +2,8 @@ package authn
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net"
-	"net/http"
-	"net/url"
-	"sync"
-	"time"
 
 	jose "github.com/go-jose/go-jose/v4"
 )
@@ -20,7 +13,7 @@ var ErrSigningKeyNotFound = errors.New("authn: signing key not found")
 // KeySource 根据令牌中的 kid 和签名算法查找验签公钥。
 type KeySource interface {
 	// Key 返回匹配 kid、兼容指定算法且可用于验签的唯一公钥；kid 未知时禁止退回任意其他密钥。
-	// 密钥集合中无匹配或存在多个匹配时返回 ErrSigningKeyNotFound；远程加载失败可返回底层错误。
+	// 密钥集合中无匹配或存在多个匹配时返回 ErrSigningKeyNotFound。
 	Key(context.Context, string, string) (jose.JSONWebKey, error)
 }
 
@@ -34,93 +27,6 @@ func NewStaticKeySet(set jose.JSONWebKeySet) *StaticKeySet {
 
 func (s *StaticKeySet) Key(_ context.Context, kid, algorithm string) (jose.JSONWebKey, error) {
 	return selectKey(s.set, kid, algorithm)
-}
-
-// RemoteKeySet caches an authentication center's JWKS. An unknown kid forces
-// one refresh, while a temporarily unavailable endpoint may use a bounded stale
-// key so an auth-center outage does not immediately take every resource service down.
-type RemoteKeySet struct {
-	url      string
-	client   *http.Client
-	cacheTTL time.Duration
-	maxStale time.Duration
-
-	mu        sync.Mutex
-	set       jose.JSONWebKeySet
-	fetchedAt time.Time
-}
-
-func NewRemoteKeySet(rawURL string, client *http.Client, cacheTTL, maxStale time.Duration) (*RemoteKeySet, error) {
-	u, err := url.Parse(rawURL)
-	if err != nil || u.Scheme == "" || u.Host == "" {
-		return nil, errors.New("authn: JWKS URL must be absolute")
-	}
-	host := u.Hostname()
-	loopback := host == "localhost"
-	if ip := net.ParseIP(host); ip != nil {
-		loopback = ip.IsLoopback()
-	}
-	if u.Scheme != "https" && !loopback {
-		return nil, errors.New("authn: JWKS URL must use HTTPS outside loopback development")
-	}
-	if client == nil {
-		client = &http.Client{Timeout: 5 * time.Second}
-	}
-	if cacheTTL <= 0 || maxStale < cacheTTL {
-		return nil, errors.New("authn: JWKS cache TTL must be positive and max stale must be at least the cache TTL")
-	}
-	return &RemoteKeySet{url: rawURL, client: client, cacheTTL: cacheTTL, maxStale: maxStale}, nil
-}
-
-// Key 串行执行缓存查找与刷新，缓存过期或未命中时重新加载 JWKS。
-// 刷新失败时仅允许回退到 maxStale 时间内的匹配旧公钥。
-func (r *RemoteKeySet) Key(ctx context.Context, kid, algorithm string) (jose.JSONWebKey, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	now := time.Now()
-	if now.Sub(r.fetchedAt) < r.cacheTTL {
-		if key, err := selectKey(r.set, kid, algorithm); err == nil {
-			return key, nil
-		}
-	}
-	previous, previousAt := r.set, r.fetchedAt
-	if err := r.refresh(ctx); err != nil {
-		if !previousAt.IsZero() && now.Sub(previousAt) <= r.maxStale {
-			if key, keyErr := selectKey(previous, kid, algorithm); keyErr == nil {
-				return key, nil
-			}
-		}
-		return jose.JSONWebKey{}, err
-	}
-	return selectKey(r.set, kid, algorithm)
-}
-
-func (r *RemoteKeySet) refresh(ctx context.Context) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.url, nil)
-	if err != nil {
-		return fmt.Errorf("authn: create JWKS request: %w", err)
-	}
-	resp, err := r.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("authn: fetch JWKS: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("authn: fetch JWKS: unexpected HTTP status %d", resp.StatusCode)
-	}
-	var set jose.JSONWebKeySet
-	decoder := json.NewDecoder(io.LimitReader(resp.Body, 1<<20))
-	if err := decoder.Decode(&set); err != nil {
-		return fmt.Errorf("authn: decode JWKS: %w", err)
-	}
-	set = publicClone(set)
-	if len(set.Keys) == 0 {
-		return errors.New("authn: JWKS contains no usable public signing keys")
-	}
-	r.set = set
-	r.fetchedAt = time.Now()
-	return nil
 }
 
 func selectKey(set jose.JSONWebKeySet, kid, algorithm string) (jose.JSONWebKey, error) {

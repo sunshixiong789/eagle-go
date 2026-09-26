@@ -40,6 +40,7 @@ EAGLE_DSN ?= postgres://eagle:eagle@127.0.0.1:5432/eagle?sslmode=disable
 MIGRATION_DIR := migrations
 endif
 MYSQL_TEST_PACKAGES := \
+	./cmd/eagle-admin \
 	./pkg/db \
 	./internal/access/infrastructure \
 	./internal/auth/infrastructure \
@@ -104,6 +105,7 @@ generate: api ent tidy
 build:
 	@mkdir -p $(BIN)
 	go build -ldflags "$(LDFLAGS)" -o $(BIN)/eagle ./cmd/eagle
+	go build -o $(BIN)/eagle-admin ./cmd/eagle-admin
 	go -C tools build -o $(BIN)/migrate ./migrate
 
 .PHONY: dev-key
@@ -203,3 +205,9 @@ help:
 	} { lastLine = $$0 }' $(MAKEFILE_LIST)
 
 .DEFAULT_GOAL := help
+
+.PHONY: test-ingress
+# 真实 HAProxy + 策略延迟摘流验收；使用本机临时数据库
+test-ingress:
+	@test -n "$(HAPROXY_BIN)" || (echo "HAPROXY_BIN is required" >&2; exit 1)
+	HAPROXY_BIN="$(HAPROXY_BIN)" go test -race -count=1 -v ./tests/ingress

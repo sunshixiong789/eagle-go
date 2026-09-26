@@ -86,6 +86,81 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/eagle.auth.v1.TokenResponse'
+    /v1/system/accounts:
+        get:
+            tags:
+                - AccountService
+            description: ListAccounts 分页查询统一账号，按 subject 升序；不返回第三方凭证或会话信息。
+            operationId: AccountService_ListAccounts
+            parameters:
+                - name: keyword
+                  in: query
+                  schema:
+                    type: string
+                - name: page
+                  in: query
+                  description: 从 1 开始，未传时使用第一页。
+                  schema:
+                    type: integer
+                    format: int32
+                - name: pageSize
+                  in: query
+                  description: 未传时为 20，最大为 100。
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.auth.v1.ListAccountsResponse'
+    /v1/system/accounts/{subject}/roles:
+        get:
+            tags:
+                - AccountService
+            description: GetAccountRoles 返回账号在当前 audience 的角色与该 audience 的全局版本；无角色返回空集合。
+            operationId: AccountService_GetAccountRoles
+            parameters:
+                - name: subject
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.auth.v1.GetAccountRolesResponse'
+        put:
+            tags:
+                - AccountService
+            description: |-
+                SetAccountRoles 原子覆盖角色并记录审计；必须传入读取到的版本，空数组持续撤销全部角色。
+                 不允许移除当前 audience 的最后一个启用管理员；角色在下次登录或刷新时进入新 token。
+            operationId: AccountService_SetAccountRoles
+            parameters:
+                - name: subject
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.auth.v1.SetAccountRolesRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.auth.v1.SetAccountRolesResponse'
     /v1/system/dict/data:
         get:
             tags:
@@ -830,6 +905,26 @@ components:
             properties:
                 permission:
                     $ref: '#/components/schemas/eagle.access.v1.Permission'
+        eagle.auth.v1.Account:
+            type: object
+            properties:
+                subject:
+                    type: string
+                displayName:
+                    type: string
+                status:
+                    type: integer
+                    description: 1 表示启用，0 表示停用。
+                    format: int32
+        eagle.auth.v1.GetAccountRolesResponse:
+            type: object
+            properties:
+                roles:
+                    type: array
+                    items:
+                        type: string
+                revision:
+                    type: string
         eagle.auth.v1.GetJSONWebKeySetResponse:
             type: object
             properties:
@@ -867,6 +962,15 @@ components:
                 e:
                     type: string
                     description: RSA 公钥指数的 Base64URL 编码；EC 公钥不使用此字段。
+        eagle.auth.v1.ListAccountsResponse:
+            type: object
+            properties:
+                accounts:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/eagle.auth.v1.Account'
+                total:
+                    type: string
         eagle.auth.v1.LogoutRequest:
             type: object
             properties:
@@ -882,6 +986,22 @@ components:
                 refreshToken:
                     type: string
                     description: 当前会话最近一次签发的刷新凭证，成功刷新后须保存响应中的新凭证。
+        eagle.auth.v1.SetAccountRolesRequest:
+            type: object
+            properties:
+                subject:
+                    type: string
+                roles:
+                    type: array
+                    items:
+                        type: string
+                expectedRevision:
+                    type: string
+        eagle.auth.v1.SetAccountRolesResponse:
+            type: object
+            properties:
+                revision:
+                    type: string
         eagle.auth.v1.SocialLoginRequest:
             type: object
             properties:
@@ -1125,6 +1245,8 @@ components:
                 dictType:
                     $ref: '#/components/schemas/eagle.dictionary.v1.DictType'
 tags:
+    - name: AccountService
+      description: AccountService 管理本应用 audience 内的账号角色；已有 access token 在到期前保留原角色。
     - name: AuthService
       description: AuthService 将第三方身份映射到 Eagle 账号，签发、刷新令牌并提供验签公钥。
     - name: DictService

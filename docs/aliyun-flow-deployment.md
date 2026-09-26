@@ -68,7 +68,7 @@ CI 的临时 PostgreSQL/MySQL 将端口随机绑定在构建机 `127.0.0.1`。�
 已有 root checkout 时，可在构建任务中切换用户运行（工作目录及缓存须可读写）：
 
 ```bash
-runuser -u eagle-ci -- sh deploy/scripts/ci.sh all
+runuser -u eagle-ci -- HAPROXY_BIN=/usr/sbin/haproxy sh deploy/scripts/ci.sh all
 ```
 
 推荐缓存 `go env GOMODCACHE`、`go env GOCACHE` 对应目录和构建用户的
@@ -93,17 +93,18 @@ EAGLE_CI_BASE_REF=origin/master
 Flow「执行命令」步骤，在代码仓库根目录运行：
 
 ```bash
-sh deploy/scripts/ci.sh all
+HAPROXY_BIN=/usr/sbin/haproxy sh deploy/scripts/ci.sh all
 ```
 
-`all` 顺序执行以下门禁，也可分别用子命令配置独立任务：
+构建机需安装 HAProxy 3.2，并按实际路径设置 `HAPROXY_BIN`。`all` 顺序执行以下门禁，也可分别用子命令配置独立任务：
 
 | 子命令 | 检查 |
 |---|---|
 | `check` | 迁移不可改写、Buf lint/breaking、API/配置/Ent 生成一致性、构建、两个 module 的 vet、golangci-lint、Compose 解析、发布脚本故障回归 |
 | `test` | 核心单测覆盖率至少 80%、业务 module race + PostgreSQL 集成/e2e、tools module 测试 |
 | `postgres` | 临时 PostgreSQL 上执行迁移 up → down-to 0 → up |
-| `mysql` | 临时 MySQL 上执行仓储/e2e 测试和迁移 up → down-to 0 → up |
+| `mysql` | 临时 MySQL 上执行管理员命令、仓储/e2e 测试和迁移 up → down-to 0 → up |
+| `ingress` | 指定 `HAPROXY_BIN`，验证真实策略过期、HAProxy 摘流及恢复；见 [摘流验收](ingress-readiness.md) |
 
 拆分任务时每个任务都要 checkout，全部成功才能进入构建。可上传
 `dist/coverage/eagle.out` 作为覆盖率制品。MR 流水线运行到 CI 即可，不授予 ACR 推送或 ECS 部署凭据。
@@ -279,3 +280,5 @@ DEPLOY_ENV=testing sh deploy/scripts/cd.sh rollback
 
 **数据库不自动回退。** 迁移必须采用 expand/contract，旧字段保留到旧版本退出回滚窗口以后再清理。
 上线前启用 RDS 备份与恢复点，迁移评审要求见[迁移兼容性](migration-compatibility.md)。
+
+账号角色管理首次发布须遵循 [00003 迁移的回滚边界](migration-compatibility.md)，启用新功能前先建立兼容的回滚基线。

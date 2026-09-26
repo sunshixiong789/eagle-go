@@ -12,6 +12,8 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/eagle-go/eagle/internal/platform/database/ent/accountroleaudit"
+	"github.com/eagle-go/eagle/internal/platform/database/ent/accountrolestate"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/authsession"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/casbinrule"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/dictdata"
@@ -22,6 +24,7 @@ import (
 	"github.com/eagle-go/eagle/internal/platform/database/ent/policyaudit"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/policystate"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/useraccount"
+	"github.com/eagle-go/eagle/internal/platform/database/ent/useraudience"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/useridentity"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/userrolebinding"
 )
@@ -84,6 +87,8 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
+			accountroleaudit.Table:     accountroleaudit.ValidColumn,
+			accountrolestate.Table:     accountrolestate.ValidColumn,
 			authsession.Table:          authsession.ValidColumn,
 			casbinrule.Table:           casbinrule.ValidColumn,
 			dictdata.Table:             dictdata.ValidColumn,
@@ -94,6 +99,7 @@ func checkColumn(t, c string) error {
 			policyaudit.Table:          policyaudit.ValidColumn,
 			policystate.Table:          policystate.ValidColumn,
 			useraccount.Table:          useraccount.ValidColumn,
+			useraudience.Table:         useraudience.ValidColumn,
 			useridentity.Table:         useridentity.ValidColumn,
 			userrolebinding.Table:      userrolebinding.ValidColumn,
 		})

@@ -71,3 +71,46 @@ Content-Type: application/json
 即时会话检查，普通接口保持本地公钥验签，避免认证中心故障拖垮所有服务。客户端退出时应清除两种 token。
 登录和刷新在本地签发成功后才提交数据库事务；签发失败可以使用原 refresh token 重试。
 如果事务已提交但响应丢失，原 refresh token 已失效，客户端应重新登录。
+
+## 管理员初始化与账号角色管理
+
+先让目标用户完成一次正常登录，取得返回的 Eagle `subject`。执行迁移到 `00003` 后，
+在具有该应用数据库权限的运维终端运行同版本命令（镜像内为 `/app/eagle-admin`）：
+
+```bash
+make build
+export EAGLE_DATABASE_DRIVER=postgres
+export EAGLE_DATABASE_DSN='<从部署密钥注入数据库连接>'
+export EAGLE_AUTH_AUDIENCE='<与服务配置一致的 audience>'
+./bin/eagle-admin -subject '<已有账号 subject>' -actor '<运维人员标识>'
+```
+
+每个 audience 只能初始化一次；已有管理员时也拒绝执行，停用账号不能被初始化。
+命令在同一事务内写入角色、初始化标记和审计；并发执行只有一次成功。
+目标账号刷新或重新登录后获得 `admin`。管理员仍经过 Casbin，权限来自已存在的 `system:*` 策略。
+该命令不提供密码重置、身份绑定或绕过数据库认证的功能。
+
+使用管理员 token 管理账号：
+
+| 操作 | HTTP | 权限 |
+|---|---|---|
+| 分页查询账号 | `GET /v1/system/accounts?page=1&page_size=20` | `system:account:list` |
+| 查询角色和版本 | `GET /v1/system/accounts/{subject}/roles` | `system:account:query` |
+| 全量替换角色 | `PUT /v1/system/accounts/{subject}/roles` | `system:account:assign` |
+
+PUT 示例（`expected_revision` 使用刚查询到的 revision）：
+
+```json
+{"roles":["user","support-agent"],"expected_revision":2}
+```
+
+revision 是当前 audience 的全局版本；其他账号变更或首次加入该应用也会使旧版本失效。
+遇到 409 必须重新读取并核对，不能盲目重试覆盖。角色名去重排序，`roles: []` 表示撤销所有角色，
+之后刷新、退出再登录都不会重新获得默认 `user`；其他 audience 不受影响。
+角色名称允许先分配再配置 Casbin 权限，未授予权限的角色不会因此获得接口访问权。
+最后一个启用的直接 `admin` 不能被移除；应先给另一启用账号分配管理员。
+不要把 `system:account:assign` 授给普通角色，该权限允许分配管理员。
+
+`user_audience` 区分“从未加入应用”和“明确拥有空角色”；`account_role_state` 串行化版本更新，
+`account_role_audit` 记录目标、操作者、动作、前后角色和版本。HTTP 操作者取自已验签主体，不能由请求体指定。
+角色调整只影响之后签发的 access token，已有 JWT 在其有效期内仍可使用，默认最长 900 秒。

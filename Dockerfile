@@ -22,6 +22,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
       -ldflags "-w -s -X main.Version=${VERSION}" \
       -o /out/eagle \
       ./cmd/eagle && \
+    go build -trimpath -ldflags "-w -s" -o /out/eagle-admin ./cmd/eagle-admin && \
     go -C tools build -trimpath -ldflags "-w -s" -o /out/migrate ./migrate && \
     go -C tools build -trimpath -ldflags "-w -s" -o /out/healthcheck ./healthcheck && \
     cp -R migrations /out/migrations && \
@@ -34,6 +35,7 @@ LABEL org.opencontainers.image.title="eagle" \
       org.opencontainers.image.version="${VERSION}"
 
 COPY --from=builder /out/eagle /app/eagle
+COPY --from=builder /out/eagle-admin /app/eagle-admin
 COPY --from=builder /out/migrate /app/migrate
 COPY --from=builder /out/healthcheck /app/healthcheck
 COPY --from=builder /out/migrations /app/migrations

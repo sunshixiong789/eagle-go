@@ -69,11 +69,13 @@ func composeApp(bc *config.Bootstrap, logger *slog.Logger) (platformruntime.Comp
 		authapp.NewUsecase(authinfra.NewProviderVerifier(auth), sessions, auth.GetAccessTokenTtl().AsDuration(), auth.GetRefreshTokenTtl().AsDuration()),
 		issuer,
 	)
+	accounts := authinterfaces.NewAccountService(authapp.NewAccountUsecase(authinfra.NewAccountRepository(db, auth.GetAudience())))
 	hs := server.NewHTTPServer(bc.GetServer(), ms, func(s *http.Server) {
 		accessv1.RegisterPermissionServiceHTTPServer(s, permissions)
 		accessv1.RegisterRoleBindingServiceHTTPServer(s, roles)
 		dictionaryv1.RegisterDictServiceHTTPServer(s, dictionaries)
 		authv1.RegisterAuthServiceHTTPServer(s, login)
+		authv1.RegisterAccountServiceHTTPServer(s, accounts)
 	})
 	if err := server.RegisterSwagger(hs, bc.GetServer().GetSwagger()); err != nil {
 		return platformruntime.Components{}, err

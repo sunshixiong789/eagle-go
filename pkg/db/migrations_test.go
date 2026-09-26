@@ -58,6 +58,7 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	dir := testkit.MigrationsDirFor(testDatabase.Driver)
 	assertLatestSchema(t, sqlDB, testDatabase.Driver)
 	assertSeedData(t, sqlDB, testDatabase.Driver)
+	assertAccountRoleUpgrade(t, sqlDB, dir)
 
 	if err := goose.DownTo(sqlDB, dir, 0); err != nil {
 		t.Fatalf("down-to 0: %v", err)
@@ -80,10 +81,10 @@ func assertLatestSchema(t *testing.T, db *sql.DB, driver string) {
 	t.Helper()
 	if version, err := goose.GetDBVersion(db); err != nil {
 		t.Fatalf("读取迁移版本: %v", err)
-	} else if version != 2 {
-		t.Fatalf("迁移版本 = %d, want 2", version)
+	} else if version != 3 {
+		t.Fatalf("迁移版本 = %d, want 3", version)
 	}
-	for _, table := range []string{"user_account", "user_identity", "user_role_binding", "auth_session"} {
+	for _, table := range []string{"user_account", "user_identity", "user_role_binding", "auth_session", "user_audience", "account_role_state", "account_role_audit"} {
 		exists, err := tableExists(db, driver, table)
 		if err != nil {
 			t.Fatalf("检查表 %s: %v", table, err)
@@ -203,7 +204,7 @@ func assertTablesDropped(t *testing.T, db *sql.DB, driver string) {
 	t.Helper()
 
 	for _, table := range []string{
-		"auth_session", "social_identity", "user_account", "user_identity", "user_role_binding",
+		"account_role_audit", "user_audience", "account_role_state", "auth_session", "social_identity", "user_account", "user_identity", "user_role_binding",
 		"navigation_node", "permission_definition", "permission_tree_state",
 		"sys_dict_type", "sys_dict_data", "casbin_rule",
 		"authz_policy_state", "authz_policy_audit",
@@ -236,4 +237,52 @@ func bind(driver, query string) string {
 		return strings.ReplaceAll(query, "$1", "?")
 	}
 	return query
+}
+
+// assertAccountRoleUpgrade 验证旧角色、无角色的旧会话都被回填，原有账号和会话字段保持可读写。
+func assertAccountRoleUpgrade(t *testing.T, db *sql.DB, dir string) {
+	t.Helper()
+	if err := goose.DownTo(db, dir, 2); err != nil {
+		t.Fatal(err)
+	}
+	for _, statement := range []string{
+		"INSERT INTO user_account (subject) VALUES ('upgrade-admin'), ('upgrade-empty')",
+		"INSERT INTO user_role_binding (account_subject, audience, role) VALUES ('upgrade-admin', 'upgrade-app', 'admin')",
+		"INSERT INTO user_identity (id, account_subject, provider, provider_subject) VALUES (9184, 'upgrade-empty', 'google', 'upgrade-provider')",
+		"INSERT INTO auth_session (id, identity_id, audience, refresh_token_hash, expires_at) VALUES ('upgrade-session', 9184, 'upgrade-app', 'upgrade-refresh', '2028-01-01 00:00:00')",
+	} {
+		if _, err := db.Exec(statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := goose.Up(db, dir); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := db.QueryRow("SELECT count(*) FROM user_audience WHERE audience='upgrade-app'").Scan(&count); err != nil || count != 2 {
+		t.Fatalf("audience backfill = %d: %v", count, err)
+	}
+	var initialized bool
+	if err := db.QueryRow("SELECT admin_initialized FROM account_role_state WHERE audience='upgrade-app'").Scan(&initialized); err != nil || !initialized {
+		t.Fatalf("existing admin not marked: %v", err)
+	}
+	if err := db.QueryRow("SELECT count(*) FROM user_role_binding WHERE account_subject='upgrade-empty'").Scan(&count); err != nil || count != 0 {
+		t.Fatalf("empty roles changed = %d: %v", count, err)
+	}
+	// 旧写法不需要提供任何新增列；迁移后仍能刷新会话、更新用户资料。
+	if _, err := db.Exec("UPDATE auth_session SET refresh_token_hash='upgrade-next' WHERE id='upgrade-session'"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("UPDATE user_account SET display_name='After upgrade' WHERE subject='upgrade-admin'"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow("SELECT count(*) FROM user_role_binding WHERE account_subject='upgrade-admin' AND role='admin'").Scan(&count); err != nil || count != 1 {
+		t.Fatalf("legacy admin changed = %d: %v", count, err)
+	}
+	// 清理夹具，避免后续回退到最初身份模型改变本测试的范围。
+	for _, statement := range []string{"DELETE FROM user_account WHERE subject IN ('upgrade-admin','upgrade-empty')", "DELETE FROM account_role_state WHERE audience='upgrade-app'"} {
+		if _, err := db.Exec(statement); err != nil {
+			t.Fatal(err)
+		}
+	}
 }

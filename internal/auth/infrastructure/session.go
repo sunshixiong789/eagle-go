@@ -2,6 +2,7 @@ package infrastructure
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"slices"
 	"time"
@@ -10,8 +11,8 @@ import (
 	platformdb "github.com/eagle-go/eagle/internal/platform/database"
 	"github.com/eagle-go/eagle/internal/platform/database/ent"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/authsession"
+	"github.com/eagle-go/eagle/internal/platform/database/ent/useraudience"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/useridentity"
-	"github.com/eagle-go/eagle/internal/platform/database/ent/userrolebinding"
 )
 
 const accountStatusEnabled int32 = 1
@@ -32,7 +33,7 @@ func (r *SessionRepository) Create(
 	newAccountSubject string,
 	session domain.Session,
 ) (*domain.SessionGrant, error) {
-	tx, err := r.db.Client().Tx(ctx)
+	tx, err := r.db.Client().BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
 		return nil, fmt.Errorf("begin social login: %w", err)
 	}
@@ -132,47 +133,42 @@ func upsertIdentity(
 	return row, nil
 }
 
-// ensureAndLoadRoles 读取账号在指定 audience 下的角色；没有绑定时幂等补入默认 user 角色。
+// ensureAndLoadRoles 仅在首次进入 audience 时补默认角色，显式空授权由初始化标记保留。
+// 调用前已锁定目标账号；状态行锁与管理入口顺序一致。
 func ensureAndLoadRoles(ctx context.Context, tx *ent.Tx, subject, audience string) ([]string, error) {
-	exists, err := tx.UserRoleBinding.Query().Where(
-		userrolebinding.AccountSubjectEQ(subject),
-		userrolebinding.AudienceEQ(audience),
-	).Exist(ctx)
+	initialized, err := tx.UserAudience.Query().Where(useraudience.AccountSubjectEQ(subject), useraudience.AudienceEQ(audience)).Exist(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("check user role bindings: %w", err)
+		return nil, err
 	}
-	if !exists {
-		if err := tx.UserRoleBinding.Create().
-			SetAccountSubject(subject).
-			SetAudience(audience).
-			SetRole("user").
-			OnConflictColumns(
-				userrolebinding.FieldAccountSubject,
-				userrolebinding.FieldAudience,
-				userrolebinding.FieldRole,
-			).
-			Ignore().
-			Exec(ctx); err != nil {
-			return nil, fmt.Errorf("assign default user role: %w", err)
+	if initialized {
+		return loadRoles(ctx, tx, subject, audience)
+	}
+	state, err := lockAccountRoleState(ctx, tx, audience)
+	if err != nil {
+		return nil, err
+	}
+	before, err := loadRoles(ctx, tx, subject, audience)
+	if err != nil {
+		return nil, err
+	}
+	roles := before
+	if len(roles) == 0 {
+		if _, err := tx.UserRoleBinding.Create().SetAccountSubject(subject).SetAudience(audience).SetRole("user").Save(ctx); err != nil {
+			return nil, err
 		}
+		roles = []string{"user"}
 	}
-	rows, err := tx.UserRoleBinding.Query().Where(
-		userrolebinding.AccountSubjectEQ(subject),
-		userrolebinding.AudienceEQ(audience),
-	).All(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("read user role bindings: %w", err)
+	if err := markAudience(ctx, tx, subject, audience); err != nil {
+		return nil, err
 	}
-	roles := make([]string, 0, len(rows))
-	for _, row := range rows {
-		roles = append(roles, row.Role)
+	if _, err := auditAccountRoles(ctx, tx, state, subject, subject, "audience.join", before, roles); err != nil {
+		return nil, err
 	}
-	slices.Sort(roles)
 	return roles, nil
 }
 
 func (r *SessionRepository) Rotate(ctx context.Context, oldHash, newHash string, expiresAt time.Time) (*domain.SessionGrant, error) {
-	tx, err := r.db.Client().Tx(ctx)
+	tx, err := r.db.Client().BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
 		return nil, fmt.Errorf("begin refresh: %w", err)
 	}
@@ -210,7 +206,7 @@ func (r *SessionRepository) Rotate(ctx context.Context, oldHash, newHash string,
 	if account.Status != accountStatusEnabled {
 		return nil, domain.ErrAccountDisabled
 	}
-	roles, err := ensureAndLoadRoles(ctx, tx, identity.AccountSubject, r.audience)
+	roles, err := loadRoles(ctx, tx, identity.AccountSubject, r.audience)
 	if err != nil {
 		return nil, err
 	}

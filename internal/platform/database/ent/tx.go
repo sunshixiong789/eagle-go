@@ -14,6 +14,10 @@ import (
 // Tx is a transactional client that is created by calling Client.Tx().
 type Tx struct {
 	config
+	// AccountRoleAudit is the client for interacting with the AccountRoleAudit builders.
+	AccountRoleAudit *AccountRoleAuditClient
+	// AccountRoleState is the client for interacting with the AccountRoleState builders.
+	AccountRoleState *AccountRoleStateClient
 	// AuthSession is the client for interacting with the AuthSession builders.
 	AuthSession *AuthSessionClient
 	// CasbinRule is the client for interacting with the CasbinRule builders.
@@ -34,6 +38,8 @@ type Tx struct {
 	PolicyState *PolicyStateClient
 	// UserAccount is the client for interacting with the UserAccount builders.
 	UserAccount *UserAccountClient
+	// UserAudience is the client for interacting with the UserAudience builders.
+	UserAudience *UserAudienceClient
 	// UserIdentity is the client for interacting with the UserIdentity builders.
 	UserIdentity *UserIdentityClient
 	// UserRoleBinding is the client for interacting with the UserRoleBinding builders.
@@ -169,6 +175,8 @@ func (tx *Tx) Client() *Client {
 }
 
 func (tx *Tx) init() {
+	tx.AccountRoleAudit = NewAccountRoleAuditClient(tx.config)
+	tx.AccountRoleState = NewAccountRoleStateClient(tx.config)
 	tx.AuthSession = NewAuthSessionClient(tx.config)
 	tx.CasbinRule = NewCasbinRuleClient(tx.config)
 	tx.DictData = NewDictDataClient(tx.config)
@@ -179,6 +187,7 @@ func (tx *Tx) init() {
 	tx.PolicyAudit = NewPolicyAuditClient(tx.config)
 	tx.PolicyState = NewPolicyStateClient(tx.config)
 	tx.UserAccount = NewUserAccountClient(tx.config)
+	tx.UserAudience = NewUserAudienceClient(tx.config)
 	tx.UserIdentity = NewUserIdentityClient(tx.config)
 	tx.UserRoleBinding = NewUserRoleBindingClient(tx.config)
 }
@@ -190,7 +199,7 @@ func (tx *Tx) init() {
 // of them in order to commit or rollback the transaction.
 //
 // If a closed transaction is embedded in one of the generated entities, and the entity
-// applies a query, for example: AuthSession.QueryXXX(), the query will be executed
+// applies a query, for example: AccountRoleAudit.QueryXXX(), the query will be executed
 // through the driver which created this transaction.
 //
 // Note that txDriver is not goroutine safe.

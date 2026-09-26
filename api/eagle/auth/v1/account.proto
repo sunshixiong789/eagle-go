@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package eagle.auth.v1;
+
+import "buf/validate/validate.proto";
+import "eagle/annotations/v1/perm.proto";
+import "google/api/annotations.proto";
+
+option go_package = "github.com/eagle-go/eagle/api/eagle/auth/v1;authv1";
+
+// AccountService 管理本应用 audience 内的账号角色；已有 access token 在到期前保留原角色。
+service AccountService {
+  // ListAccounts 分页查询统一账号，按 subject 升序；不返回第三方凭证或会话信息。
+  rpc ListAccounts(ListAccountsRequest) returns (ListAccountsResponse) {
+    option (google.api.http) = {get: "/v1/system/accounts"};
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
+    option (eagle.annotations.v1.perm) = "system:account:list";
+  }
+  // GetAccountRoles 返回账号在当前 audience 的角色与该 audience 的全局版本；无角色返回空集合。
+  rpc GetAccountRoles(GetAccountRolesRequest) returns (GetAccountRolesResponse) {
+    option (google.api.http) = {get: "/v1/system/accounts/{subject}/roles"};
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
+    option (eagle.annotations.v1.perm) = "system:account:query";
+  }
+  // SetAccountRoles 原子覆盖角色并记录审计；必须传入读取到的版本，空数组持续撤销全部角色。
+  // 不允许移除当前 audience 的最后一个启用管理员；角色在下次登录或刷新时进入新 token。
+  rpc SetAccountRoles(SetAccountRolesRequest) returns (SetAccountRolesResponse) {
+    option (google.api.http) = {put: "/v1/system/accounts/{subject}/roles" body: "*"};
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
+    option (eagle.annotations.v1.perm) = "system:account:assign";
+  }
+}
+
+message Account {
+  string subject = 1;
+  string display_name = 2;
+  // 1 表示启用，0 表示停用。
+  int32 status = 3;
+}
+
+message ListAccountsRequest {
+  string keyword = 1 [(buf.validate.field).string.max_len = 128];
+  // 从 1 开始，未传时使用第一页。
+  int32 page = 2 [(buf.validate.field).int32 = {gte: 0 lte: 1000000}];
+  // 未传时为 20，最大为 100。
+  int32 page_size = 3 [(buf.validate.field).int32 = {gte: 0 lte: 100}];
+}
+
+message ListAccountsResponse {
+  repeated Account accounts = 1;
+  int64 total = 2;
+}
+
+message GetAccountRolesRequest {
+  string subject = 1 [(buf.validate.field).string = {min_len: 1 max_len: 32}];
+}
+
+message GetAccountRolesResponse {
+  repeated string roles = 1;
+  int64 revision = 2;
+}
+
+message SetAccountRolesRequest {
+  string subject = 1 [(buf.validate.field).string = {min_len: 1 max_len: 32}];
+  repeated string roles = 2 [(buf.validate.field).repeated = {
+    max_items: 32
+    items: {string: {min_len: 1 max_len: 64 pattern: "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"}}
+  }];
+  int64 expected_revision = 3 [(buf.validate.field).int64.gt = 0];
+}
+
+message SetAccountRolesResponse {
+  int64 revision = 1;
+}

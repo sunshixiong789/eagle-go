@@ -9,6 +9,30 @@ import (
 	"github.com/eagle-go/eagle/internal/platform/database/ent"
 )
 
+// The AccountRoleAuditFunc type is an adapter to allow the use of ordinary
+// function as AccountRoleAudit mutator.
+type AccountRoleAuditFunc func(context.Context, *ent.AccountRoleAuditMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AccountRoleAuditFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AccountRoleAuditMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AccountRoleAuditMutation", m)
+}
+
+// The AccountRoleStateFunc type is an adapter to allow the use of ordinary
+// function as AccountRoleState mutator.
+type AccountRoleStateFunc func(context.Context, *ent.AccountRoleStateMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AccountRoleStateFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AccountRoleStateMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AccountRoleStateMutation", m)
+}
+
 // The AuthSessionFunc type is an adapter to allow the use of ordinary
 // function as AuthSession mutator.
 type AuthSessionFunc func(context.Context, *ent.AuthSessionMutation) (ent.Value, error)
@@ -127,6 +151,18 @@ func (f UserAccountFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value,
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.UserAccountMutation", m)
+}
+
+// The UserAudienceFunc type is an adapter to allow the use of ordinary
+// function as UserAudience mutator.
+type UserAudienceFunc func(context.Context, *ent.UserAudienceMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f UserAudienceFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.UserAudienceMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.UserAudienceMutation", m)
 }
 
 // The UserIdentityFunc type is an adapter to allow the use of ordinary
