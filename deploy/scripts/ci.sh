@@ -18,7 +18,7 @@ check() {
   ./bin/buf lint
   ./bin/buf breaking api --against ".git#ref=${base},subdir=api"
   make api config ent
-  if [ -n "$(git status --porcelain --untracked-files=all -- api pkg/platform/config internal/platform/database/ent openapi.yaml go.mod go.sum tools/go.mod tools/go.sum)" ]; then
+  if [ -n "$(git status --porcelain --untracked-files=all -- api internal/platform/config internal/platform/database/ent openapi.yaml go.mod go.sum tools/go.mod tools/go.sum)" ]; then
     echo 'ci: generated code differs; run make generate and commit the results' >&2
     exit 1
   fi

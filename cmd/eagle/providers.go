@@ -17,11 +17,11 @@ import (
 	authinterfaces "github.com/eagle-go/eagle/internal/auth/interfaces"
 	dictionaryinfra "github.com/eagle-go/eagle/internal/dictionary/infrastructure"
 	dictionaryinterfaces "github.com/eagle-go/eagle/internal/dictionary/interfaces"
+	"github.com/eagle-go/eagle/internal/platform/config"
 	platformdb "github.com/eagle-go/eagle/internal/platform/database"
+	platformruntime "github.com/eagle-go/eagle/internal/platform/runtime"
+	"github.com/eagle-go/eagle/internal/platform/server"
 	"github.com/eagle-go/eagle/pkg/authn"
-	"github.com/eagle-go/eagle/pkg/platform/config"
-	platformruntime "github.com/eagle-go/eagle/pkg/platform/runtime"
-	"github.com/eagle-go/eagle/pkg/platform/server"
 )
 
 // composeApp 是唯一组合根。所有可能失败的构造完成后才启动后台任务。

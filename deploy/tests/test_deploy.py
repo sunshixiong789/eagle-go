@@ -219,10 +219,38 @@ class DeploymentTests(unittest.TestCase):
         self.assertFalse((self.repo / "dist/eagle-release.tgz").exists())
 
     def test_coverage_gate_does_not_mask_test_failure(self):
-        self.executable("go", "import sys\nif sys.argv[1] == 'test': sys.exit(23)\nprint('total: (statements) 99.0%')\n")
+        self.executable("go", "import sys\nif sys.argv[1] == 'test': sys.exit(23)\nprint('github.com/eagle-go/eagle/internal/newmodule/domain')\n")
         result = subprocess.run(["make", "-f", str(ROOT / "Makefile"), "test-coverage"],
                                 cwd=self.root, env=self.env, capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
+
+    def test_coverage_gate_checks_each_discovered_package(self):
+        self.executable("go", '''import pathlib, sys
+packages = ["github.com/eagle-go/eagle/internal/newmodule/domain", "github.com/eagle-go/eagle/pkg/newpackage"]
+if sys.argv[1] == "list":
+    print("\\n".join(packages))
+elif sys.argv[1] == "test":
+    assert all(p in sys.argv for p in packages), sys.argv
+    path = next(a.split("=", 1)[1] for a in sys.argv if a.startswith("-coverprofile="))
+    pathlib.Path(path).write_text("mode: atomic\\n" + packages[0] + "/domain.go:1.1,2.1 100 1\\n" + packages[1] + "/work.go:1.1,2.1 1 0\\n")
+''')
+        result = subprocess.run(["make", "-f", str(ROOT / "Makefile"), "test-coverage"],
+                                cwd=self.root, env=self.env, capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("pkg/newpackage: 0.0%", result.stdout)
+
+    def test_tool_rebuilds_when_module_lock_changes(self):
+        tools = self.root / "tools"
+        tools.mkdir()
+        for name in ("go.mod", "go.sum"):
+            (tools / name).write_text("fixture")
+        binary = self.bin / "ent"
+        binary.write_text("old generator")
+        result = subprocess.run(["make", "-n", "-f", str(ROOT / "Makefile"),
+                                 "-W", "tools/go.mod", "BIN=" + str(self.bin), str(binary)],
+                                cwd=self.root, env=self.env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("go -C tools build", result.stdout)
 
     def test_ci_rejects_a_missing_or_self_comparison_base(self):
         self.run_script(script="ci.sh", action="check", success=False, EAGLE_CI_BASE_REF="")

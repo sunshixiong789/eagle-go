@@ -1,6 +1,7 @@
 package db_test
 
 import (
+	"context"
 	"database/sql"
 	"flag"
 	"strings"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/pressly/goose/v3"
 
+	"github.com/eagle-go/eagle/pkg/db"
 	"github.com/eagle-go/eagle/tests/testkit"
 )
 
@@ -24,6 +26,23 @@ func TestMigrationsRoundTrip(t *testing.T) {
 		t.Fatalf("启动测试数据库: %v", err)
 	}
 	t.Cleanup(func() { _ = testDatabase.Close() })
+	dialect, err := db.ParseDialect(testDatabase.Driver)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, idle := range []int32{0, 1} {
+		pool, closePool, err := db.New(context.Background(), db.Config{
+			Dialect: dialect, DSN: testDatabase.DSN, MaxConns: 2, MaxIdleConns: idle,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		stats := pool.Stats()
+		closePool()
+		if stats.Idle != int(idle) {
+			t.Fatalf("max_idle_conns=%d: idle connections=%d", idle, stats.Idle)
+		}
+	}
 
 	sqlDB, err := sql.Open(testDatabase.SQLDriver, testDatabase.DSN)
 	if err != nil {

@@ -41,11 +41,11 @@ import (
 	dictionarydomain "github.com/eagle-go/eagle/internal/dictionary/domain"
 	dictionaryinfra "github.com/eagle-go/eagle/internal/dictionary/infrastructure"
 	dictionaryinterfaces "github.com/eagle-go/eagle/internal/dictionary/interfaces"
+	"github.com/eagle-go/eagle/internal/platform/config"
 	platformdb "github.com/eagle-go/eagle/internal/platform/database"
+	"github.com/eagle-go/eagle/internal/platform/server"
 	"github.com/eagle-go/eagle/pkg/authn"
 	"github.com/eagle-go/eagle/pkg/authz"
-	"github.com/eagle-go/eagle/pkg/platform/config"
-	"github.com/eagle-go/eagle/pkg/platform/server"
 	"github.com/eagle-go/eagle/tests/testkit"
 )
 

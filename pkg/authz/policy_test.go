@@ -89,6 +89,14 @@ func TestRegisteredPoliciesAreExplicit(t *testing.T) {
 	}
 }
 
+func TestRegisteredPoliciesRejectEmptyCatalog(t *testing.T) {
+	for _, codes := range [][]string{{}, {"system:dict:add"}} {
+		if err := ValidateRegisteredPolicies(codes); err == nil {
+			t.Fatalf("incomplete catalog accepted: %v", codes)
+		}
+	}
+}
+
 func TestPolicyForIsCached(t *testing.T) {
 	const op = "/eagle.access.v1.PermissionService/DeletePermission"
 

@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	_ "github.com/eagle-go/eagle/api/eagle/dictionary/v1"
+	"github.com/eagle-go/eagle/internal/platform/config"
 	platformdb "github.com/eagle-go/eagle/internal/platform/database"
-	"github.com/eagle-go/eagle/pkg/platform/config"
 	"github.com/eagle-go/eagle/tests/testkit"
 )
 

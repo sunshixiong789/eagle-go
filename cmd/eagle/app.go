@@ -7,7 +7,7 @@ import (
 	accessdomain "github.com/eagle-go/eagle/internal/access/domain"
 	authdomain "github.com/eagle-go/eagle/internal/auth/domain"
 	dictionarydomain "github.com/eagle-go/eagle/internal/dictionary/domain"
-	"github.com/eagle-go/eagle/pkg/platform/server"
+	"github.com/eagle-go/eagle/internal/platform/server"
 )
 
 func errorMappings() []server.ErrorMappingRule {

@@ -9,10 +9,10 @@ import (
 
 	entsql "entgo.io/ent/dialect/sql"
 
+	"github.com/eagle-go/eagle/internal/platform/config"
 	"github.com/eagle-go/eagle/internal/platform/database/ent"
 	"github.com/eagle-go/eagle/pkg/db"
 	"github.com/eagle-go/eagle/pkg/healthx"
-	"github.com/eagle-go/eagle/pkg/platform/config"
 )
 
 type Database struct {

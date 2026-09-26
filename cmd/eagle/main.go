@@ -1,6 +1,6 @@
 package main
 
-import platformruntime "github.com/eagle-go/eagle/pkg/platform/runtime"
+import platformruntime "github.com/eagle-go/eagle/internal/platform/runtime"
 
 var Version string
 

@@ -4,7 +4,7 @@ import (
 	"github.com/go-kratos/kratos/v3/middleware"
 	"github.com/go-kratos/kratos/v3/transport/http"
 
-	"github.com/eagle-go/eagle/pkg/platform/config"
+	"github.com/eagle-go/eagle/internal/platform/config"
 )
 
 // HTTPRegistrar lets each process register only the APIs it owns.
@@ -15,7 +15,7 @@ func NewHTTPServer(
 	ms []middleware.Middleware,
 	registrars ...HTTPRegistrar,
 ) *http.Server {
-	opts := []http.ServerOption{http.Middleware(ms...)}
+	opts := []http.ServerOption{http.Middleware(ms...), http.ErrorEncoder(encodeError)}
 	if n := c.GetHttp().GetNetwork(); n != "" {
 		opts = append(opts, http.Network(n))
 	}

@@ -18,7 +18,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-// Config 是连接池参数。零值字段会落到下面的默认值。
+// Config 是连接池参数。MaxIdleConns 为零时不保留空闲连接，其他零值时长沿用 database/sql 默认行为。
 type Config struct {
 	Dialect         Dialect
 	DSN             string
@@ -46,7 +46,7 @@ func New(ctx context.Context, cfg Config) (*sql.DB, func(), error) {
 	if cfg.MaxConns > 0 {
 		sqlDB.SetMaxOpenConns(int(cfg.MaxConns))
 	}
-	if cfg.MaxIdleConns > 0 {
+	if cfg.MaxIdleConns >= 0 {
 		sqlDB.SetMaxIdleConns(int(cfg.MaxIdleConns))
 	}
 	if cfg.MaxConnLifetime > 0 {

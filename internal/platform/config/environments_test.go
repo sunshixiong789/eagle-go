@@ -9,7 +9,7 @@ import (
 	configenv "github.com/go-kratos/kratos/v3/config/env"
 	"github.com/go-kratos/kratos/v3/config/file"
 
-	appconfig "github.com/eagle-go/eagle/pkg/platform/config"
+	appconfig "github.com/eagle-go/eagle/internal/platform/config"
 )
 
 func TestSharedTemplateWithEnvironmentVariables(t *testing.T) {

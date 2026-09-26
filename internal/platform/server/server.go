@@ -19,7 +19,7 @@ import (
 )
 
 // meterName 是本服务所有自定义指标的 instrumentation scope。
-const meterName = "github.com/eagle-go/eagle/pkg/platform/server"
+const meterName = "github.com/eagle-go/eagle/internal/platform/server"
 
 // NewMiddlewares 构造 HTTP 服务端中间件链。
 //

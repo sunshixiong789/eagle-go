@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 
@@ -67,8 +68,8 @@ func Setup(ctx context.Context, cfg Config) (shutdown func(context.Context) erro
 		// （那会留下运行中的 goroutine），但也不能无限期挂住启动流程
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
-		for _, fn := range shutdowns {
-			_ = fn(ctx)
+		for i := len(shutdowns) - 1; i >= 0; i-- {
+			_ = shutdowns[i](ctx)
 		}
 	}
 
@@ -90,7 +91,12 @@ func Setup(ctx context.Context, cfg Config) (shutdown func(context.Context) erro
 		shutdowns = append(shutdowns, meterShutdown)
 	}
 
-	if serverShutdown := startMetricsServer(cfg.MetricsAddr); serverShutdown != nil {
+	serverShutdown, err := startMetricsServer(cfg.MetricsAddr)
+	if err != nil {
+		rollback(ctx)
+		return nil, err
+	}
+	if serverShutdown != nil {
 		shutdowns = append(shutdowns, serverShutdown)
 	}
 
@@ -214,14 +220,18 @@ func secondsHistogramView(name string) metricsdk.View {
 	}
 }
 
-// startMetricsServer 启动独立的指标端点。
+// startMetricsServer 同步绑定健康与指标端口；绑定失败阻止启动，避免业务运行却永远无法通过健康探针。
 //
 // 单开一个端口而不是挂在业务 HTTP 服务上：指标端点不应经过认证鉴权
 // 中间件（Prometheus 不会带 token），挂在业务服务上就得为它开一个
 // 免鉴权的口子，那个口子迟早会被别的东西复用。
-func startMetricsServer(addr string) func(context.Context) error {
+func startMetricsServer(addr string) (func(context.Context) error, error) {
 	if addr == "" {
-		return nil
+		return nil, nil
+	}
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("otelx: 监听健康与指标端口: %w", err)
 	}
 
 	mux := http.NewServeMux()
@@ -254,13 +264,12 @@ func startMetricsServer(addr string) func(context.Context) error {
 	}
 
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			// 指标端点起不来不该拖垮业务，记录后继续
+		if err := srv.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			otel.Handle(fmt.Errorf("otelx: 指标端点退出: %w", err))
 		}
 	}()
 
-	return srv.Shutdown
+	return srv.Shutdown, nil
 }
 
 // clampRatio 把采样率收敛到 [0, 1]。

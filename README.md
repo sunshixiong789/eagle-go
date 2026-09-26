@@ -56,7 +56,7 @@ eagle-go/
 ├── internal/
 │   ├── access/             # 权限与角色绑定
 │   ├── dictionary/         # 字典
-│   └── platform/database/  # Ent Client 与 schema
+│   └── platform/           # 应用配置、启动、HTTP 装配及 database/ 下的 Ent Client
 ├── migrations/             # goose SQL，生产不使用 Ent 自动迁移
 ├── pkg/                    # 无业务语义的技术能力，不得 import internal/
 ├── tests/                  # 架构测试、端到端测试和测试工具
@@ -242,6 +242,8 @@ make lint
 ```bash
 make test
 ```
+
+快速单元测试使用 `make test-unit`；`make test-coverage` 自动发现业务模块的 domain、application、interfaces 和核心公共包，逐包检查 80% 覆盖率，新增模块无需手动加入包清单。数据库、可观测性及进程启动相关包由完整测试覆盖。
 
 启动完整 Compose 环境：
 

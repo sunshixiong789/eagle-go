@@ -12,7 +12,7 @@ package eagle.platform.config;
 // 和 config_test.go 里挡住它的回归测试。
 import "google/protobuf/duration.proto";
 
-option go_package = "github.com/eagle-go/eagle/pkg/platform/config;config";
+option go_package = "github.com/eagle-go/eagle/internal/platform/config;config";
 
 // Bootstrap 是配置文件的根消息，对应 configs/config.yaml 的顶层结构。
 message Bootstrap {

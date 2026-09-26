@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"log/slog"
 	"maps"
 	"slices"
 
@@ -114,7 +115,7 @@ func (r *policyRepo) commitPolicy(ctx context.Context, version int64, err error)
 		return 0, err
 	}
 	if err := r.enforcer.ReloadPolicy(ctx); err != nil {
-		return version, fmt.Errorf("策略已提交为版本 %d，但本实例重载失败: %w", version, err)
+		slog.WarnContext(ctx, "策略已提交，等待后台对账重载", "policy_version", version, "error", err)
 	}
 	return version, nil
 }

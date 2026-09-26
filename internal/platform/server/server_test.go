@@ -11,9 +11,9 @@ import (
 	kratoshttp "github.com/go-kratos/kratos/v3/transport/http"
 	"google.golang.org/protobuf/types/known/durationpb"
 
+	"github.com/eagle-go/eagle/internal/platform/config"
 	"github.com/eagle-go/eagle/pkg/authn"
 	"github.com/eagle-go/eagle/pkg/authz"
-	"github.com/eagle-go/eagle/pkg/platform/config"
 )
 
 type denyAuthorizer struct{}

@@ -11,7 +11,7 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 
 	"github.com/eagle-go/eagle/internal/auth/domain"
-	"github.com/eagle-go/eagle/pkg/platform/config"
+	"github.com/eagle-go/eagle/internal/platform/config"
 )
 
 const (

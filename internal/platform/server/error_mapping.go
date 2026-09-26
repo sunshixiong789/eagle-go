@@ -3,9 +3,11 @@ package server
 import (
 	"context"
 	"errors"
+	"net/http"
 
 	kerrors "github.com/go-kratos/kratos/v3/errors"
 	"github.com/go-kratos/kratos/v3/middleware"
+	khttp "github.com/go-kratos/kratos/v3/transport/http"
 )
 
 // errorReason 提供传输错误使用的稳定原因码，通常由 Proto 错误枚举实现。
@@ -69,5 +71,18 @@ func toTransportError(err error, rules []ErrorMappingRule) error {
 			return rule.toKratos(err).WithCause(err)
 		}
 	}
-	return err
+	return publicError(err)
+}
+
+// publicError 保留明确的客户端错误；服务端错误只暴露稳定原因码，原始信息留在 cause 中供日志记录。
+func publicError(err error) error {
+	if err == nil || kerrors.Code(err) < http.StatusInternalServerError {
+		return err
+	}
+	return kerrors.New(kerrors.Code(err), "INTERNAL_ERROR", "服务暂时不可用").WithCause(err)
+}
+
+// encodeError 也覆盖鉴权、恢复和协议解码等未经过业务错误映射的响应。
+func encodeError(w http.ResponseWriter, r *http.Request, err error) {
+	khttp.DefaultErrorEncoder(w, r, publicError(err))
 }

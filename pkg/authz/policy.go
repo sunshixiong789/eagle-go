@@ -82,6 +82,7 @@ var concretePermissionPattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9]*:[a-zA-
 // ValidateRegisteredPolicies 扫描所有 eagle RPC 的访问声明，并可选地校验
 // 所需权限码是否存在于数据库权限目录。服务启动时执行，避免漏注解的接口
 // 带着不安全的默认语义运行。
+// catalogCodes 为 nil 时仅校验声明；非 nil（包括空集合）必须包含全部所需权限码。
 func ValidateRegisteredPolicies(catalogCodes []string) error {
 	catalog := make(map[string]struct{}, len(catalogCodes))
 	for _, code := range catalogCodes {
@@ -110,7 +111,7 @@ func ValidateRegisteredPolicies(catalogCodes []string) error {
 				case annotationsv1.AccessLevel_ACCESS_LEVEL_PERMISSION_REQUIRED:
 					if !concretePermissionPattern.MatchString(policy.Perm) {
 						violations = append(violations, fmt.Sprintf("%s: 权限码 %q 不是严格三段格式", op, policy.Perm))
-					} else if len(catalog) > 0 {
+					} else if catalogCodes != nil {
 						if _, ok := catalog[policy.Perm]; !ok {
 							violations = append(violations, fmt.Sprintf("%s: 权限码 %q 不在权限目录中", op, policy.Perm))
 						}

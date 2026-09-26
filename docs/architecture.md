@@ -21,6 +21,7 @@ Google/Apple 只负责证明第三方身份；Eagle 用不透明 `subject` 表�
     cmd/eagle                           进程入口和唯一组合根（显式构造）
     internal/<module>                   业务模块
     internal/platform/database/ent      Ent Client 与 schema
+    internal/platform/{config,runtime,server} 应用配置、生命周期与 HTTP 装配
     migrations                          goose SQL 迁移
     pkg                                 无业务语义的共享技术模块
     tools                               生成器与迁移程序（独立 go.mod）
@@ -111,7 +112,7 @@ Google/Apple 只负责证明第三方身份；Eagle 用不透明 `subject` 表�
 
 ## 共享代码边界
 
-`pkg/` 只放无业务语义的技术原语：JWT 验签、授权中间件、健康检查、配置、进程生命周期和传输运行时。业务模型不能进 `pkg/`，`pkg/` 也不得 import `internal/`——一旦依赖方向反过来，技术设施开始依赖业务，两边就再也拆不开。
+`pkg/` 只放共享技术原语：JWT 验签、授权中间件、数据库连接、健康检查和可观测性。应用配置、进程生命周期及 HTTP 装配放在 `internal/platform/`，避免把应用专用配置作为公共库接口。业务模型不能进 `pkg/`，`pkg/` 也不得 import `internal/`。
 
 这些约束由 `tests/architecture/dependencies_test.go` 持续检查，包括分层依赖、模块边界、`pkg/` 方向、Ent Client 不出 infrastructure、禁止引入 DI 容器，以及一份明确拒绝的第三方库清单。
 
@@ -121,6 +122,9 @@ Google/Apple 只负责证明第三方身份；Eagle 用不透明 `subject` 表�
 持续落后即返回失败，追平后自动恢复。数据库读取失败立即使 readiness 失败。
 这不是请求级即时撤权：部署环境必须持续探测并从流量池移除未就绪副本，探测和摘流也有延迟。
 本地 Compose 仅标记容器健康状态，不自动停止向该容器发送请求。
+
+策略写入成功响应表示事务已提交，并返回权威版本；同步重载失败记录日志和指标，由后台对账继续重试，不把已提交操作报告为保存失败。响应不保证全部副本已加载该版本。
+健康与指标共用的监听端口必须在启动期间绑定成功，否则应用启动失败。HTTP 服务端错误对外使用稳定的 `INTERNAL_ERROR` 原因码，原始错误只保留在服务端日志中。
 
 退出登录立即撤销该 refresh token 的刷新能力，已签发 access token 仍可使用到到期（默认 15 分钟）。
 账号停用或 audience 范围内的角色降级也在重新签发 token 后反映；修改角色的权限绑定则走策略对账。

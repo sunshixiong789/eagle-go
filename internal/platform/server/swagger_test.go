@@ -10,7 +10,7 @@ import (
 
 	kratoshttp "github.com/go-kratos/kratos/v3/transport/http"
 
-	"github.com/eagle-go/eagle/pkg/platform/config"
+	"github.com/eagle-go/eagle/internal/platform/config"
 )
 
 func TestSwaggerDisabledDoesNotExposeDocuments(t *testing.T) {

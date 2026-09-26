@@ -11,7 +11,8 @@ option go_package = "github.com/eagle-go/eagle/api/eagle/access/v1;accessv1";
 // RoleBindingService 管理 Eagle 角色的直接权限与继承关系。
 // 用户到角色的归属由 auth 模块维护，并通过 Eagle token 携带。
 // 策略写入成功后同步重载本实例，其他实例通过后台对账同步。
-// 若提交后本实例重载失败，请求会返回错误，但策略写入已生效于存储，应重新查询确认。
+// 成功响应表示策略已提交，返回权威版本；本实例重载失败时由后台对账重试，不返回保存失败。
+// 成功响应不保证所有实例已加载该版本。
 service RoleBindingService {
   // ListBoundRoles 按角色键升序列出当前有直接授权的角色及一致的全局策略版本。
   // 没有直接授权、仅通过继承获得权限的角色不在列表中。

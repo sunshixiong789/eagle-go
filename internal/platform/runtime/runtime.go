@@ -20,9 +20,9 @@ import (
 	"github.com/go-kratos/kratos/v3/log"
 	"github.com/go-kratos/kratos/v3/transport"
 
+	"github.com/eagle-go/eagle/internal/platform/config"
 	"github.com/eagle-go/eagle/pkg/healthx"
 	"github.com/eagle-go/eagle/pkg/otelx"
-	"github.com/eagle-go/eagle/pkg/platform/config"
 )
 
 type Components struct {
@@ -76,6 +76,7 @@ func run(spec Spec) error {
 	instanceID, _ := os.Hostname()
 	logger := newLogger(spec, instanceID, bc.GetObservability())
 	log.SetDefault(logger)
+	slog.SetDefault(logger)
 
 	shutdownOtel, err := setupObservability(spec, instanceID, bc.GetObservability())
 	if err != nil {

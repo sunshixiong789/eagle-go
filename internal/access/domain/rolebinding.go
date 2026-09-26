@@ -131,7 +131,8 @@ func NewRoleInheritance(child, parent Role) (RoleInheritance, error) {
 //
 // 写操作在同一事务内检查可选的全局 expectedVersion、修改策略、记录审计并推进版本；
 // 版本不匹配返回 ErrConcurrentModification，nil 表示不检查版本。
-// 写入提交后同步重载本实例；若重载失败，返回已提交版本及错误，调用方不能据此认定写入已回滚。
+// 成功返回表示写入已提交，返回值为已提交版本；本实例重载失败由后台对账重试，不作为写入失败返回。
+// 成功响应不保证所有实例已加载该版本。
 type PolicyRepo interface {
 	// FindBinding 返回角色的直接权限及对应的全局策略版本；未绑定时返回非 nil 的空绑定。
 	FindBinding(ctx context.Context, role Role) (*RoleBinding, error)

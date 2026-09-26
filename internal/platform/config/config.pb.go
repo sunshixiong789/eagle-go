@@ -695,7 +695,7 @@ const file_config_proto_rawDesc = "" +
 	"\x12trace_sample_ratio\x18\x02 \x01(\x01R\x10traceSampleRatio\x12\x1b\n" +
 	"\tlog_level\x18\x03 \x01(\tR\blogLevel\x12!\n" +
 	"\fmetrics_addr\x18\x04 \x01(\tR\vmetricsAddr\x12#\n" +
-	"\rotlp_insecure\x18\x05 \x01(\bR\fotlpInsecureB6Z4github.com/eagle-go/eagle/pkg/platform/config;configb\x06proto3"
+	"\rotlp_insecure\x18\x05 \x01(\bR\fotlpInsecureB;Z9github.com/eagle-go/eagle/internal/platform/config;configb\x06proto3"
 
 var (
 	file_config_proto_rawDescOnce sync.Once
