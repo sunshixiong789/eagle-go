@@ -31,6 +31,10 @@ $(BIN)/%: tools/go.mod tools/go.sum
 	@mkdir -p $(BIN)
 	go -C tools build -o $@ $(TOOL_PKG_$*)
 
+$(BIN)/migrate: tools/migrate/*.go tools/go.mod tools/go.sum
+	@mkdir -p $(BIN)
+	go -C tools build -o $@ ./migrate
+
 EAGLE_DATABASE_DRIVER ?= postgres
 ifeq ($(EAGLE_DATABASE_DRIVER),mysql)
 EAGLE_DSN ?= eagle:eagle@tcp(127.0.0.1:3306)/eagle?parseTime=true&loc=UTC&charset=utf8mb4
@@ -60,15 +64,13 @@ init: $(BUF) $(GOOSE) $(GOLANGCI_LINT)
 api: $(BUF)
 	$(BUF) generate
 
-.PHONY: config
-# 兼容原配置生成命令，统一由 api 生成
-config: api
-
 .PHONY: lint-proto
-# proto 风格检查 + 兼容性检查（against master）
+# Proto 风格检查；已发布项目可显式指定兼容性基线。
 lint-proto: $(BUF)
 	$(BUF) lint
-	$(BUF) breaking api --against '.git#branch=master,subdir=api'
+	@if [ -n "$${EAGLE_CI_RELEASE_REF:-}" ]; then \
+		$(BUF) breaking api --against ".git#ref=$${EAGLE_CI_RELEASE_REF},subdir=api"; \
+	fi
 
 .PHONY: ent
 # 生成 Ent 数据访问代码。--target 省略时默认取 schema 目录的父目录，
@@ -84,8 +86,8 @@ tidy:
 
 .PHONY: migrate-up
 # 执行数据库迁移
-migrate-up: $(GOOSE)
-	$(GOOSE) -dir $(MIGRATION_DIR) $(EAGLE_DATABASE_DRIVER) "$(EAGLE_DSN)" up
+migrate-up: $(BIN)/migrate
+	$(BIN)/migrate -dir "$(CURDIR)/migrations" -driver "$(EAGLE_DATABASE_DRIVER)" -dsn "$(EAGLE_DSN)"
 
 .PHONY: migrate-down
 # 回滚一个版本

@@ -19,7 +19,7 @@ func (p providerFake) Verify(context.Context, domain.Provider, string, string) (
 }
 
 type sessionsFake struct {
-	domain.SessionRepository
+	domain.SessionManager
 	create func(context.Context, *domain.ExternalIdentity, string, domain.Session) (*domain.SessionGrant, error)
 	rotate func(context.Context, string, string, time.Time) (*domain.SessionGrant, error)
 	revoke func(context.Context, string) error

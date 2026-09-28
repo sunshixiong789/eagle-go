@@ -47,8 +47,8 @@ paths:
             description: |-
                 SocialLogin 校验 Google/Apple ID Token 和 nonce，为对应 Eagle 账号创建会话并返回令牌。
                  同一第三方身份复用已有账号；每次成功登录创建独立会话，停用账号不能登录。
-                 buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
-                 buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 预生产既有响应契约，保持客户端 wire/source 兼容。
+                 buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 登录与刷新返回相同的令牌结构，复用响应消息。
+                 buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 登录与刷新返回相同的令牌结构，复用响应消息。
             operationId: AuthService_SocialLogin
             requestBody:
                 content:
@@ -70,8 +70,8 @@ paths:
             description: |-
                 RefreshToken 轮换刷新凭证并签发新的 access token，成功后旧刷新凭证不可再次使用。
                  签发失败时回滚轮换；无效、过期或已撤销的刷新凭证不能刷新，停用账号不能刷新。
-                 buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
-                 buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 预生产既有响应契约，保持客户端 wire/source 兼容。
+                 buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 登录与刷新返回相同的令牌结构，复用响应消息。
+                 buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 登录与刷新返回相同的令牌结构，复用响应消息。
             operationId: AuthService_RefreshToken
             requestBody:
                 content:
@@ -99,7 +99,7 @@ paths:
                     type: string
                 - name: page
                   in: query
-                  description: 从 1 开始，未传时使用第一页。
+                  description: 从 0 开始的页码，未传或传 0 均表示第一页。
                   schema:
                     type: integer
                     format: int32

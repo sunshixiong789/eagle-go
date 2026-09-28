@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 )
 
 // Role 是 Eagle 分配的稳定角色键，如 user、admin、support-agent。
@@ -28,9 +29,9 @@ func NewRole(s string) (Role, error) {
 func (r Role) String() string { return string(r) }
 func (r Role) IsZero() bool   { return r == "" }
 
-// RoleBinding 是「角色 → 权限码集合」的聚合根，对应 Casbin 的 p 策略。
+// RoleBinding 表达一个角色的直接权限集合；Revision 是全局策略版本。
 //
-// 用户与角色的归属由 auth 模块维护，本聚合只负责角色被授予的直接权限。
+// 用户与角色的归属由 auth 模块维护，本模型只负责角色被授予的直接权限。
 type RoleBinding struct {
 	role     Role
 	codes    []PermissionCode
@@ -66,8 +67,10 @@ func NewRoleBinding(role Role, codes []PermissionCode) (*RoleBinding, error) {
 	return &RoleBinding{role: role, codes: deduped}, nil
 }
 
-func (b *RoleBinding) Role() Role              { return b.role }
-func (b *RoleBinding) Codes() []PermissionCode { return b.codes }
+func (b *RoleBinding) Role() Role { return b.role }
+
+// Codes 返回副本，防止调用方绕过构造校验修改授权集合。
+func (b *RoleBinding) Codes() []PermissionCode { return slices.Clone(b.codes) }
 func (b *RoleBinding) CodeStrings() []string   { return PermissionCodeStrings(b.codes) }
 func (b *RoleBinding) IsEmpty() bool           { return len(b.codes) == 0 }
 func (b *RoleBinding) Revision() int64         { return b.revision }
@@ -127,25 +130,43 @@ func NewRoleInheritance(child, parent Role) (RoleInheritance, error) {
 	return RoleInheritance{Child: child, Parent: parent}, nil
 }
 
+// PolicyMutation 显式携带策略变更的审计归属与并发条件。
+// Actor 是账号 subject 或后台任务的稳定标识；RequestID 是可选的审计关联标识。
+// ExpectedVersion 为 nil 时不检查版本，否则必须与当前全局策略版本一致。
+type PolicyMutation struct {
+	Actor           string
+	RequestID       string
+	ExpectedVersion *int64
+}
+
+// Validate 要求所有入口显式声明操作者，避免成功写入无法归属的策略审计。
+func (m PolicyMutation) Validate() error {
+	if strings.TrimSpace(m.Actor) == "" || len(m.Actor) > 128 {
+		return ErrInvalidPolicyActor
+	}
+	return nil
+}
+
 // PolicyRepo 是授权策略的仓储接口，由基础设施层适配到具体判定引擎。
 //
-// 写操作在同一事务内检查可选的全局 expectedVersion、修改策略、记录审计并推进版本；
+// 写操作在同一事务内检查可选的全局 ExpectedVersion、修改策略、记录审计并推进版本；
 // 版本不匹配返回 ErrConcurrentModification，nil 表示不检查版本。
+// 操作者无效返回 ErrInvalidPolicyActor。
 // 成功返回表示写入已提交，返回值为已提交版本；本实例重载失败由后台对账重试，不作为写入失败返回。
 // 成功响应不保证所有实例已加载该版本。
 type PolicyRepo interface {
 	// FindBinding 返回角色的直接权限及对应的全局策略版本；未绑定时返回非 nil 的空绑定。
 	FindBinding(ctx context.Context, role Role) (*RoleBinding, error)
 	// SaveBinding 全量覆盖直接权限，空集合清除直接授权；未登记或停用的具体权限码返回 ErrUnknownPermissionCode。
-	SaveBinding(ctx context.Context, b *RoleBinding, expectedVersion *int64) (int64, error)
+	SaveBinding(ctx context.Context, b *RoleBinding, mutation PolicyMutation) (int64, error)
 	// ListBindings 按角色键升序返回有直接授权的角色；列表与全局策略版本来自同一快照，包括空列表。
 	ListBindings(ctx context.Context) ([]*RoleBinding, int64, error)
 	// ResolveCodes 从本实例已加载的策略中汇总并去重角色的权限，展开角色继承但保留权限通配码。
 	ResolveCodes(ctx context.Context, roles []Role) ([]PermissionCode, error)
 	// SaveInheritance 建立继承；形成环时返回 ErrRoleInheritanceCycle，关系已存在时不推进版本。
-	SaveInheritance(ctx context.Context, ri RoleInheritance, expectedVersion *int64) (int64, error)
+	SaveInheritance(ctx context.Context, ri RoleInheritance, mutation PolicyMutation) (int64, error)
 	// ListInheritances 按子角色、父角色升序返回继承关系及同一快照的全局策略版本。
 	ListInheritances(ctx context.Context) ([]RoleInheritance, int64, error)
 	// DeleteInheritance 删除继承；关系不存在时成功返回当前版本，不推进版本。
-	DeleteInheritance(ctx context.Context, ri RoleInheritance, expectedVersion *int64) (int64, error)
+	DeleteInheritance(ctx context.Context, ri RoleInheritance, mutation PolicyMutation) (int64, error)
 }

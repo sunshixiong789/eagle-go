@@ -1,5 +1,4 @@
-// Command migrate is the deployment-time schema migration job shared by all
-// services. The selected directory determines database ownership.
+// Command migrate 执行单体的部署期数据库迁移。
 package main
 
 import (

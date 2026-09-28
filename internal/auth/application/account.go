@@ -15,16 +15,13 @@ func NewAccountUsecase(repo domain.AccountRepository) *AccountUsecase {
 }
 
 func (uc *AccountUsecase) List(ctx context.Context, keyword string, page, pageSize int32) ([]domain.Account, int64, error) {
-	if page == 0 {
-		page = 1
-	}
 	if pageSize == 0 {
 		pageSize = 20
 	}
-	if page < 1 || page > 1000000 || pageSize < 1 || pageSize > 100 {
+	if page < 0 || page > 1000000 || pageSize < 1 || pageSize > 100 {
 		return nil, 0, domain.ErrInvalidRoleAssignment
 	}
-	return uc.repo.List(ctx, domain.AccountQuery{Keyword: strings.TrimSpace(keyword), Offset: int(page-1) * int(pageSize), Limit: int(pageSize)})
+	return uc.repo.List(ctx, domain.AccountQuery{Keyword: strings.TrimSpace(keyword), Offset: int64(page) * int64(pageSize), Limit: int(pageSize)})
 }
 func (uc *AccountUsecase) Roles(ctx context.Context, subject string) (*domain.AccountRoles, error) {
 	return uc.repo.Roles(ctx, subject)

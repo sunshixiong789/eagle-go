@@ -4,7 +4,7 @@ import "slices"
 
 // PermissionTree 是权限节点的集合视图，承载需要纵观全树才能判断的规则。
 //
-// 单个聚合根看不到兄弟和祖先，因此「防环」「补全祖先链」放在这里。
+// 树视图不是独立持久化的聚合；写入时由仓储在整树锁内加载并校验，避免并发形成环。
 type PermissionTree struct {
 	byID map[int64]*Permission
 	all  []*Permission

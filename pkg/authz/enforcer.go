@@ -9,6 +9,7 @@ import (
 	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
 	"github.com/casbin/casbin/v2/persist"
+	defaultrolemanager "github.com/casbin/casbin/v2/rbac/default-role-manager"
 )
 
 // Enforcer 封装 Casbin，对外只暴露本项目需要的判定与策略管理接口。
@@ -81,9 +82,9 @@ func buildCasbinEnforcer(ctx context.Context, adapter persist.Adapter) (*casbin.
 		// 持久化写入只允许走 Replace* / *IfVersion，避免 Casbin AutoSave
 		// 绕过版本号和审计。
 		e.EnableAutoSave(false)
-		if err := e.BuildRoleLinks(); err != nil {
-			return nil, fmt.Errorf("authz: 构建角色继承: %w", err)
-		}
+	}
+	if err := rebuildRoleLinks(e); err != nil {
+		return nil, err
 	}
 	return e, nil
 }
@@ -216,6 +217,20 @@ func (en *Enforcer) AddRoleInheritance(_ context.Context, child, parent string) 
 
 	if _, err := en.e.AddGroupingPolicy(child, parent); err != nil {
 		return fmt.Errorf("authz: 建立 %q -> %q 的继承: %w", child, parent, err)
+	}
+	return rebuildRoleLinks(en.e)
+}
+
+// rebuildRoleLinks 根据当前继承边数设置遍历上限，覆盖图中所有简单路径。
+// 避免 Casbin 默认的 10 层上限静默截断已保存的继承；重载时重新计算。
+func rebuildRoleLinks(e *casbin.Enforcer) error {
+	rules, err := e.GetGroupingPolicy()
+	if err != nil {
+		return fmt.Errorf("authz: 读取角色继承: %w", err)
+	}
+	e.SetRoleManager(defaultrolemanager.NewRoleManager(len(rules) + 1))
+	if err := e.BuildRoleLinks(); err != nil {
+		return fmt.Errorf("authz: 构建角色继承: %w", err)
 	}
 	return nil
 }

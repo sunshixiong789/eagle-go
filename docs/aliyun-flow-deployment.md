@@ -80,15 +80,15 @@ runuser -u eagle-ci -- HAPROXY_BIN=/usr/sbin/haproxy sh deploy/scripts/ci.sh all
 
 ## 2. CI 流水线
 
-在 Flow 获取代码步骤拉取完整 Git 历史和目标分支，设置普通变量：
+首次发布前不需要兼容基线。开始正式发布后，在 Flow 中拉取对应 tag 或 commit，并固定设置：
 
 ```text
-EAGLE_CI_BASE_REF=origin/master
+EAGLE_CI_RELEASE_REF=v1.0.0
 ```
 
-按实际主分支调整为 `origin/main` 或 `origin/develop`。MR 使用目标分支；脚本计算 merge-base
-后检查已存在迁移不可改写和 API 兼容性。主分支合入后的流水线应传入合入前的已验证提交 SHA，
-不要拿当前 HEAD 自己作为基线。缺失变量或未拉取基线都会失败，不静默跳过检查。
+该值指向已发布版本，检查该版本的迁移不可改写和 API 兼容性，不使用任意开发分支的 Git 历史
+作为发布历史。未发布时留空；一旦填写但无法解析，检查会失败。正式发布后必须维护该变量，
+不能通过清空变量跳过兼容检查。GitHub 手动检查提供同样的 `release_ref` 输入。
 
 Flow「执行命令」步骤，在代码仓库根目录运行：
 
@@ -274,11 +274,7 @@ DEPLOY_ENV=testing sh deploy/scripts/cd.sh rollback
 若使用自定义根目录，仍须传入相同 `EAGLE_DEPLOY_ROOT`。成功回滚后 current / previous 交换，
 再次 rollback 可切回刚才的版本。不要清理这两个快照引用的镜像或密钥。
 
-旧版 `/opt/eagle/<environment>/runtime.env` + `compose.yml` 会在首次执行时转存为初始快照，
-便于第一次升级失败时恢复。确认新流程稳定后可手动移除旧平铺文件；后续脚本以指针为准。
 历史/失败快照保留用于定位问题，由运维定期清理非 current/previous 的目录；不要上传其中的私密配置。
 
 **数据库不自动回退。** 迁移必须采用 expand/contract，旧字段保留到旧版本退出回滚窗口以后再清理。
 上线前启用 RDS 备份与恢复点，迁移评审要求见[迁移兼容性](migration-compatibility.md)。
-
-账号角色管理首次发布须遵循 [00003 迁移的回滚边界](migration-compatibility.md)，启用新功能前先建立兼容的回滚基线。

@@ -40,8 +40,11 @@ func TestAccountUsecase(t *testing.T) {
 	if err != nil || total != 1 || len(rows) != 1 || f.query.Keyword != "x" || f.query.Limit != 20 {
 		t.Fatalf("query=%+v error=%v", f.query, err)
 	}
-	if _, _, err := uc.List(ctx, "", 2, 10); err != nil || f.query.Offset != 10 {
+	if _, _, err := uc.List(ctx, "", 2, 10); err != nil || f.query.Offset != 20 {
 		t.Fatal("pagination lost")
+	}
+	if _, _, err := uc.List(ctx, "", 1, 10); err != nil || f.query.Offset != 10 {
+		t.Fatal("second page repeats first page")
 	}
 	for _, q := range [][2]int32{{-1, 1}, {1000001, 1}, {1, -1}, {1, 101}} {
 		if _, _, err := uc.List(ctx, "", q[0], q[1]); err == nil {

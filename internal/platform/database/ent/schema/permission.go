@@ -10,16 +10,8 @@ import (
 	"entgo.io/ent/schema/index"
 )
 
-// Permission 是前端导航节点。类型名为兼容现有 API 和领域模型而保留，
-// 持久化表已经与后端 permission_definition 分离。
-//
-// 权限码（code）是三方契约的交汇点：proto 注解上写
-// (eagle.annotations.v1.perm) = "system:dict:add"，Casbin 策略里是同一个
-// 字符串，本表存它的元数据。三处对不上就是全线 403。
-//
-// 刻意不为 parent_id 声明 ent edge：根节点用 parent_id=0 表示「无父级」，
-// 而 edge 会生成真实外键约束，0 指向不存在的行会直接插入失败。
-// 树结构在应用层按 parent_id 拼装，权限总量只有百级，成本可忽略。
+// Permission 是前端导航节点，permission_code 引用后端 permission_definition 目录。
+// parent_id 在数据库中以 NULL 表示根节点，领域层映射为 0；外键由 goose 迁移维护。
 type Permission struct {
 	ent.Schema
 }

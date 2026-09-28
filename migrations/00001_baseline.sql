@@ -105,26 +105,73 @@ CREATE TABLE sys_dict_data (
 );
 CREATE INDEX idx_sys_dict_data_type_sort ON sys_dict_data (dict_type, sort);
 
--- 社会化身份与本地刷新会话。Google/Apple 仅证明外部身份，Eagle 负责会话。
-CREATE TABLE social_identity (
+-- 统一账号、第三方身份、账号角色与本地刷新会话。
+CREATE TABLE user_account (
+    subject      varchar(32)   PRIMARY KEY,
+    display_name varchar(128)  NOT NULL DEFAULT '',
+    avatar_url   varchar(2048) NOT NULL DEFAULT '',
+    status       int           NOT NULL DEFAULT 1 CHECK (status IN (0, 1)),
+    created_at   timestamptz   NOT NULL DEFAULT now(),
+    updated_at   timestamptz   NOT NULL DEFAULT now()
+);
+
+CREATE TABLE user_identity (
     id               bigserial     PRIMARY KEY,
-    subject          varchar(384)  NOT NULL UNIQUE,
-    provider         varchar(16)   NOT NULL CHECK (provider IN ('google', 'apple')),
+    account_subject  varchar(32)   NOT NULL REFERENCES user_account(subject) ON DELETE CASCADE,
+    provider         varchar(32)   NOT NULL,
     provider_subject varchar(255)  NOT NULL,
     email            varchar(320)  NOT NULL DEFAULT '',
     email_verified   boolean       NOT NULL DEFAULT false,
-    display_name     varchar(128)  NOT NULL DEFAULT '',
-    avatar_url       varchar(2048) NOT NULL DEFAULT '',
-    role             varchar(32)   NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
     last_login_at    timestamptz   NOT NULL DEFAULT now(),
     created_at       timestamptz   NOT NULL DEFAULT now(),
     updated_at       timestamptz   NOT NULL DEFAULT now(),
     UNIQUE (provider, provider_subject)
 );
+CREATE INDEX idx_user_identity_account ON user_identity (account_subject);
+
+CREATE TABLE user_role_binding (
+    id              bigserial    PRIMARY KEY,
+    account_subject varchar(32)  NOT NULL REFERENCES user_account(subject) ON DELETE CASCADE,
+    audience        varchar(255) NOT NULL,
+    role            varchar(64)  NOT NULL,
+    created_at      timestamptz  NOT NULL DEFAULT now(),
+    updated_at      timestamptz  NOT NULL DEFAULT now(),
+    UNIQUE (account_subject, audience, role)
+);
+CREATE INDEX idx_user_role_binding_account_audience ON user_role_binding (account_subject, audience);
+
+CREATE TABLE account_role_state (
+    audience varchar(255) PRIMARY KEY,
+    revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
+    admin_initialized boolean NOT NULL DEFAULT false,
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE user_audience (
+    id bigserial PRIMARY KEY,
+    account_subject varchar(32) NOT NULL,
+    audience varchar(255) NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT fk_user_audience_account FOREIGN KEY (account_subject) REFERENCES user_account(subject) ON DELETE CASCADE,
+    UNIQUE (account_subject, audience)
+);
+CREATE TABLE account_role_audit (
+    id bigserial PRIMARY KEY,
+    audience varchar(255) NOT NULL,
+    revision bigint NOT NULL,
+    account_subject varchar(32) NOT NULL,
+    actor_subject varchar(128) NOT NULL,
+    action varchar(32) NOT NULL,
+    "before" jsonb NOT NULL,
+    "after" jsonb NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (audience, revision)
+);
+CREATE INDEX idx_account_role_audit_target ON account_role_audit(account_subject, created_at);
 
 CREATE TABLE auth_session (
     id                 varchar(32) PRIMARY KEY,
-    identity_id        bigint      NOT NULL REFERENCES social_identity(id) ON DELETE CASCADE,
+    identity_id        bigint      NOT NULL REFERENCES user_identity(id) ON DELETE CASCADE,
+    audience           varchar(255) NOT NULL,
     refresh_token_hash varchar(64) NOT NULL UNIQUE,
     expires_at         timestamptz NOT NULL,
     revoked_at         timestamptz,
@@ -147,7 +194,10 @@ INSERT INTO permission_definition (code, service, resource, action, status, sour
     ('system:dict:add',          'system', 'dict',       'add',    1, 'baseline'),
     ('system:dict:list',         'system', 'dict',       'list',   1, 'baseline'),
     ('system:dict:edit',         'system', 'dict',       'edit',   1, 'baseline'),
-    ('system:dict:remove',       'system', 'dict',       'remove', 1, 'baseline');
+    ('system:dict:remove',       'system', 'dict',       'remove', 1, 'baseline'),
+    ('system:account:list',      'system', 'account',    'list',   1, 'baseline'),
+    ('system:account:query',     'system', 'account',    'query',  1, 'baseline'),
+    ('system:account:assign',    'system', 'account',    'assign', 1, 'baseline');
 
 -- type: 1=目录、2=菜单、3=按钮。
 INSERT INTO navigation_node (id, parent_id, name, permission_code, type, path, component, icon, sort) VALUES
@@ -195,7 +245,12 @@ INSERT INTO sys_dict_data (dict_type, label, value, sort, css_class, is_default)
 -- +goose Down
 -- +goose StatementBegin
 DROP TABLE IF EXISTS auth_session;
-DROP TABLE IF EXISTS social_identity;
+DROP TABLE IF EXISTS account_role_audit;
+DROP TABLE IF EXISTS user_audience;
+DROP TABLE IF EXISTS account_role_state;
+DROP TABLE IF EXISTS user_role_binding;
+DROP TABLE IF EXISTS user_identity;
+DROP TABLE IF EXISTS user_account;
 DROP TABLE IF EXISTS sys_dict_data;
 DROP TABLE IF EXISTS sys_dict_type;
 DROP TABLE IF EXISTS authz_policy_audit;

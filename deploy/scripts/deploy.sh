@@ -50,16 +50,6 @@ start() {
   compose "$1" up -d --no-deps --pull never --wait --wait-timeout "${timeout}" eagle
 }
 
-# 接管旧版脚本留下的运行文件，首次升级也能回滚。
-if [ ! -f "${deploy_dir}/current" ] && [ -f "${deploy_dir}/runtime.env" ]; then
-  [ -f "${deploy_dir}/compose.yml" ] || fail 'legacy runtime.env has no compose.yml'
-  legacy=$(mktemp -d "${deploy_dir}/releases/release.XXXXXXXX")
-  cp "${deploy_dir}/runtime.env" "${legacy}/runtime.env"
-  cp "${deploy_dir}/runtime.env" "${legacy}/compose.env"
-  cp "${deploy_dir}/compose.yml" "${legacy}/compose.yml"
-  chmod 0600 "${legacy}"/*.env
-  save_pointer current "${legacy}"
-fi
 current=$(read_pointer current)
 candidate=
 application_touched=false

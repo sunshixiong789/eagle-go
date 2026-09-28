@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/go-kratos/kratos/v3/errors"
+	"github.com/go-kratos/kratos/v3/transport"
 
 	v1 "github.com/eagle-go/eagle/api/eagle/access/v1"
 	"github.com/eagle-go/eagle/internal/access/application"
@@ -57,7 +58,7 @@ func (s *RoleBindingService) GetRolePermissions(ctx context.Context, req *v1.Get
 
 // SetRolePermissions 全量覆盖角色的权限码。
 func (s *RoleBindingService) SetRolePermissions(ctx context.Context, req *v1.SetRolePermissionsRequest) (*v1.SetRolePermissionsResponse, error) {
-	version, err := s.uc.SetRolePermissions(ctx, req.GetRole(), req.GetPermissionCodes(), req.ExpectedVersion)
+	version, err := s.uc.SetRolePermissions(ctx, req.GetRole(), req.GetPermissionCodes(), policyMutation(ctx, req.ExpectedVersion))
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +67,7 @@ func (s *RoleBindingService) SetRolePermissions(ctx context.Context, req *v1.Set
 
 // AddRoleInheritance 建立角色继承。
 func (s *RoleBindingService) AddRoleInheritance(ctx context.Context, req *v1.AddRoleInheritanceRequest) (*v1.AddRoleInheritanceResponse, error) {
-	version, err := s.uc.AddRoleInheritance(ctx, req.GetChild(), req.GetParent(), req.ExpectedVersion)
+	version, err := s.uc.AddRoleInheritance(ctx, req.GetChild(), req.GetParent(), policyMutation(ctx, req.ExpectedVersion))
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +92,7 @@ func (s *RoleBindingService) ListRoleInheritances(ctx context.Context, _ *v1.Lis
 
 // DeleteRoleInheritance 删除角色继承关系。
 func (s *RoleBindingService) DeleteRoleInheritance(ctx context.Context, req *v1.DeleteRoleInheritanceRequest) (*v1.DeleteRoleInheritanceResponse, error) {
-	version, err := s.uc.DeleteRoleInheritance(ctx, req.GetChild(), req.GetParent(), req.ExpectedVersion)
+	version, err := s.uc.DeleteRoleInheritance(ctx, req.GetChild(), req.GetParent(), policyMutation(ctx, req.ExpectedVersion))
 	if err != nil {
 		return nil, err
 	}
@@ -115,4 +116,13 @@ func (s *RoleBindingService) GetMyPermissions(ctx context.Context, _ *v1.GetMyPe
 		Roles:           p.Roles,
 		PermissionCodes: domain.PermissionCodeStrings(codes),
 	}, nil
+}
+
+// policyMutation 在入站边界提取主体和审计关联标识，不把 HTTP 上下文交给仓储解析。
+func policyMutation(ctx context.Context, version *int64) domain.PolicyMutation {
+	mutation := domain.PolicyMutation{Actor: identity.Subject(ctx), ExpectedVersion: version}
+	if tr, ok := transport.FromServerContext(ctx); ok {
+		mutation.RequestID = tr.RequestHeader().Get("X-Request-ID")
+	}
+	return mutation
 }

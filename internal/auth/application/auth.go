@@ -15,13 +15,13 @@ import (
 // Usecase 编排第三方身份验证、刷新凭证生成与会话操作。
 type Usecase struct {
 	providers  domain.ProviderVerifier
-	sessions   domain.SessionRepository
+	sessions   domain.SessionManager
 	accessTTL  time.Duration
 	refreshTTL time.Duration
 	now        func() time.Time
 }
 
-func NewUsecase(providers domain.ProviderVerifier, sessions domain.SessionRepository, accessTTL, refreshTTL time.Duration) *Usecase {
+func NewUsecase(providers domain.ProviderVerifier, sessions domain.SessionManager, accessTTL, refreshTTL time.Duration) *Usecase {
 	return &Usecase{providers: providers, sessions: sessions, accessTTL: accessTTL, refreshTTL: refreshTTL, now: time.Now}
 }
 

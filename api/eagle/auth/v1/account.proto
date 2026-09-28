@@ -40,7 +40,7 @@ message Account {
 
 message ListAccountsRequest {
   string keyword = 1 [(buf.validate.field).string.max_len = 128];
-  // 从 1 开始，未传时使用第一页。
+  // 从 0 开始的页码，未传或传 0 均表示第一页。
   int32 page = 2 [(buf.validate.field).int32 = {gte: 0 lte: 1000000}];
   // 未传时为 20，最大为 100。
   int32 page_size = 3 [(buf.validate.field).int32 = {gte: 0 lte: 100}];

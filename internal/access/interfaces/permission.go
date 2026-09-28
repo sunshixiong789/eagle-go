@@ -21,8 +21,7 @@ func NewPermissionService(uc *application.PermissionUsecase) *PermissionService 
 	return &PermissionService{uc: uc}
 }
 
-// toProtoPermission 把聚合根投影成传输对象。
-// 聚合根的字段是私有的，只能经访问器读取——这正是它能保证不变量的前提。
+// toProtoPermission 把领域节点投影成协议对象。
 func toProtoPermission(p *domain.Permission) *v1.Permission {
 	if p == nil {
 		return nil

@@ -64,7 +64,7 @@ func composeApp(bc *config.Bootstrap, logger *slog.Logger) (platformruntime.Comp
 	permissions := accessinterfaces.NewPermissionService(accessapp.NewPermissionUsecase(accessinfra.NewPermissionRepo(db), policy))
 	roles := accessinterfaces.NewRoleBindingService(accessapp.NewRoleBindingUsecase(policy))
 	dictionaries := dictionaryinterfaces.NewDictService(dictionaryinfra.NewDictRepo(db))
-	sessions := authinfra.NewSessionRepository(db, issuer, auth.GetAudience())
+	sessions := authinfra.NewSessionManager(db, issuer, auth.GetAudience())
 	login := authinterfaces.NewAuthService(
 		authapp.NewUsecase(authinfra.NewProviderVerifier(auth), sessions, auth.GetAccessTokenTtl().AsDuration(), auth.GetRefreshTokenTtl().AsDuration()),
 		issuer,

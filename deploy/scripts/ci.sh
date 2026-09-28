@@ -7,17 +7,13 @@ repo_dir=$(CDPATH= cd -- "${script_dir}/../.." && pwd)
 cd "${repo_dir}"
 
 check() {
-  : "${EAGLE_CI_BASE_REF:?set the fetched target branch, e.g. origin/master, or a verified base commit}"
-  base=$(git merge-base HEAD "${EAGLE_CI_BASE_REF}")
-  if [ "${base}" = "$(git rev-parse HEAD)" ]; then
-    echo 'ci: the base equals HEAD; set EAGLE_CI_BASE_REF to the pre-merge verified commit' >&2
-    exit 1
+  # 首次发布前没有旧契约；正式发布后由流水线显式指定最近的发布基线。
+  if [ -n "${EAGLE_CI_RELEASE_REF:-}" ]; then
+    release=$(git rev-parse --verify "${EAGLE_CI_RELEASE_REF}^{commit}")
+    sh tools/scripts/check-migrations.sh "${release}"
   fi
-  sh tools/scripts/check-migrations.sh "${base}"
-  make "${repo_dir}/bin/buf"
-  ./bin/buf lint
-  ./bin/buf breaking api --against ".git#ref=${base},subdir=api"
-  make api config ent
+  make lint-proto
+  make api ent
   if [ -n "$(git status --porcelain --untracked-files=all -- api internal/platform/config internal/platform/database/ent openapi.yaml go.mod go.sum tools/go.mod tools/go.sum)" ]; then
     echo 'ci: generated code differs; run make generate and commit the results' >&2
     exit 1

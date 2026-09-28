@@ -118,8 +118,7 @@ make generate
 出现新的差异，CI 会检查这一点。
 
 Buf 只维护一份生成模板：`buf.yaml` 定义模块、依赖和检查规则，`buf.gen.yaml` 定义生成插件，
-`buf.lock` 自动锁定远程 Proto 依赖。`make api` 统一生成 API 与内部配置代码及 OpenAPI；
-`make config` 保留为同一命令的别名。
+`buf.lock` 自动锁定远程 Proto 依赖。`make api` 统一生成 API、内部配置代码及 OpenAPI。
 
 ### 3. 启动完整本地环境
 
@@ -428,7 +427,7 @@ make build
 
 镜像采用多阶段构建：Go builder 编译，运行阶段使用 distroless。一个镜像同时包含常驻服务
 `/app/eagle`、一次性迁移任务 `/app/migrate`、管理员初始化 `/app/eagle-admin` 和健康探针 `/app/healthcheck`，四者同版本，
-部署流程先执行迁移再启动服务；迁移必须兼容仍在运行和允许回滚的旧应用。
+部署流程先执行迁移再启动服务；首次发布后，增量迁移必须兼容仍在运行和允许回滚的应用版本。
 
 ```bash
 make image VERSION=v1.2.0 REGISTRY=registry.example.com/eagle

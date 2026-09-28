@@ -17,17 +17,19 @@ import (
 
 const accountStatusEnabled int32 = 1
 
-type SessionRepository struct {
+// SessionManager 在本地签名成功后提交身份、角色与会话变更。
+type SessionManager struct {
 	db       *platformdb.Database
 	issuer   domain.AccessTokenIssuer
 	audience string
 }
 
-func NewSessionRepository(db *platformdb.Database, issuer domain.AccessTokenIssuer, audience string) domain.SessionRepository {
-	return &SessionRepository{db: db, issuer: issuer, audience: audience}
+// NewSessionManager 构造会话原子操作的数据库适配器。
+func NewSessionManager(db *platformdb.Database, issuer domain.AccessTokenIssuer, audience string) domain.SessionManager {
+	return &SessionManager{db: db, issuer: issuer, audience: audience}
 }
 
-func (r *SessionRepository) Create(
+func (r *SessionManager) Create(
 	ctx context.Context,
 	external *domain.ExternalIdentity,
 	newAccountSubject string,
@@ -167,7 +169,7 @@ func ensureAndLoadRoles(ctx context.Context, tx *ent.Tx, subject, audience strin
 	return roles, nil
 }
 
-func (r *SessionRepository) Rotate(ctx context.Context, oldHash, newHash string, expiresAt time.Time) (*domain.SessionGrant, error) {
+func (r *SessionManager) Rotate(ctx context.Context, oldHash, newHash string, expiresAt time.Time) (*domain.SessionGrant, error) {
 	tx, err := r.db.Client().BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
 		return nil, fmt.Errorf("begin refresh: %w", err)
@@ -221,7 +223,7 @@ func (r *SessionRepository) Rotate(ctx context.Context, oldHash, newHash string,
 	return &domain.SessionGrant{Identity: principal, AccessToken: access}, nil
 }
 
-func (r *SessionRepository) Revoke(ctx context.Context, hash string) error {
+func (r *SessionManager) Revoke(ctx context.Context, hash string) error {
 	now := time.Now()
 	count, err := r.db.Client().AuthSession.Update().
 		Where(

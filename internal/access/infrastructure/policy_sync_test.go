@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eagle-go/eagle/internal/access/domain"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/casbinrule"
 	"github.com/eagle-go/eagle/pkg/authz"
 )
@@ -37,7 +38,7 @@ func TestCommittedPolicySucceedsWhenReloadFails(t *testing.T) {
 		_, _ = testDB.Client().CasbinRule.Delete().Where(casbinrule.V0EQ(role)).Exec(ctx)
 	})
 	source.unavailable = true
-	version, err := repo.SaveBinding(ctx, mustBinding(t, role, code), nil)
+	version, err := repo.SaveBinding(ctx, mustBinding(t, role, code), domain.PolicyMutation{Actor: "test-operator"})
 	if err != nil {
 		t.Fatalf("committed write reported as failed: %v", err)
 	}
@@ -89,7 +90,7 @@ func TestPolicyReconcilerSyncsAcrossReplicas(t *testing.T) {
 		t.Fatalf("构造副本 A 的 enforcer: %v", err)
 	}
 	storeA := NewPolicyRepo(enforcerA, store)
-	if _, err := storeA.SaveBinding(ctx, mustBinding(t, role, permCode), nil); err != nil {
+	if _, err := storeA.SaveBinding(ctx, mustBinding(t, role, permCode), domain.PolicyMutation{Actor: "test-operator"}); err != nil {
 		t.Fatalf("副本 A SaveBinding: %v", err)
 	}
 

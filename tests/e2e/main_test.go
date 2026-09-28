@@ -179,7 +179,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	permRepo := accessinfra.NewPermissionRepo(adminDB)
 	policyRepo := accessinfra.NewPolicyRepo(enforcer, store)
 	dictRepo := dictionaryinfra.NewDictRepo(adminDB)
-	sessions := authinfra.NewSessionRepository(adminDB, issuer, testAudience)
+	sessions := authinfra.NewSessionManager(adminDB, issuer, testAudience)
 
 	permSvc := accessinterfaces.NewPermissionService(accessapp.NewPermissionUsecase(permRepo, policyRepo))
 	dictSvc := dictionaryinterfaces.NewDictService(dictRepo)
@@ -272,7 +272,7 @@ func (e *testEnv) grantRole(t *testing.T, role string, perms ...string) {
 	if err != nil {
 		t.Fatalf("构造角色绑定: %v", err)
 	}
-	if _, err := e.policy.SaveBinding(context.Background(), binding, nil); err != nil {
+	if _, err := e.policy.SaveBinding(context.Background(), binding, accessdomain.PolicyMutation{Actor: "test-operator"}); err != nil {
 		t.Fatalf("授予角色 %s 权限: %v", role, err)
 	}
 }

@@ -16,7 +16,7 @@ func TestSessionLifecycle(t *testing.T) {
 	if testing.Short() {
 		t.Skip("需要真实数据库")
 	}
-	repo := NewSessionRepository(authTestDB, &testIssuer{}, "eagle-api")
+	repo := NewSessionManager(authTestDB, &testIssuer{}, "eagle-api")
 	identity, err := repo.Create(context.Background(), &domain.ExternalIdentity{
 		Provider: domain.ProviderGoogle, ProviderID: "provider-user-1", Email: "user@example.com",
 		EmailVerified: true, DisplayName: "User",
@@ -58,7 +58,7 @@ func TestSessionPreservesUnicodeProfile(t *testing.T) {
 		t.Skip("需要真实数据库")
 	}
 	ctx := context.Background()
-	repo := NewSessionRepository(authTestDB, &testIssuer{}, "eagle-api")
+	repo := NewSessionManager(authTestDB, &testIssuer{}, "eagle-api")
 	t.Cleanup(func() { _ = authTestDB.Client().UserAccount.DeleteOneID("unicode-account-0").Exec(ctx) })
 	for i, character := range []string{"汉", "😀"} {
 		external := &domain.ExternalIdentity{
@@ -85,7 +85,7 @@ func TestProviderSubjectsRemainCaseSensitive(t *testing.T) {
 	if testing.Short() {
 		t.Skip("需要真实数据库")
 	}
-	repo := NewSessionRepository(authTestDB, &testIssuer{}, "eagle-api")
+	repo := NewSessionManager(authTestDB, &testIssuer{}, "eagle-api")
 	var identities []*domain.Identity
 	for i, providerID := range []string{"CaseSensitive", "casesensitive"} {
 		grant, err := repo.Create(context.Background(), &domain.ExternalIdentity{
@@ -109,7 +109,7 @@ func TestRolesAreScopedByAudience(t *testing.T) {
 		t.Skip("需要真实数据库")
 	}
 	ctx := context.Background()
-	consumerRepo := NewSessionRepository(authTestDB, &testIssuer{}, "consumer-api")
+	consumerRepo := NewSessionManager(authTestDB, &testIssuer{}, "consumer-api")
 	external := &domain.ExternalIdentity{Provider: domain.ProviderGoogle, ProviderID: "audience-scoped-user"}
 	consumer, err := consumerRepo.Create(ctx, external, "55555555555555555555555555555555", domain.Session{
 		ID: "audience-consumer-session-0001", RefreshTokenHash: "audience-consumer-old", ExpiresAt: time.Now().Add(time.Hour),
@@ -128,7 +128,7 @@ func TestRolesAreScopedByAudience(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	backofficeRepo := NewSessionRepository(authTestDB, &testIssuer{}, "backoffice-api")
+	backofficeRepo := NewSessionManager(authTestDB, &testIssuer{}, "backoffice-api")
 	backoffice, err := backofficeRepo.Create(ctx, external, "66666666666666666666666666666666", domain.Session{
 		ID: "audience-backoffice-session-01", RefreshTokenHash: "audience-backoffice-old", ExpiresAt: time.Now().Add(time.Hour),
 	})
@@ -154,7 +154,7 @@ func TestDisabledAccountCannotRefreshAndRotationRollsBack(t *testing.T) {
 		t.Skip("需要真实数据库")
 	}
 	ctx := context.Background()
-	repo := NewSessionRepository(authTestDB, &testIssuer{}, "eagle-api")
+	repo := NewSessionManager(authTestDB, &testIssuer{}, "eagle-api")
 	grant, err := repo.Create(ctx,
 		&domain.ExternalIdentity{Provider: domain.ProviderGoogle, ProviderID: "disabled-account"},
 		"77777777777777777777777777777777",
@@ -193,7 +193,7 @@ func TestSigningFailureRollsBackSession(t *testing.T) {
 	ctx := context.Background()
 	signingErr := errors.New("signing unavailable")
 	issuer := &testIssuer{err: signingErr}
-	repo := NewSessionRepository(authTestDB, issuer, "eagle-api")
+	repo := NewSessionManager(authTestDB, issuer, "eagle-api")
 	external := &domain.ExternalIdentity{Provider: domain.ProviderGoogle, ProviderID: "signing-failure"}
 	session := domain.Session{ID: "signing-failure", RefreshTokenHash: "signing-old", ExpiresAt: time.Now().Add(time.Hour)}
 	if _, err := repo.Create(ctx, external, "33333333333333333333333333333333", session); !errors.Is(err, signingErr) {
@@ -232,7 +232,7 @@ func TestConcurrentRefreshHasOneWinner(t *testing.T) {
 		t.Skip("需要真实数据库")
 	}
 	ctx := context.Background()
-	repo := NewSessionRepository(authTestDB, &testIssuer{}, "eagle-api")
+	repo := NewSessionManager(authTestDB, &testIssuer{}, "eagle-api")
 	_, err := repo.Create(ctx, &domain.ExternalIdentity{Provider: domain.ProviderGoogle, ProviderID: "concurrent-refresh"}, "44444444444444444444444444444444", domain.Session{ID: "concurrent-refresh", RefreshTokenHash: "concurrent-old", ExpiresAt: time.Now().Add(time.Hour)})
 	if err != nil {
 		t.Fatal(err)

@@ -12,6 +12,10 @@
 | `auth` | 账号、Google/Apple 登录身份、Eagle token 与会话 | `user_account`、`user_identity`、`user_role_binding`、`auth_session`、`user_audience`、`account_role_state`、`account_role_audit` | Google/Apple JWKS |
 | `dictionary` | 字典的简单 CRUD，作为新模块的样板 | `dict_type`、`dict_data` | 无 |
 
+这里的模块首先表达代码和数据所有权，不把每个目录自动视为独立的 DDD 限界上下文。
+`auth` 拥有账号与角色的分配关系，`access` 拥有角色的权限和继承关系；两侧通过稳定角色键关联，
+不共享角色实体或互读表。角色键不会因为一侧出现记录而自动在另一侧创建授权。
+
 Google/Apple 只负责证明第三方身份；Eagle 用不透明 `subject` 表示统一账号，一个账号可以显式绑定多个
 登录身份。Eagle 保存最小身份资料与可撤销会话，并签发自己的 access token。
 
@@ -48,6 +52,15 @@ Google/Apple 只负责证明第三方身份；Eagle 用不透明 `subject` 表�
 - interfaces：入站接口层，包括 protobuf Service 和后台任务入口；完成协议转换并传递当前主体。
 
 两个模块覆盖两种典型形态：`dictionary` 没有 application，展示纯 CRUD；`access` 有 application 且 domain 承载权限码、导航树和策略版本等真实不变量，也展示事务与用例编排。
+
+领域模型按实际一致性要求命名：`Permission` 是导航权限节点，`PermissionTree` 是跨节点规则的集合视图。
+防环和节点写入在仓储的整树状态锁内完成；节点版本用于检测编辑冲突，整树锁用于保护拓扑一致性。
+`RoleBinding` 表达角色的直接权限集合，其版本是全局策略版本，不是单个绑定的独立聚合版本。
+策略写入通过 `PolicyMutation` 显式携带操作者、可选审计关联标识和预期版本，后台入口也必须声明操作者。
+HTTP 主体与请求头只在 interfaces 解析，infrastructure 不从 HTTP context 推断审计归属。
+
+`auth` 的 `SessionManager` 是会话原子能力端口，涵盖身份映射、角色读取、会话变更和本地令牌签发。
+它不承诺单个实体仓储的语义；签名失败与会话变更必须一起回滚，不向 application 暴露数据库事务。
 
 单个仓储操作内部使用事务，本身不构成增加 application 的理由。已有真实编排的 application 可以保留同一用例下的简单查询转发。
 
@@ -130,7 +143,8 @@ Google/Apple 只负责证明第三方身份；Eagle 用不透明 `subject` 表�
 会话创建/轮换与本地 access token 签发由一个原子端口完成：签发失败回滚事务，不消耗旧 refresh token。
 事务提交后若网络响应丢失，客户端可能需要重新登录；当前不提供刷新响应重放或幂等恢复。
 
-发布先运行新迁移，此时旧应用仍在运行；新应用启动失败也只回滚应用镜像。
+首次发布前直接维护当前初始迁移，不保留旧模型的升级路径。
+首次发布后的升级先运行新迁移，此时旧应用仍在运行；新应用启动失败也只回滚应用镜像。
 所以每次迁移必须兼容仍在运行及允许回滚的应用版本，不能以同镜像包含迁移替代兼容性验证。
 先扩展结构并保留旧字段，再迁移读写与历史数据，最后在旧版本退出回滚范围后收缩结构。
 数据库 down 仅用于已验证的人工恢复，部署脚本不自动执行。

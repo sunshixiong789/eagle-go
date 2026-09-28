@@ -503,7 +503,7 @@ func (x *Server_Swagger) GetSpecFile() string {
 
 type Data_Database struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// 数据库方言：postgres 或 mysql。留空时兼容为 postgres。
+	// 数据库方言：postgres 或 mysql。留空时默认为 postgres。
 	Driver string `protobuf:"bytes,6,opt,name=driver,proto3" json:"driver,omitempty"`
 	// 所选驱动的连接串；MySQL 必须启用 parseTime=true。
 	Dsn string `protobuf:"bytes,1,opt,name=dsn,proto3" json:"dsn,omitempty"`
@@ -649,13 +649,12 @@ var File_config_proto protoreflect.FileDescriptor
 
 const file_config_proto_rawDesc = "" +
 	"\n" +
-	"\fconfig.proto\x12\x15eagle.platform.config\x1a\x1egoogle/protobuf/duration.proto\"\x8e\x02\n" +
+	"\fconfig.proto\x12\x15eagle.platform.config\x1a\x1egoogle/protobuf/duration.proto\"\xf0\x01\n" +
 	"\tBootstrap\x125\n" +
 	"\x06server\x18\x01 \x01(\v2\x1d.eagle.platform.config.ServerR\x06server\x12/\n" +
 	"\x04data\x18\x02 \x01(\v2\x1b.eagle.platform.config.DataR\x04data\x12/\n" +
 	"\x04auth\x18\x03 \x01(\v2\x1b.eagle.platform.config.AuthR\x04auth\x12J\n" +
-	"\robservability\x18\x04 \x01(\v2$.eagle.platform.config.ObservabilityR\robservabilityJ\x04\b\x05\x10\x06J\x04\b\x06\x10\aJ\x04\b\a\x10\bJ\x04\b\b\x10\tJ\x04\b\t\x10\n" +
-	"\"\xc8\x02\n" +
+	"\robservability\x18\x04 \x01(\v2$.eagle.platform.config.ObservabilityR\robservability\"\xc2\x02\n" +
 	"\x06Server\x126\n" +
 	"\x04http\x18\x01 \x01(\v2\".eagle.platform.config.Server.HTTPR\x04http\x12?\n" +
 	"\aswagger\x18\x03 \x01(\v2%.eagle.platform.config.Server.SwaggerR\aswagger\x1ai\n" +
@@ -666,7 +665,7 @@ const file_config_proto_rawDesc = "" +
 	"\aSwagger\x12\x18\n" +
 	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x12\n" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12\x1b\n" +
-	"\tspec_file\x18\x03 \x01(\tR\bspecFileJ\x04\b\x02\x10\x03\"\xd7\x02\n" +
+	"\tspec_file\x18\x03 \x01(\tR\bspecFile\"\xd1\x02\n" +
 	"\x04Data\x12@\n" +
 	"\bdatabase\x18\x01 \x01(\v2$.eagle.platform.config.Data.DatabaseR\bdatabase\x1a\x86\x02\n" +
 	"\bDatabase\x12\x16\n" +
@@ -675,7 +674,7 @@ const file_config_proto_rawDesc = "" +
 	"\tmax_conns\x18\x02 \x01(\x05R\bmaxConns\x12$\n" +
 	"\x0emax_idle_conns\x18\x03 \x01(\x05R\fmaxIdleConns\x12E\n" +
 	"\x11max_conn_lifetime\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\x0fmaxConnLifetime\x12F\n" +
-	"\x12max_conn_idle_time\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\x0fmaxConnIdleTimeJ\x04\b\x02\x10\x03\"\xb2\x04\n" +
+	"\x12max_conn_idle_time\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\x0fmaxConnIdleTime\"\xfc\x03\n" +
 	"\x04Auth\x12\x16\n" +
 	"\x06issuer\x18\x01 \x01(\tR\x06issuer\x12\x1a\n" +
 	"\baudience\x18\x03 \x01(\tR\baudience\x12C\n" +
@@ -687,9 +686,7 @@ const file_config_proto_rawDesc = "" +
 	"\x15active_signing_key_id\x18\x11 \x01(\tR\x12activeSigningKeyId\x1aG\n" +
 	"\x0eSocialProvider\x12\x18\n" +
 	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x1b\n" +
-	"\tclient_id\x18\x02 \x01(\tR\bclientIdJ\x04\b\x02\x10\x03J\x04\b\x04\x10\x05J\x04\b\x05\x10\x06J\x04\b\x06\x10\aJ\x04\b\a\x10\bJ\x04\b\b\x10\tJ\x04\b\t\x10\n" +
-	"J\x04\b\n" +
-	"\x10\vJ\x04\b\v\x10\f\"\xc7\x01\n" +
+	"\tclient_id\x18\x02 \x01(\tR\bclientId\"\xc7\x01\n" +
 	"\rObservability\x12#\n" +
 	"\rotlp_endpoint\x18\x01 \x01(\tR\fotlpEndpoint\x12,\n" +
 	"\x12trace_sample_ratio\x18\x02 \x01(\x01R\x10traceSampleRatio\x12\x1b\n" +

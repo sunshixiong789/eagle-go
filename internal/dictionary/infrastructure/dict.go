@@ -72,17 +72,6 @@ func (r *dictRepo) CreateType(ctx context.Context, t *domain.DictType) (*domain.
 	return toDomainDictType(created), nil
 }
 
-func (r *dictRepo) GetTypeByID(ctx context.Context, id int64) (*domain.DictType, error) {
-	t, err := r.db.Client().DictType.Get(ctx, id)
-	if err != nil {
-		if platformdb.IsNotFound(err) {
-			return nil, domain.ErrDictTypeNotFound
-		}
-		return nil, fmt.Errorf("get dict type %d: %w", id, err)
-	}
-	return toDomainDictType(t), nil
-}
-
 func (r *dictRepo) ListTypes(ctx context.Context, q domain.ListDictTypesQuery) ([]*domain.DictType, int64, error) {
 	query := r.db.Client().DictType.Query()
 	if q.Keyword != "" {
@@ -168,17 +157,6 @@ func (r *dictRepo) CreateData(ctx context.Context, d *domain.DictData) (*domain.
 		return nil, fmt.Errorf("create dict data: %w", err)
 	}
 	return toDomainDictData(created), nil
-}
-
-func (r *dictRepo) GetDataByID(ctx context.Context, id int64) (*domain.DictData, error) {
-	d, err := r.db.Client().DictData.Get(ctx, id)
-	if err != nil {
-		if platformdb.IsNotFound(err) {
-			return nil, domain.ErrDictDataNotFound
-		}
-		return nil, fmt.Errorf("get dict data %d: %w", id, err)
-	}
-	return toDomainDictData(d), nil
 }
 
 func (r *dictRepo) ListData(ctx context.Context, q domain.ListDictDataQuery) ([]*domain.DictData, int64, error) {

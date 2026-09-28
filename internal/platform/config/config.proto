@@ -20,10 +20,6 @@ message Bootstrap {
   Data data = 2;
   Auth auth = 3;
   Observability observability = 4;
-
-
-  // 5~9 是已删除能力的历史编号，不再复用。
-  reserved 5, 6, 7, 8, 9;
 }
 
 // Server 是 HTTP 监听参数。
@@ -38,8 +34,6 @@ message Server {
     google.protobuf.Duration timeout = 3;
   }
   HTTP http = 1;
-  // 2 曾是 grpc；单体只对外暴露 HTTP。
-  reserved 2;
   // Swagger 仅在开发环境显式启用；关闭时不注册文档路由。
   message Swagger {
     bool enabled = 1;
@@ -53,7 +47,7 @@ message Server {
 
 message Data {
   message Database {
-    // 数据库方言：postgres 或 mysql。留空时兼容为 postgres。
+    // 数据库方言：postgres 或 mysql。留空时默认为 postgres。
     string driver = 6;
     // 所选驱动的连接串；MySQL 必须启用 parseTime=true。
     string dsn = 1;
@@ -68,7 +62,6 @@ message Data {
     google.protobuf.Duration max_conn_idle_time = 5;
   }
   Database database = 1;
-  reserved 2;
 }
 
 // 社会化登录与 Eagle token 签发配置。
@@ -77,8 +70,6 @@ message Auth {
   string issuer = 1;
   // Eagle API 的 audience。
   string audience = 3;
-  // 已删除的历史认证兼容、角色绕过和 HS256 共享密钥配置，不再复用编号。
-  reserved 2, 4, 5, 6, 7, 8, 9, 10, 11;
 
   google.protobuf.Duration access_token_ttl = 12;
   google.protobuf.Duration refresh_token_ttl = 13;

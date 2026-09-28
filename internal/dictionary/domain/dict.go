@@ -83,8 +83,6 @@ type UpdateDictData struct {
 type DictRepo interface {
 	// CreateType 创建字典类型；Type 重复时返回 ErrDictTypeDuplicated。
 	CreateType(ctx context.Context, t *DictType) (*DictType, error)
-	// GetTypeByID 查询字典类型；不存在时返回 ErrDictTypeNotFound。
-	GetTypeByID(ctx context.Context, id int64) (*DictType, error)
 	// ListTypes 按 ID 升序分页返回类型及过滤后的总数，Status 为 nil 时不筛选状态。
 	// 总数与当页数据分别查询，不保证来自同一快照。
 	ListTypes(ctx context.Context, q ListDictTypesQuery) ([]*DictType, int64, error)
@@ -95,8 +93,6 @@ type DictRepo interface {
 
 	// CreateData 创建字典项；类型不存在时返回 ErrDictTypeNotFound，同类型下 Value 重复时返回 ErrDictDataDuplicated。
 	CreateData(ctx context.Context, d *DictData) (*DictData, error)
-	// GetDataByID 查询字典项；不存在时返回 ErrDictDataNotFound。
-	GetDataByID(ctx context.Context, id int64) (*DictData, error)
 	// ListData 按类型、Sort、ID 升序分页返回字典项及过滤后的总数，可选条件为 nil 时不筛选。
 	// 总数与当页数据分别查询，不保证来自同一快照。
 	ListData(ctx context.Context, q ListDictDataQuery) ([]*DictData, int64, error)

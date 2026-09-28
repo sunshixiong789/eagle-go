@@ -88,7 +88,7 @@ func (x *Account) GetStatus() int32 {
 type ListAccountsRequest struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Keyword string                 `protobuf:"bytes,1,opt,name=keyword,proto3" json:"keyword,omitempty"`
-	// 从 1 开始，未传时使用第一页。
+	// 从 0 开始的页码，未传或传 0 均表示第一页。
 	Page int32 `protobuf:"varint,2,opt,name=page,proto3" json:"page,omitempty"`
 	// 未传时为 20，最大为 100。
 	PageSize      int32 `protobuf:"varint,3,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`

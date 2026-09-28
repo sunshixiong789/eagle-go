@@ -20,7 +20,7 @@ type Account struct {
 }
 type AccountQuery struct {
 	Keyword string
-	Offset  int
+	Offset  int64
 	Limit   int
 }
 type AccountRoles struct {

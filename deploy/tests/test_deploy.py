@@ -188,15 +188,6 @@ class DeploymentTests(unittest.TestCase):
                 process.terminate()
                 process.wait(timeout=10)
 
-    def test_legacy_layout_is_adopted_for_rollback(self):
-        self.host.mkdir(parents=True)
-        values = self.env | {"EAGLE_HTTP_PORT": "8000"}
-        (self.host / "runtime.env").write_text("".join(f"{k}='{v}'\n" for k, v in values.items() if k.startswith("EAGLE_")))
-        (self.host / "compose.yml").write_text("# legacy manifest\n")
-        self.run_script(success=False, EAGLE_IMAGE=IMAGE_B, TEST_FAIL_STAGE="up", TEST_FAIL_IMAGE=IMAGE_B)
-        self.assertEqual(self.events()[-1]["image"], IMAGE_A)
-        self.assertEqual(self.events()[-1]["compose"], "# legacy manifest\n")
-
     def test_cd_rejects_conflicting_pipeline_image(self):
         (self.repo / "release").mkdir()
         (self.repo / "release/image.txt").write_text(IMAGE_A + "\n")
@@ -252,13 +243,35 @@ elif sys.argv[1] == "test":
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("go -C tools build", result.stdout)
 
-    def test_ci_rejects_a_missing_or_self_comparison_base(self):
-        self.run_script(script="ci.sh", action="check", success=False, EAGLE_CI_BASE_REF="")
+    def test_ci_only_checks_compatibility_against_an_explicit_release(self):
+        marker = self.root / "make-started"
+        self.executable("make", "import pathlib, sys\npathlib.Path(" + repr(str(marker)) + ").touch()\nsys.exit(42)\n")
+        self.run_script(script="ci.sh", action="check", success=False, EAGLE_CI_RELEASE_REF="")
+        self.assertTrue(marker.exists(), "unreleased scaffold should reach ordinary build checks")
+        marker.unlink()
         for args in (["init", "-q"], ["add", "."], ["-c", "user.name=CI", "-c", "user.email=ci@example.com", "commit", "-qm", "fixture"]):
             subprocess.run(["git", *args], cwd=self.repo, check=True, capture_output=True)
-        result = self.run_script(script="ci.sh", action="check", success=False, EAGLE_CI_BASE_REF="HEAD")
-        self.assertIn("base equals HEAD", result.stderr)
+        self.run_script(script="ci.sh", action="check", success=False, EAGLE_CI_RELEASE_REF="missing-release")
+        self.assertFalse(marker.exists(), "an invalid release baseline must fail before build")
         self.assertEqual(self.events(), [])
+
+    def test_published_migration_check_allows_additions_but_rejects_rewrites(self):
+        migrations = self.repo / "migrations"
+        migrations.mkdir()
+        baseline = migrations / "00001_baseline.sql"
+        baseline.write_text("CREATE TABLE baseline (id int);\n")
+        for args in (["init", "-q"], ["add", "."], ["-c", "user.name=CI", "-c", "user.email=ci@example.com", "commit", "-qm", "release"]):
+            subprocess.run(["git", *args], cwd=self.repo, check=True, capture_output=True)
+        def check():
+            return subprocess.run(["sh", str(ROOT / "tools/scripts/check-migrations.sh"), "HEAD"],
+                                  cwd=self.repo, capture_output=True, text=True)
+        self.assertEqual(check().returncode, 0)
+        (migrations / "00002_addition.sql").write_text("CREATE TABLE addition (id int);\n")
+        self.assertEqual(check().returncode, 0)
+        baseline.write_text("CREATE TABLE rewritten (id int);\n")
+        self.assertNotEqual(check().returncode, 0)
+        baseline.unlink()
+        self.assertNotEqual(check().returncode, 0)
 
     def test_each_environment_uses_the_same_image_with_isolated_variables_and_state(self):
         for environment in ("development", "testing", "production"):

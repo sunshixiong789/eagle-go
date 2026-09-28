@@ -31,7 +31,8 @@ func (s Status) Enabled() bool { return s == StatusEnabled }
 // RootPermissionID 是顶级节点的 parent。用 0 而非 NULL：根是领域概念，不该由数据库可空性表达。
 const RootPermissionID int64 = 0
 
-// Permission 是权限树的聚合根。
+// Permission 是导航权限节点，维护节点自身的字段不变量。
+// 跨节点规则由 PermissionTree 判断，仓储通过整树状态锁保证检查与写入原子执行。
 //
 // 不变量由实体自己守护：
 //   - 名称非空

@@ -59,7 +59,7 @@ func TestPermissionRepoCRUD(t *testing.T) {
 		t.Errorf("code = %q", got.Code())
 	}
 
-	// 聚合根的字段是私有的，只能经领域行为修改——
+	// 节点的字段是私有的，只能经领域行为修改——
 	// 这保证了不可能绕过不变量校验改坏实体
 	if err := got.Update(domain.NewPermissionParams{
 		ParentID: domain.RootPermissionID,
@@ -136,7 +136,7 @@ func TestPermissionRepoUpdateNullableFields(t *testing.T) {
 	}
 }
 
-// newPermission 构造合法的权限聚合根，构造失败直接终止用例。
+// newPermission 构造合法的权限节点，构造失败直接终止用例。
 func newPermission(t *testing.T, params domain.NewPermissionParams) *domain.Permission {
 	t.Helper()
 	p, err := domain.NewPermission(params)
@@ -415,11 +415,11 @@ func TestPolicyStoreRejectsRoleInheritanceCycle(t *testing.T) {
 	a, _ := domain.NewRole("cycle-a")
 	b, _ := domain.NewRole("cycle-b")
 	first, _ := domain.NewRoleInheritance(a, b)
-	if _, err := store.SaveInheritance(ctx, first, nil); err != nil {
+	if _, err := store.SaveInheritance(ctx, first, domain.PolicyMutation{Actor: "test-operator"}); err != nil {
 		t.Fatalf("SaveInheritance(a->b): %v", err)
 	}
 	second, _ := domain.NewRoleInheritance(b, a)
-	if _, err := store.SaveInheritance(ctx, second, nil); !errors.Is(err, domain.ErrRoleInheritanceCycle) {
+	if _, err := store.SaveInheritance(ctx, second, domain.PolicyMutation{Actor: "test-operator"}); !errors.Is(err, domain.ErrRoleInheritanceCycle) {
 		t.Fatalf("cycle error = %v", err)
 	}
 }
@@ -438,7 +438,7 @@ func TestPolicyStoreSetRolePermissionsPersists(t *testing.T) {
 	})
 
 	binding := mustBinding(t, role, "system:dict:remove", "system:dict:list")
-	if _, err := store.SaveBinding(ctx, binding, nil); err != nil {
+	if _, err := store.SaveBinding(ctx, binding, domain.PolicyMutation{Actor: "test-operator"}); err != nil {
 		t.Fatalf("SaveBinding: %v", err)
 	}
 
@@ -509,10 +509,10 @@ func TestPolicyStoreSetRolePermissionsReplaces(t *testing.T) {
 			Where(casbinrule.V0EQ(role)).Exec(ctx)
 	})
 
-	if _, err := store.SaveBinding(ctx, mustBinding(t, role, "system:dict:remove", "system:dict:add"), nil); err != nil {
+	if _, err := store.SaveBinding(ctx, mustBinding(t, role, "system:dict:remove", "system:dict:add"), domain.PolicyMutation{Actor: "test-operator"}); err != nil {
 		t.Fatalf("首次设置: %v", err)
 	}
-	if _, err := store.SaveBinding(ctx, mustBinding(t, role, "system:dict:remove"), nil); err != nil {
+	if _, err := store.SaveBinding(ctx, mustBinding(t, role, "system:dict:remove"), domain.PolicyMutation{Actor: "test-operator"}); err != nil {
 		t.Fatalf("覆盖设置: %v", err)
 	}
 
@@ -890,5 +890,44 @@ func TestEmptyPolicyListsRetainSnapshotVersion(t *testing.T) {
 	}
 	if len(bindings) != 0 || len(inheritances) != 0 || bindingVersion != version || inheritanceVersion != version {
 		t.Fatalf("empty snapshots lost version %d: %v/%d, %v/%d", version, bindings, bindingVersion, inheritances, inheritanceVersion)
+	}
+}
+
+// 后台入口无 HTTP 上下文也必须能留下完整审计，未声明操作者的写入不能推进版本。
+func TestPolicyRepoExplicitMutationAudit(t *testing.T) {
+	skipIfShort(t)
+	ctx := context.Background()
+	repo := newTestPolicyStore(t)
+	binding := mustBinding(t, "test-background-audit", "system:dict:list")
+	store := NewPolicyStore(testDB)
+	before, err := store.PolicyVersion(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ri := domain.RoleInheritance{Child: "test-background-child", Parent: "test-background-parent"}
+	calls := []func() (int64, error){
+		func() (int64, error) { return repo.SaveBinding(ctx, binding, domain.PolicyMutation{}) },
+		func() (int64, error) { return repo.SaveInheritance(ctx, ri, domain.PolicyMutation{}) },
+		func() (int64, error) { return repo.DeleteInheritance(ctx, ri, domain.PolicyMutation{}) },
+	}
+	for _, call := range calls {
+		if _, err := call(); !errors.Is(err, domain.ErrInvalidPolicyActor) {
+			t.Fatalf("error = %v", err)
+		}
+	}
+	after, err := store.PolicyVersion(ctx)
+	if err != nil || after != before {
+		t.Fatalf("invalid actor changed version: %d -> %d: %v", before, after, err)
+	}
+	version, err := repo.SaveBinding(ctx, binding, domain.PolicyMutation{Actor: "job:policy-import", RequestID: "import-42", ExpectedVersion: &before})
+	if err != nil {
+		t.Fatal(err)
+	}
+	audit, err := testDB.Client().PolicyAudit.Query().Where(policyaudit.PolicyVersionEQ(version)).Only(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if audit.ActorSubject != "job:policy-import" || audit.RequestID != "import-42" {
+		t.Fatalf("audit = %+v", audit)
 	}
 }

@@ -12,18 +12,18 @@ import (
 type policyRecorder struct {
 	domain.PolicyRepo
 	findBinding       func(context.Context, domain.Role) (*domain.RoleBinding, error)
-	saveBinding       func(context.Context, *domain.RoleBinding, *int64) (int64, error)
+	saveBinding       func(context.Context, *domain.RoleBinding, domain.PolicyMutation) (int64, error)
 	listBindings      func(context.Context) ([]*domain.RoleBinding, int64, error)
 	resolveCodes      func(context.Context, []domain.Role) ([]domain.PermissionCode, error)
-	saveInheritance   func(context.Context, domain.RoleInheritance, *int64) (int64, error)
+	saveInheritance   func(context.Context, domain.RoleInheritance, domain.PolicyMutation) (int64, error)
 	listInheritances  func(context.Context) ([]domain.RoleInheritance, int64, error)
-	deleteInheritance func(context.Context, domain.RoleInheritance, *int64) (int64, error)
+	deleteInheritance func(context.Context, domain.RoleInheritance, domain.PolicyMutation) (int64, error)
 }
 
 func (p policyRecorder) FindBinding(ctx context.Context, role domain.Role) (*domain.RoleBinding, error) {
 	return p.findBinding(ctx, role)
 }
-func (p policyRecorder) SaveBinding(ctx context.Context, b *domain.RoleBinding, version *int64) (int64, error) {
+func (p policyRecorder) SaveBinding(ctx context.Context, b *domain.RoleBinding, version domain.PolicyMutation) (int64, error) {
 	return p.saveBinding(ctx, b, version)
 }
 func (p policyRecorder) ListBindings(ctx context.Context) ([]*domain.RoleBinding, int64, error) {
@@ -32,13 +32,13 @@ func (p policyRecorder) ListBindings(ctx context.Context) ([]*domain.RoleBinding
 func (p policyRecorder) ResolveCodes(ctx context.Context, roles []domain.Role) ([]domain.PermissionCode, error) {
 	return p.resolveCodes(ctx, roles)
 }
-func (p policyRecorder) SaveInheritance(ctx context.Context, ri domain.RoleInheritance, version *int64) (int64, error) {
+func (p policyRecorder) SaveInheritance(ctx context.Context, ri domain.RoleInheritance, version domain.PolicyMutation) (int64, error) {
 	return p.saveInheritance(ctx, ri, version)
 }
 func (p policyRecorder) ListInheritances(ctx context.Context) ([]domain.RoleInheritance, int64, error) {
 	return p.listInheritances(ctx)
 }
-func (p policyRecorder) DeleteInheritance(ctx context.Context, ri domain.RoleInheritance, version *int64) (int64, error) {
+func (p policyRecorder) DeleteInheritance(ctx context.Context, ri domain.RoleInheritance, version domain.PolicyMutation) (int64, error) {
 	return p.deleteInheritance(ctx, ri, version)
 }
 
@@ -97,11 +97,11 @@ func TestGetRolePermissionsBoundaries(t *testing.T) {
 
 func TestSetRolePermissionsValidatesAndSaves(t *testing.T) {
 	version := int64(4)
-	policy := policyRecorder{saveBinding: func(_ context.Context, b *domain.RoleBinding, got *int64) (int64, error) {
+	policy := policyRecorder{saveBinding: func(_ context.Context, b *domain.RoleBinding, got domain.PolicyMutation) (int64, error) {
 		if b.Role().String() != "editor" || !slices.Equal(b.CodeStrings(), []string{"system:user:add", "system:user:list"}) {
 			t.Fatalf("binding = %q %v", b.Role(), b.CodeStrings())
 		}
-		if got == nil || *got != version {
+		if got.Actor != "test-operator" || got.ExpectedVersion == nil || *got.ExpectedVersion != version {
 			t.Fatalf("version = %v", got)
 		}
 		return 5, nil
@@ -109,14 +109,14 @@ func TestSetRolePermissionsValidatesAndSaves(t *testing.T) {
 	uc := NewRoleBindingUsecase(policy)
 	got, err := uc.SetRolePermissions(context.Background(), "editor", []string{
 		"system:user:list", "system:user:add", "system:user:list",
-	}, &version)
+	}, domain.PolicyMutation{Actor: "test-operator", ExpectedVersion: &version})
 	if err != nil || got != 5 {
 		t.Fatalf("save = %d, %v", got, err)
 	}
-	if _, err := uc.SetRolePermissions(context.Background(), "bad role", nil, nil); !errors.Is(err, domain.ErrEmptyRole) {
+	if _, err := uc.SetRolePermissions(context.Background(), "bad role", nil, domain.PolicyMutation{Actor: "test-operator"}); !errors.Is(err, domain.ErrEmptyRole) {
 		t.Fatalf("role error = %v", err)
 	}
-	if _, err := uc.SetRolePermissions(context.Background(), "editor", []string{"bad"}, nil); !errors.Is(err, domain.ErrInvalidPermissionCode) {
+	if _, err := uc.SetRolePermissions(context.Background(), "editor", []string{"bad"}, domain.PolicyMutation{Actor: "test-operator"}); !errors.Is(err, domain.ErrInvalidPermissionCode) {
 		t.Fatalf("code error = %v", err)
 	}
 }
@@ -125,46 +125,49 @@ func TestRoleInheritanceCommands(t *testing.T) {
 	version := int64(9)
 	want := domain.RoleInheritance{Child: domain.Role("lead"), Parent: domain.Role("editor")}
 	policy := policyRecorder{
-		saveInheritance: func(_ context.Context, got domain.RoleInheritance, expected *int64) (int64, error) {
-			if got != want || expected == nil || *expected != version {
+		saveInheritance: func(_ context.Context, got domain.RoleInheritance, expected domain.PolicyMutation) (int64, error) {
+			if got != want || expected.Actor != "test-operator" || expected.ExpectedVersion == nil || *expected.ExpectedVersion != version {
 				t.Fatalf("save args = %+v, %v", got, expected)
 			}
 			return 10, nil
 		},
-		deleteInheritance: func(_ context.Context, got domain.RoleInheritance, expected *int64) (int64, error) {
-			if got != want || expected == nil || *expected != version {
+		deleteInheritance: func(_ context.Context, got domain.RoleInheritance, expected domain.PolicyMutation) (int64, error) {
+			if got != want || expected.Actor != "test-operator" || expected.ExpectedVersion == nil || *expected.ExpectedVersion != version {
 				t.Fatalf("delete args = %+v, %v", got, expected)
 			}
 			return 11, nil
 		},
 	}
 	uc := NewRoleBindingUsecase(policy)
-	if got, err := uc.AddRoleInheritance(context.Background(), "lead", "editor", &version); err != nil || got != 10 {
+	if got, err := uc.AddRoleInheritance(context.Background(), "lead", "editor", domain.PolicyMutation{Actor: "test-operator", ExpectedVersion: &version}); err != nil || got != 10 {
 		t.Fatalf("add = %d, %v", got, err)
 	}
-	if got, err := uc.DeleteRoleInheritance(context.Background(), "lead", "editor", &version); err != nil || got != 11 {
+	if got, err := uc.DeleteRoleInheritance(context.Background(), "lead", "editor", domain.PolicyMutation{Actor: "test-operator", ExpectedVersion: &version}); err != nil || got != 11 {
 		t.Fatalf("delete = %d, %v", got, err)
 	}
 	for _, call := range []func() error{
 		func() error {
-			_, err := uc.AddRoleInheritance(context.Background(), "bad role", "editor", nil)
+			_, err := uc.AddRoleInheritance(context.Background(), "bad role", "editor", domain.PolicyMutation{Actor: "test-operator"})
 			return err
 		},
 		func() error {
-			_, err := uc.AddRoleInheritance(context.Background(), "lead", "bad role", nil)
-			return err
-		},
-		func() error { _, err := uc.AddRoleInheritance(context.Background(), "lead", "lead", nil); return err },
-		func() error {
-			_, err := uc.DeleteRoleInheritance(context.Background(), "bad role", "editor", nil)
+			_, err := uc.AddRoleInheritance(context.Background(), "lead", "bad role", domain.PolicyMutation{Actor: "test-operator"})
 			return err
 		},
 		func() error {
-			_, err := uc.DeleteRoleInheritance(context.Background(), "lead", "bad role", nil)
+			_, err := uc.AddRoleInheritance(context.Background(), "lead", "lead", domain.PolicyMutation{Actor: "test-operator"})
 			return err
 		},
 		func() error {
-			_, err := uc.DeleteRoleInheritance(context.Background(), "lead", "lead", nil)
+			_, err := uc.DeleteRoleInheritance(context.Background(), "bad role", "editor", domain.PolicyMutation{Actor: "test-operator"})
+			return err
+		},
+		func() error {
+			_, err := uc.DeleteRoleInheritance(context.Background(), "lead", "bad role", domain.PolicyMutation{Actor: "test-operator"})
+			return err
+		},
+		func() error {
+			_, err := uc.DeleteRoleInheritance(context.Background(), "lead", "lead", domain.PolicyMutation{Actor: "test-operator"})
 			return err
 		},
 	} {
@@ -188,5 +191,25 @@ func TestResolveCodesNormalizesRoles(t *testing.T) {
 	}
 	if _, err := uc.ResolveCodes(context.Background(), []string{"bad role"}); !errors.Is(err, domain.ErrEmptyRole) {
 		t.Fatalf("invalid role error = %v", err)
+	}
+}
+
+func TestPolicyCommandsRejectMissingActorBeforeCallingPort(t *testing.T) {
+	uc := NewRoleBindingUsecase(policyRecorder{})
+	calls := []func() (int64, error){
+		func() (int64, error) {
+			return uc.SetRolePermissions(context.Background(), "editor", nil, domain.PolicyMutation{})
+		},
+		func() (int64, error) {
+			return uc.AddRoleInheritance(context.Background(), "editor", "viewer", domain.PolicyMutation{})
+		},
+		func() (int64, error) {
+			return uc.DeleteRoleInheritance(context.Background(), "editor", "viewer", domain.PolicyMutation{})
+		},
+	}
+	for _, call := range calls {
+		if _, err := call(); !errors.Is(err, domain.ErrInvalidPolicyActor) {
+			t.Fatalf("error = %v", err)
+		}
 	}
 }

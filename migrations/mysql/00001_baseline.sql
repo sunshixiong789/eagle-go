@@ -139,29 +139,78 @@ CREATE TABLE sys_dict_data (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_bin;
 CREATE INDEX idx_sys_dict_data_type_sort ON sys_dict_data (dict_type, sort);
 
-CREATE TABLE social_identity (
+CREATE TABLE user_account (
+    subject      varchar(32)   NOT NULL,
+    display_name varchar(128)  NOT NULL DEFAULT '',
+    avatar_url   varchar(2048) NOT NULL DEFAULT '',
+    status       int           NOT NULL DEFAULT 1,
+    created_at   datetime(6)   NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at   datetime(6)   NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (subject),
+    CONSTRAINT ck_user_account_status CHECK (status IN (0, 1))
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_bin;
+
+CREATE TABLE user_identity (
     id               bigint        NOT NULL AUTO_INCREMENT,
-    subject          varchar(384)  NOT NULL,
-    provider         varchar(16)   NOT NULL,
+    account_subject  varchar(32)   NOT NULL,
+    provider         varchar(32)   NOT NULL,
     provider_subject varchar(255)  NOT NULL,
     email            varchar(320)  NOT NULL DEFAULT '',
     email_verified   boolean       NOT NULL DEFAULT false,
-    display_name     varchar(128)  NOT NULL DEFAULT '',
-    avatar_url       varchar(2048) NOT NULL DEFAULT '',
-    role             varchar(32)   NOT NULL DEFAULT 'user',
     last_login_at    datetime(6)   NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     created_at       datetime(6)   NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     updated_at       datetime(6)   NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     PRIMARY KEY (id),
-    UNIQUE KEY uk_social_identity_subject (subject),
-    UNIQUE KEY uk_social_identity_provider_subject (provider, provider_subject),
-    CONSTRAINT ck_social_identity_provider CHECK (provider IN ('google', 'apple')),
-    CONSTRAINT ck_social_identity_role CHECK (role IN ('user', 'admin'))
+    UNIQUE KEY uk_user_identity_provider_subject (provider, provider_subject),
+    CONSTRAINT fk_user_identity_account FOREIGN KEY (account_subject) REFERENCES user_account(subject) ON DELETE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_bin;
+CREATE INDEX idx_user_identity_account ON user_identity (account_subject);
+
+CREATE TABLE user_role_binding (
+    id              bigint       NOT NULL AUTO_INCREMENT,
+    account_subject varchar(32)  NOT NULL,
+    audience        varchar(255) NOT NULL,
+    role            varchar(64)  NOT NULL,
+    created_at      datetime(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at      datetime(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_user_role_binding_account_audience_role (account_subject, audience, role),
+    CONSTRAINT fk_user_role_binding_account FOREIGN KEY (account_subject) REFERENCES user_account(subject) ON DELETE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_bin;
+CREATE INDEX idx_user_role_binding_account_audience ON user_role_binding (account_subject, audience);
+
+CREATE TABLE account_role_state (
+    audience varchar(255) PRIMARY KEY,
+    revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
+    admin_initialized boolean NOT NULL DEFAULT false,
+    updated_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+CREATE TABLE user_audience (
+    id bigint NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    account_subject varchar(32) NOT NULL,
+    audience varchar(255) NOT NULL,
+    created_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    CONSTRAINT fk_user_audience_account FOREIGN KEY (account_subject) REFERENCES user_account(subject) ON DELETE CASCADE,
+    UNIQUE (account_subject, audience)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+CREATE TABLE account_role_audit (
+    id bigint NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    audience varchar(255) NOT NULL,
+    revision bigint NOT NULL,
+    account_subject varchar(32) NOT NULL,
+    actor_subject varchar(128) NOT NULL,
+    action varchar(32) NOT NULL,
+    `before` json NOT NULL,
+    `after` json NOT NULL,
+    created_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    UNIQUE (audience, revision)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+CREATE INDEX idx_account_role_audit_target ON account_role_audit(account_subject, created_at);
 
 CREATE TABLE auth_session (
     id                 varchar(32) NOT NULL,
     identity_id        bigint      NOT NULL,
+    audience           varchar(255) NOT NULL,
     refresh_token_hash varchar(64) NOT NULL,
     expires_at         datetime(6) NOT NULL,
     revoked_at         datetime(6),
@@ -169,7 +218,7 @@ CREATE TABLE auth_session (
     updated_at         datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     PRIMARY KEY (id),
     UNIQUE KEY uk_auth_session_refresh_token_hash (refresh_token_hash),
-    CONSTRAINT fk_auth_session_identity FOREIGN KEY (identity_id) REFERENCES social_identity(id) ON DELETE CASCADE
+    CONSTRAINT fk_auth_session_identity FOREIGN KEY (identity_id) REFERENCES user_identity(id) ON DELETE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_bin;
 CREATE INDEX idx_auth_session_identity ON auth_session (identity_id);
 CREATE INDEX idx_auth_session_expires ON auth_session (expires_at);
@@ -186,7 +235,10 @@ INSERT INTO permission_definition (code, service, resource, action, status, sour
     ('system:dict:add',          'system', 'dict',       'add',    1, 'baseline'),
     ('system:dict:list',         'system', 'dict',       'list',   1, 'baseline'),
     ('system:dict:edit',         'system', 'dict',       'edit',   1, 'baseline'),
-    ('system:dict:remove',       'system', 'dict',       'remove', 1, 'baseline');
+    ('system:dict:remove',       'system', 'dict',       'remove', 1, 'baseline'),
+    ('system:account:list',      'system', 'account',    'list',   1, 'baseline'),
+    ('system:account:query',     'system', 'account',    'query',  1, 'baseline'),
+    ('system:account:assign',    'system', 'account',    'assign', 1, 'baseline');
 
 INSERT INTO navigation_node (id, parent_id, name, permission_code, type, path, component, icon, sort) VALUES
     (1,   NULL, '系统管理', NULL,                       1, '/system',    '',                  'settings', 1),
@@ -228,7 +280,12 @@ INSERT INTO sys_dict_data (dict_type, label, value, sort, css_class, is_default)
 
 -- +goose Down
 DROP TABLE IF EXISTS auth_session;
-DROP TABLE IF EXISTS social_identity;
+DROP TABLE IF EXISTS account_role_audit;
+DROP TABLE IF EXISTS user_audience;
+DROP TABLE IF EXISTS account_role_state;
+DROP TABLE IF EXISTS user_role_binding;
+DROP TABLE IF EXISTS user_identity;
+DROP TABLE IF EXISTS user_account;
 DROP TABLE IF EXISTS sys_dict_data;
 DROP TABLE IF EXISTS sys_dict_type;
 DROP TABLE IF EXISTS authz_policy_audit;

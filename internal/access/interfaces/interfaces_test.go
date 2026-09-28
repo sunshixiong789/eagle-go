@@ -52,6 +52,7 @@ type policyRepoStub struct {
 	bindings    []*domain.RoleBinding
 	codes       []domain.PermissionCode
 	inheritance []domain.RoleInheritance
+	mutation    domain.PolicyMutation
 	version     int64
 	err         error
 }
@@ -59,7 +60,8 @@ type policyRepoStub struct {
 func (r *policyRepoStub) FindBinding(context.Context, domain.Role) (*domain.RoleBinding, error) {
 	return r.binding, r.err
 }
-func (r *policyRepoStub) SaveBinding(_ context.Context, binding *domain.RoleBinding, _ *int64) (int64, error) {
+func (r *policyRepoStub) SaveBinding(_ context.Context, binding *domain.RoleBinding, mutation domain.PolicyMutation) (int64, error) {
+	r.mutation = mutation
 	r.binding = binding
 	return r.version, r.err
 }
@@ -69,14 +71,16 @@ func (r *policyRepoStub) ListBindings(context.Context) ([]*domain.RoleBinding, i
 func (r *policyRepoStub) ResolveCodes(context.Context, []domain.Role) ([]domain.PermissionCode, error) {
 	return r.codes, r.err
 }
-func (r *policyRepoStub) SaveInheritance(_ context.Context, ri domain.RoleInheritance, _ *int64) (int64, error) {
+func (r *policyRepoStub) SaveInheritance(_ context.Context, ri domain.RoleInheritance, mutation domain.PolicyMutation) (int64, error) {
+	r.mutation = mutation
 	r.inheritance = []domain.RoleInheritance{ri}
 	return r.version, r.err
 }
 func (r *policyRepoStub) ListInheritances(context.Context) ([]domain.RoleInheritance, int64, error) {
 	return r.inheritance, r.version, r.err
 }
-func (r *policyRepoStub) DeleteInheritance(_ context.Context, ri domain.RoleInheritance, _ *int64) (int64, error) {
+func (r *policyRepoStub) DeleteInheritance(_ context.Context, ri domain.RoleInheritance, mutation domain.PolicyMutation) (int64, error) {
+	r.mutation = mutation
 	r.inheritance = []domain.RoleInheritance{ri}
 	return r.version, r.err
 }
@@ -194,7 +198,7 @@ func TestRoleBindingService(t *testing.T) {
 		inheritance: []domain.RoleInheritance{inheritance}, version: 9,
 	}
 	service := NewRoleBindingService(application.NewRoleBindingUsecase(policy))
-	ctx := context.Background()
+	ctx := identity.NewContext(context.Background(), &identity.Principal{Subject: "operator-subject"})
 	if toProtoBinding(nil) != nil {
 		t.Fatal("nil binding must stay nil")
 	}
@@ -216,9 +220,15 @@ func TestRoleBindingService(t *testing.T) {
 	if err != nil || set.GetPolicyVersion() != 9 {
 		t.Fatalf("set = %+v, %v", set, err)
 	}
+	if policy.mutation.Actor != "operator-subject" || policy.mutation.ExpectedVersion != &version {
+		t.Fatalf("mutation = %+v", policy.mutation)
+	}
 	added, err := service.AddRoleInheritance(ctx, &v1.AddRoleInheritanceRequest{Child: "lead", Parent: "viewer", ExpectedVersion: &version})
 	if err != nil || added.GetPolicyVersion() != 9 {
 		t.Fatalf("add inheritance = %+v, %v", added, err)
+	}
+	if policy.mutation.Actor != "operator-subject" {
+		t.Fatalf("mutation = %+v", policy.mutation)
 	}
 	inherited, err := service.ListRoleInheritances(ctx, &v1.ListRoleInheritancesRequest{})
 	if err != nil || len(inherited.GetInheritances()) != 1 || inherited.GetPolicyVersion() != 9 {
@@ -227,6 +237,9 @@ func TestRoleBindingService(t *testing.T) {
 	deleted, err := service.DeleteRoleInheritance(ctx, &v1.DeleteRoleInheritanceRequest{Child: "lead", Parent: "viewer", ExpectedVersion: &version})
 	if err != nil || deleted.GetPolicyVersion() != 9 {
 		t.Fatalf("delete inheritance = %+v, %v", deleted, err)
+	}
+	if policy.mutation.Actor != "operator-subject" {
+		t.Fatalf("mutation = %+v", policy.mutation)
 	}
 }
 

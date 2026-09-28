@@ -12,11 +12,13 @@ import (
 
 type accountRepoFake struct {
 	domain.AccountRepository
+	query domain.AccountQuery
 	actor string
 	err   error
 }
 
-func (f *accountRepoFake) List(context.Context, domain.AccountQuery) ([]domain.Account, int64, error) {
+func (f *accountRepoFake) List(_ context.Context, q domain.AccountQuery) ([]domain.Account, int64, error) {
+	f.query = q
 	return []domain.Account{{Subject: "target", DisplayName: "Test", Status: 1}}, 1, f.err
 }
 func (f *accountRepoFake) Roles(context.Context, string) (*domain.AccountRoles, error) {
@@ -51,5 +53,17 @@ func TestAccountServiceMappings(t *testing.T) {
 	}
 	if _, err := s.SetAccountRoles(ctx, &v1.SetAccountRolesRequest{Subject: "target", ExpectedRevision: 5}); err == nil {
 		t.Fatal("write error lost")
+	}
+}
+
+// TestAccountPagination 验证协议页码直接使用统一的 0-based 契约。
+func TestAccountPagination(t *testing.T) {
+	for _, page := range []int32{0, 1, 2} {
+		repo := &accountRepoFake{}
+		service := NewAccountService(application.NewAccountUsecase(repo))
+		_, err := service.ListAccounts(context.Background(), &v1.ListAccountsRequest{Page: page, PageSize: 10})
+		if err != nil || repo.query.Offset != int64(page)*10 {
+			t.Fatalf("page=%d query=%+v error=%v", page, repo.query, err)
+		}
 	}
 }

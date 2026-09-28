@@ -34,7 +34,7 @@ func (r *accountRepo) List(ctx context.Context, q domain.AccountQuery) ([]domain
 	if err != nil {
 		return nil, 0, fmt.Errorf("count accounts: %w", err)
 	}
-	rows, err := query.Order(ent.Asc(useraccount.FieldID)).Offset(q.Offset).Limit(q.Limit).All(ctx)
+	rows, err := query.Order(ent.Asc(useraccount.FieldID)).Offset(int(q.Offset)).Limit(q.Limit).All(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list accounts: %w", err)
 	}

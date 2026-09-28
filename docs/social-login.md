@@ -74,7 +74,7 @@ Content-Type: application/json
 
 ## 管理员初始化与账号角色管理
 
-先让目标用户完成一次正常登录，取得返回的 Eagle `subject`。执行迁移到 `00003` 后，
+先让目标用户完成一次正常登录，取得返回的 Eagle `subject`。完成数据库初始化后，
 在具有该应用数据库权限的运维终端运行同版本命令（镜像内为 `/app/eagle-admin`）：
 
 ```bash

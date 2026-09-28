@@ -30,13 +30,13 @@ type AuthServiceHTTPServer interface {
 	Logout(context.Context, *LogoutRequest) (*LogoutResponse, error)
 	// RefreshToken RefreshToken 轮换刷新凭证并签发新的 access token，成功后旧刷新凭证不可再次使用。
 	// 签发失败时回滚轮换；无效、过期或已撤销的刷新凭证不能刷新，停用账号不能刷新。
-	// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
-	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 预生产既有响应契约，保持客户端 wire/source 兼容。
+	// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 登录与刷新返回相同的令牌结构，复用响应消息。
+	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 登录与刷新返回相同的令牌结构，复用响应消息。
 	RefreshToken(context.Context, *RefreshTokenRequest) (*TokenResponse, error)
 	// SocialLogin SocialLogin 校验 Google/Apple ID Token 和 nonce，为对应 Eagle 账号创建会话并返回令牌。
 	// 同一第三方身份复用已有账号；每次成功登录创建独立会话，停用账号不能登录。
-	// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
-	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 预生产既有响应契约，保持客户端 wire/source 兼容。
+	// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 登录与刷新返回相同的令牌结构，复用响应消息。
+	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 登录与刷新返回相同的令牌结构，复用响应消息。
 	SocialLogin(context.Context, *SocialLoginRequest) (*TokenResponse, error)
 }
 
@@ -132,13 +132,13 @@ type AuthServiceHTTPClient interface {
 	Logout(ctx context.Context, req *LogoutRequest, opts ...http.CallOption) (rsp *LogoutResponse, err error)
 	// RefreshToken RefreshToken 轮换刷新凭证并签发新的 access token，成功后旧刷新凭证不可再次使用。
 	// 签发失败时回滚轮换；无效、过期或已撤销的刷新凭证不能刷新，停用账号不能刷新。
-	// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
-	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 预生产既有响应契约，保持客户端 wire/source 兼容。
+	// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 登录与刷新返回相同的令牌结构，复用响应消息。
+	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 登录与刷新返回相同的令牌结构，复用响应消息。
 	RefreshToken(ctx context.Context, req *RefreshTokenRequest, opts ...http.CallOption) (rsp *TokenResponse, err error)
 	// SocialLogin SocialLogin 校验 Google/Apple ID Token 和 nonce，为对应 Eagle 账号创建会话并返回令牌。
 	// 同一第三方身份复用已有账号；每次成功登录创建独立会话，停用账号不能登录。
-	// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
-	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 预生产既有响应契约，保持客户端 wire/source 兼容。
+	// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 登录与刷新返回相同的令牌结构，复用响应消息。
+	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 登录与刷新返回相同的令牌结构，复用响应消息。
 	SocialLogin(ctx context.Context, req *SocialLoginRequest, opts ...http.CallOption) (rsp *TokenResponse, err error)
 }
 
@@ -188,8 +188,8 @@ func (c *AuthServiceHTTPClientImpl) Logout(ctx context.Context, in *LogoutReques
 
 // RefreshToken RefreshToken 轮换刷新凭证并签发新的 access token，成功后旧刷新凭证不可再次使用。
 // 签发失败时回滚轮换；无效、过期或已撤销的刷新凭证不能刷新，停用账号不能刷新。
-// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
-// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 预生产既有响应契约，保持客户端 wire/source 兼容。
+// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 登录与刷新返回相同的令牌结构，复用响应消息。
+// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 登录与刷新返回相同的令牌结构，复用响应消息。
 func (c *AuthServiceHTTPClientImpl) RefreshToken(ctx context.Context, in *RefreshTokenRequest, opts ...http.CallOption) (*TokenResponse, error) {
 	var out TokenResponse
 	pattern := "/v1/auth/token/refresh"
@@ -209,8 +209,8 @@ func (c *AuthServiceHTTPClientImpl) RefreshToken(ctx context.Context, in *Refres
 
 // SocialLogin SocialLogin 校验 Google/Apple ID Token 和 nonce，为对应 Eagle 账号创建会话并返回令牌。
 // 同一第三方身份复用已有账号；每次成功登录创建独立会话，停用账号不能登录。
-// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 预生产既有响应契约，保持客户端 wire/source 兼容。
-// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 预生产既有响应契约，保持客户端 wire/source 兼容。
+// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 登录与刷新返回相同的令牌结构，复用响应消息。
+// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 登录与刷新返回相同的令牌结构，复用响应消息。
 func (c *AuthServiceHTTPClientImpl) SocialLogin(ctx context.Context, in *SocialLoginRequest, opts ...http.CallOption) (*TokenResponse, error) {
 	var out TokenResponse
 	pattern := "/v1/auth/social/login"

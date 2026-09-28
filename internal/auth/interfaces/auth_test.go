@@ -30,7 +30,7 @@ func (p *providerStub) Verify(_ context.Context, provider domain.Provider, _, _ 
 }
 
 type sessionStub struct {
-	domain.SessionRepository
+	domain.SessionManager
 	identity   *domain.Identity
 	createHash string
 	rotateHash string

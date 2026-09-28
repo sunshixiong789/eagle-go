@@ -112,12 +112,12 @@ var File_eagle_annotations_v1_perm_proto protoreflect.FileDescriptor
 
 const file_eagle_annotations_v1_perm_proto_rawDesc = "" +
 	"\n" +
-	"\x1feagle/annotations/v1/perm.proto\x12\x14eagle.annotations.v1\x1a google/protobuf/descriptor.proto*\x90\x01\n" +
+	"\x1feagle/annotations/v1/perm.proto\x12\x14eagle.annotations.v1\x1a google/protobuf/descriptor.proto*\x8a\x01\n" +
 	"\vAccessLevel\x12\x1c\n" +
 	"\x18ACCESS_LEVEL_UNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13ACCESS_LEVEL_PUBLIC\x10\x01\x12\x1e\n" +
 	"\x1aACCESS_LEVEL_AUTHENTICATED\x10\x02\x12$\n" +
-	" ACCESS_LEVEL_PERMISSION_REQUIRED\x10\x03\"\x04\b\x04\x10\x04:4\n" +
+	" ACCESS_LEVEL_PERMISSION_REQUIRED\x10\x03:4\n" +
 	"\x04perm\x12\x1e.google.protobuf.MethodOptions\x18ц\x03 \x01(\tR\x04perm:[\n" +
 	"\x06access\x12\x1e.google.protobuf.MethodOptions\x18ӆ\x03 \x01(\x0e2!.eagle.annotations.v1.AccessLevelR\x06accessBBZ@github.com/eagle-go/eagle/api/eagle/annotations/v1;annotationsv1b\x06proto3"
 

@@ -8,12 +8,10 @@ import (
 	"maps"
 	"slices"
 
-	"github.com/go-kratos/kratos/v3/transport"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/eagle-go/eagle/internal/access/domain"
 	"github.com/eagle-go/eagle/pkg/authz"
-	"github.com/eagle-go/eagle/pkg/identity"
 )
 
 // policyRepo 把 Casbin 判定器适配到领域层定义的 PolicyRepo 接口。
@@ -50,8 +48,11 @@ func (r *policyRepo) FindBinding(ctx context.Context, role domain.Role) (*domain
 	return binding.WithRevision(version), nil
 }
 
-func (r *policyRepo) SaveBinding(ctx context.Context, b *domain.RoleBinding, expectedVersion *int64) (int64, error) {
-	version, err := r.store.ReplaceRolePermissions(ctx, b.Role().String(), b.CodeStrings(), expectedVersion, mutationMeta(ctx))
+func (r *policyRepo) SaveBinding(ctx context.Context, b *domain.RoleBinding, mutation domain.PolicyMutation) (int64, error) {
+	if err := mutation.Validate(); err != nil {
+		return 0, err
+	}
+	version, err := r.store.ReplaceRolePermissions(ctx, b.Role().String(), b.CodeStrings(), mutation.ExpectedVersion, mutationMeta(ctx, mutation))
 	return r.commitPolicy(ctx, version, err)
 }
 
@@ -63,8 +64,11 @@ func (r *policyRepo) ResolveCodes(ctx context.Context, roles []domain.Role) ([]d
 	return domain.ParsePermissionCodes(raw)
 }
 
-func (r *policyRepo) SaveInheritance(ctx context.Context, ri domain.RoleInheritance, expectedVersion *int64) (int64, error) {
-	version, err := r.store.AddRoleInheritance(ctx, ri.Child.String(), ri.Parent.String(), expectedVersion, mutationMeta(ctx))
+func (r *policyRepo) SaveInheritance(ctx context.Context, ri domain.RoleInheritance, mutation domain.PolicyMutation) (int64, error) {
+	if err := mutation.Validate(); err != nil {
+		return 0, err
+	}
+	version, err := r.store.AddRoleInheritance(ctx, ri.Child.String(), ri.Parent.String(), mutation.ExpectedVersion, mutationMeta(ctx, mutation))
 	return r.commitPolicy(ctx, version, err)
 }
 
@@ -104,8 +108,11 @@ func (r *policyRepo) ListInheritances(ctx context.Context) ([]domain.RoleInherit
 	return out, version, nil
 }
 
-func (r *policyRepo) DeleteInheritance(ctx context.Context, ri domain.RoleInheritance, expectedVersion *int64) (int64, error) {
-	version, err := r.store.DeleteRoleInheritance(ctx, ri.Child.String(), ri.Parent.String(), expectedVersion, mutationMeta(ctx))
+func (r *policyRepo) DeleteInheritance(ctx context.Context, ri domain.RoleInheritance, mutation domain.PolicyMutation) (int64, error) {
+	if err := mutation.Validate(); err != nil {
+		return 0, err
+	}
+	version, err := r.store.DeleteRoleInheritance(ctx, ri.Child.String(), ri.Parent.String(), mutation.ExpectedVersion, mutationMeta(ctx, mutation))
 	return r.commitPolicy(ctx, version, err)
 }
 
@@ -120,16 +127,10 @@ func (r *policyRepo) commitPolicy(ctx context.Context, version int64, err error)
 	return version, nil
 }
 
-func mutationMeta(ctx context.Context) policyMutationMeta {
-	meta := policyMutationMeta{}
-	if p, ok := identity.FromContext(ctx); ok {
-		meta.actorSubject = p.Subject
-	}
+func mutationMeta(ctx context.Context, mutation domain.PolicyMutation) policyMutationMeta {
+	meta := policyMutationMeta{actorSubject: mutation.Actor, requestID: mutation.RequestID}
 	if sc := trace.SpanContextFromContext(ctx); sc.IsValid() {
 		meta.traceID = sc.TraceID().String()
-	}
-	if tr, ok := transport.FromServerContext(ctx); ok {
-		meta.requestID = tr.RequestHeader().Get("X-Request-ID")
 	}
 	return meta
 }

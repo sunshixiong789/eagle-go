@@ -28,9 +28,6 @@ func (r *dictRepoStub) CreateType(_ context.Context, got *domain.DictType) (*dom
 	r.dictType = got
 	return got, r.err
 }
-func (r *dictRepoStub) GetTypeByID(context.Context, int64) (*domain.DictType, error) {
-	return r.dictType, r.err
-}
 func (r *dictRepoStub) ListTypes(_ context.Context, q domain.ListDictTypesQuery) ([]*domain.DictType, int64, error) {
 	r.typeQuery = q
 	return []*domain.DictType{r.dictType}, r.total, r.err
@@ -46,9 +43,6 @@ func (r *dictRepoStub) DeleteType(_ context.Context, id int64) error {
 func (r *dictRepoStub) CreateData(_ context.Context, got *domain.DictData) (*domain.DictData, error) {
 	r.dictData = got
 	return got, r.err
-}
-func (r *dictRepoStub) GetDataByID(context.Context, int64) (*domain.DictData, error) {
-	return r.dictData, r.err
 }
 func (r *dictRepoStub) ListData(_ context.Context, q domain.ListDictDataQuery) ([]*domain.DictData, int64, error) {
 	r.dataQuery = q

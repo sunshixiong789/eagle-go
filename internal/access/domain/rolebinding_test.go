@@ -63,6 +63,13 @@ func TestRoleBindingNormalizesCodesAndProtectsCopies(t *testing.T) {
 		t.Fatalf("typed codes = %v", binding.Codes())
 	}
 
+	// 调用方不能通过访问器改写已校验的授权集合。
+	exposed := binding.Codes()
+	exposed[0] = MustPermissionCode("system:*")
+	if binding.Grants(MustPermissionCode("system:user:remove")) {
+		t.Fatal("mutating returned codes changed grants")
+	}
+
 	withRevision := binding.WithRevision(12)
 	if withRevision == binding || withRevision.Revision() != 12 || binding.Revision() != 0 {
 		t.Fatalf("revisions = copied:%d original:%d", withRevision.Revision(), binding.Revision())
@@ -117,6 +124,19 @@ func TestRoleInheritanceInvariants(t *testing.T) {
 	} {
 		if _, err := NewRoleInheritance(tc.child, tc.parent); !errors.Is(err, tc.want) {
 			t.Fatalf("NewRoleInheritance(%q,%q) error = %v, want %v", tc.child, tc.parent, err, tc.want)
+		}
+	}
+}
+
+func TestPolicyMutationRequiresActor(t *testing.T) {
+	for _, actor := range []string{"", " \t", strings.Repeat("a", 129)} {
+		if err := (PolicyMutation{Actor: actor}).Validate(); !errors.Is(err, ErrInvalidPolicyActor) {
+			t.Fatalf("actor %q: %v", actor, err)
+		}
+	}
+	for _, actor := range []string{"account-subject", "job:policy-import", strings.Repeat("a", 128)} {
+		if err := (PolicyMutation{Actor: actor}).Validate(); err != nil {
+			t.Fatal(err)
 		}
 	}
 }

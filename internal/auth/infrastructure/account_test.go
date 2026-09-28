@@ -114,7 +114,7 @@ func TestEmptyAccountRolesSurviveLoginAndRefresh(t *testing.T) {
 		t.Skip("需要真实数据库")
 	}
 	ctx := context.Background()
-	sessions := NewSessionRepository(authTestDB, &testIssuer{}, "empty-role-app")
+	sessions := NewSessionManager(authTestDB, &testIssuer{}, "empty-role-app")
 	external := &domain.ExternalIdentity{Provider: domain.ProviderGoogle, ProviderID: "empty-role-provider"}
 	grant, err := sessions.Create(ctx, external, "empty-role-account", domain.Session{ID: "empty-role-session", RefreshTokenHash: "empty-role-refresh", ExpiresAt: time.Now().Add(time.Hour)})
 	if err != nil {
@@ -136,7 +136,7 @@ func TestEmptyAccountRolesSurviveLoginAndRefresh(t *testing.T) {
 	if err != nil || len(login.Identity.Roles) != 0 {
 		t.Fatalf("login restored roles: %+v %v", login, err)
 	}
-	other := NewSessionRepository(authTestDB, &testIssuer{}, "other-role-app")
+	other := NewSessionManager(authTestDB, &testIssuer{}, "other-role-app")
 	login, err = other.Create(ctx, external, "unused-account", domain.Session{ID: "other-role-login", RefreshTokenHash: "other-role-login-hash", ExpiresAt: time.Now().Add(time.Hour)})
 	if err != nil || !slices.Equal(login.Identity.Roles, []string{"user"}) {
 		t.Fatalf("audience isolation: %+v %v", login, err)

@@ -22,7 +22,7 @@ func TestLayerDependencies(t *testing.T) {
 		basePath := "./internal/" + module
 		baseImport := modulePrefix + module
 		if isDirectory(filepath.Join(root, "internal", module, "service")) {
-			t.Errorf("模块 %s 使用了旧入站层目录 service（应使用经典 DDD 术语 interfaces）", module)
+			t.Errorf("模块 %s 使用了旧入站层目录 service（本仓库约定使用 interfaces）", module)
 		}
 
 		assertImports(t, root, basePath+"/domain/...", nil, func(imp string) bool {
@@ -42,9 +42,11 @@ func TestLayerDependencies(t *testing.T) {
 			})
 		}
 
+		// 持久化适配器接收显式业务主体，不能依赖入站层或从统一身份上下文隐式取值。
 		if isDirectory(filepath.Join(root, "internal", module, "infrastructure")) {
 			assertImports(t, root, basePath+"/infrastructure/...", nil, func(imp string) bool {
-				return strings.HasPrefix(imp, baseImport+"/interfaces")
+				return strings.HasPrefix(imp, baseImport+"/interfaces") ||
+					imp == "github.com/eagle-go/eagle/pkg/identity"
 			})
 		}
 	}

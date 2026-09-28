@@ -65,9 +65,9 @@ type ProviderVerifier interface {
 	Verify(context.Context, Provider, string, string) (*ExternalIdentity, error)
 }
 
-// SessionRepository 原子维护外部身份到 Eagle 账号的映射、账号角色和刷新会话。
+// SessionManager 原子维护外部身份到 Eagle 账号的映射、账号角色和刷新会话。
 // 会话仅保存刷新凭证的哈希；Create 和 Rotate 在本地签名成功后才提交事务。
-type SessionRepository interface {
+type SessionManager interface {
 	// Create 为已验证的外部身份创建会话并签发令牌，已有身份复用原账号。
 	// 新账号使用传入的候选 subject；账号停用返回 ErrAccountDisabled，签发失败回滚本次写入。
 	Create(context.Context, *ExternalIdentity, string, Session) (*SessionGrant, error)

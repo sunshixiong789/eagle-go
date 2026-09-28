@@ -41,7 +41,10 @@ func (uc *RoleBindingUsecase) GetRolePermissions(ctx context.Context, roleName s
 // SetRolePermissions 全量覆盖角色的权限码。
 //
 // 权限目录的存在性由仓储在保存事务内校验，避免预检与写入之间发生变化。
-func (uc *RoleBindingUsecase) SetRolePermissions(ctx context.Context, roleName string, codeStrings []string, expectedVersion *int64) (int64, error) {
+func (uc *RoleBindingUsecase) SetRolePermissions(ctx context.Context, roleName string, codeStrings []string, mutation domain.PolicyMutation) (int64, error) {
+	if err := mutation.Validate(); err != nil {
+		return 0, err
+	}
 	role, err := domain.NewRole(roleName)
 	if err != nil {
 		return 0, err
@@ -57,11 +60,14 @@ func (uc *RoleBindingUsecase) SetRolePermissions(ctx context.Context, roleName s
 		return 0, err
 	}
 
-	return uc.policy.SaveBinding(ctx, binding, expectedVersion)
+	return uc.policy.SaveBinding(ctx, binding, mutation)
 }
 
 // AddRoleInheritance 建立角色继承。
-func (uc *RoleBindingUsecase) AddRoleInheritance(ctx context.Context, childName, parentName string, expectedVersion *int64) (int64, error) {
+func (uc *RoleBindingUsecase) AddRoleInheritance(ctx context.Context, childName, parentName string, mutation domain.PolicyMutation) (int64, error) {
+	if err := mutation.Validate(); err != nil {
+		return 0, err
+	}
 	child, err := domain.NewRole(childName)
 	if err != nil {
 		return 0, err
@@ -75,7 +81,7 @@ func (uc *RoleBindingUsecase) AddRoleInheritance(ctx context.Context, childName,
 	if err != nil {
 		return 0, err
 	}
-	return uc.policy.SaveInheritance(ctx, ri, expectedVersion)
+	return uc.policy.SaveInheritance(ctx, ri, mutation)
 }
 
 func (uc *RoleBindingUsecase) ListRoleInheritances(ctx context.Context) ([]domain.RoleInheritance, int64, error) {
@@ -83,7 +89,10 @@ func (uc *RoleBindingUsecase) ListRoleInheritances(ctx context.Context) ([]domai
 }
 
 // DeleteRoleInheritance 校验角色与继承关系，再交给仓储按可选版本删除。
-func (uc *RoleBindingUsecase) DeleteRoleInheritance(ctx context.Context, childName, parentName string, expectedVersion *int64) (int64, error) {
+func (uc *RoleBindingUsecase) DeleteRoleInheritance(ctx context.Context, childName, parentName string, mutation domain.PolicyMutation) (int64, error) {
+	if err := mutation.Validate(); err != nil {
+		return 0, err
+	}
 	child, err := domain.NewRole(childName)
 	if err != nil {
 		return 0, err
@@ -96,7 +105,7 @@ func (uc *RoleBindingUsecase) DeleteRoleInheritance(ctx context.Context, childNa
 	if err != nil {
 		return 0, err
 	}
-	return uc.policy.DeleteInheritance(ctx, ri, expectedVersion)
+	return uc.policy.DeleteInheritance(ctx, ri, mutation)
 }
 
 // ResolveCodes 汇总若干角色展开继承后的全部权限码。
