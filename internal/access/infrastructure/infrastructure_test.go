@@ -273,6 +273,42 @@ func TestPermissionRepoDeleteRejectsNodeWithChildren(t *testing.T) {
 	}
 }
 
+// 修改其他节点也会推进整树版本；可选版本只控制编辑冲突，不绕过树约束。
+func TestPermissionRepoRevisionSpansDifferentNodes(t *testing.T) {
+	skipIfShort(t)
+	ctx := context.Background()
+	repo := NewPermissionRepo(testDB)
+	create := func(name string) *domain.Permission {
+		t.Helper()
+		p, err := repo.Create(ctx, newPermission(t, domain.NewPermissionParams{Name: name, Type: 1, Status: 1}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = repo.Delete(ctx, p.ID(), nil) })
+		return p
+	}
+	first := create("revision-first")
+	second := create("revision-second")
+	stale := first.Revision()
+	if _, err := repo.Update(ctx, first, &stale); !errors.Is(err, domain.ErrConcurrentModification) {
+		t.Fatalf("other node creation must invalidate revision: %v", err)
+	}
+	current := second.Revision()
+	updated, err := repo.Update(ctx, first, &current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Revision() != current+1 {
+		t.Fatalf("revision = %d", updated.Revision())
+	}
+	if err := repo.Delete(ctx, second.ID(), &current); !errors.Is(err, domain.ErrConcurrentModification) {
+		t.Fatalf("other node update must invalidate delete revision: %v", err)
+	}
+	if _, err := repo.Update(ctx, second, nil); err != nil {
+		t.Fatalf("optional revision: %v", err)
+	}
+}
+
 func TestPermissionRepoListFilters(t *testing.T) {
 	skipIfShort(t)
 

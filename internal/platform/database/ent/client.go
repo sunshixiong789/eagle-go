@@ -17,6 +17,7 @@ import (
 	"github.com/eagle-go/eagle/internal/platform/database/ent/accountroleaudit"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/accountrolestate"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/authsession"
+	"github.com/eagle-go/eagle/internal/platform/database/ent/authusedcredential"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/casbinrule"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/dictdata"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/dicttype"
@@ -44,6 +45,8 @@ type Client struct {
 	AccountRoleState *AccountRoleStateClient
 	// AuthSession is the client for interacting with the AuthSession builders.
 	AuthSession *AuthSessionClient
+	// AuthUsedCredential is the client for interacting with the AuthUsedCredential builders.
+	AuthUsedCredential *AuthUsedCredentialClient
 	// CasbinRule is the client for interacting with the CasbinRule builders.
 	CasbinRule *CasbinRuleClient
 	// DictData is the client for interacting with the DictData builders.
@@ -82,6 +85,7 @@ func (c *Client) init() {
 	c.AccountRoleAudit = NewAccountRoleAuditClient(c.config)
 	c.AccountRoleState = NewAccountRoleStateClient(c.config)
 	c.AuthSession = NewAuthSessionClient(c.config)
+	c.AuthUsedCredential = NewAuthUsedCredentialClient(c.config)
 	c.CasbinRule = NewCasbinRuleClient(c.config)
 	c.DictData = NewDictDataClient(c.config)
 	c.DictType = NewDictTypeClient(c.config)
@@ -189,6 +193,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		AccountRoleAudit:     NewAccountRoleAuditClient(cfg),
 		AccountRoleState:     NewAccountRoleStateClient(cfg),
 		AuthSession:          NewAuthSessionClient(cfg),
+		AuthUsedCredential:   NewAuthUsedCredentialClient(cfg),
 		CasbinRule:           NewCasbinRuleClient(cfg),
 		DictData:             NewDictDataClient(cfg),
 		DictType:             NewDictTypeClient(cfg),
@@ -223,6 +228,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		AccountRoleAudit:     NewAccountRoleAuditClient(cfg),
 		AccountRoleState:     NewAccountRoleStateClient(cfg),
 		AuthSession:          NewAuthSessionClient(cfg),
+		AuthUsedCredential:   NewAuthUsedCredentialClient(cfg),
 		CasbinRule:           NewCasbinRuleClient(cfg),
 		DictData:             NewDictDataClient(cfg),
 		DictType:             NewDictTypeClient(cfg),
@@ -264,10 +270,10 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.AccountRoleAudit, c.AccountRoleState, c.AuthSession, c.CasbinRule, c.DictData,
-		c.DictType, c.Permission, c.PermissionDefinition, c.PermissionTreeState,
-		c.PolicyAudit, c.PolicyState, c.UserAccount, c.UserAudience, c.UserIdentity,
-		c.UserRoleBinding,
+		c.AccountRoleAudit, c.AccountRoleState, c.AuthSession, c.AuthUsedCredential,
+		c.CasbinRule, c.DictData, c.DictType, c.Permission, c.PermissionDefinition,
+		c.PermissionTreeState, c.PolicyAudit, c.PolicyState, c.UserAccount,
+		c.UserAudience, c.UserIdentity, c.UserRoleBinding,
 	} {
 		n.Use(hooks...)
 	}
@@ -277,10 +283,10 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.AccountRoleAudit, c.AccountRoleState, c.AuthSession, c.CasbinRule, c.DictData,
-		c.DictType, c.Permission, c.PermissionDefinition, c.PermissionTreeState,
-		c.PolicyAudit, c.PolicyState, c.UserAccount, c.UserAudience, c.UserIdentity,
-		c.UserRoleBinding,
+		c.AccountRoleAudit, c.AccountRoleState, c.AuthSession, c.AuthUsedCredential,
+		c.CasbinRule, c.DictData, c.DictType, c.Permission, c.PermissionDefinition,
+		c.PermissionTreeState, c.PolicyAudit, c.PolicyState, c.UserAccount,
+		c.UserAudience, c.UserIdentity, c.UserRoleBinding,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -295,6 +301,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.AccountRoleState.mutate(ctx, m)
 	case *AuthSessionMutation:
 		return c.AuthSession.mutate(ctx, m)
+	case *AuthUsedCredentialMutation:
+		return c.AuthUsedCredential.mutate(ctx, m)
 	case *CasbinRuleMutation:
 		return c.CasbinRule.mutate(ctx, m)
 	case *DictDataMutation:
@@ -720,6 +728,139 @@ func (c *AuthSessionClient) mutate(ctx context.Context, m *AuthSessionMutation) 
 		return (&AuthSessionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown AuthSession mutation op: %q", m.Op())
+	}
+}
+
+// AuthUsedCredentialClient is a client for the AuthUsedCredential schema.
+type AuthUsedCredentialClient struct {
+	config
+}
+
+// NewAuthUsedCredentialClient returns a client for the AuthUsedCredential from the given config.
+func NewAuthUsedCredentialClient(c config) *AuthUsedCredentialClient {
+	return &AuthUsedCredentialClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `authusedcredential.Hooks(f(g(h())))`.
+func (c *AuthUsedCredentialClient) Use(hooks ...Hook) {
+	c.hooks.AuthUsedCredential = append(c.hooks.AuthUsedCredential, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `authusedcredential.Intercept(f(g(h())))`.
+func (c *AuthUsedCredentialClient) Intercept(interceptors ...Interceptor) {
+	c.inters.AuthUsedCredential = append(c.inters.AuthUsedCredential, interceptors...)
+}
+
+// Create returns a builder for creating a AuthUsedCredential entity.
+func (c *AuthUsedCredentialClient) Create() *AuthUsedCredentialCreate {
+	mutation := newAuthUsedCredentialMutation(c.config, OpCreate)
+	return &AuthUsedCredentialCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of AuthUsedCredential entities.
+func (c *AuthUsedCredentialClient) CreateBulk(builders ...*AuthUsedCredentialCreate) *AuthUsedCredentialCreateBulk {
+	return &AuthUsedCredentialCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AuthUsedCredentialClient) MapCreateBulk(slice any, setFunc func(*AuthUsedCredentialCreate, int)) *AuthUsedCredentialCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AuthUsedCredentialCreateBulk{err: fmt.Errorf("calling to AuthUsedCredentialClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AuthUsedCredentialCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AuthUsedCredentialCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for AuthUsedCredential.
+func (c *AuthUsedCredentialClient) Update() *AuthUsedCredentialUpdate {
+	mutation := newAuthUsedCredentialMutation(c.config, OpUpdate)
+	return &AuthUsedCredentialUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AuthUsedCredentialClient) UpdateOne(_m *AuthUsedCredential) *AuthUsedCredentialUpdateOne {
+	mutation := newAuthUsedCredentialMutation(c.config, OpUpdateOne, withAuthUsedCredential(_m))
+	return &AuthUsedCredentialUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AuthUsedCredentialClient) UpdateOneID(id string) *AuthUsedCredentialUpdateOne {
+	mutation := newAuthUsedCredentialMutation(c.config, OpUpdateOne, withAuthUsedCredentialID(id))
+	return &AuthUsedCredentialUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for AuthUsedCredential.
+func (c *AuthUsedCredentialClient) Delete() *AuthUsedCredentialDelete {
+	mutation := newAuthUsedCredentialMutation(c.config, OpDelete)
+	return &AuthUsedCredentialDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AuthUsedCredentialClient) DeleteOne(_m *AuthUsedCredential) *AuthUsedCredentialDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AuthUsedCredentialClient) DeleteOneID(id string) *AuthUsedCredentialDeleteOne {
+	builder := c.Delete().Where(authusedcredential.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AuthUsedCredentialDeleteOne{builder}
+}
+
+// Query returns a query builder for AuthUsedCredential.
+func (c *AuthUsedCredentialClient) Query() *AuthUsedCredentialQuery {
+	return &AuthUsedCredentialQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAuthUsedCredential},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a AuthUsedCredential entity by its id.
+func (c *AuthUsedCredentialClient) Get(ctx context.Context, id string) (*AuthUsedCredential, error) {
+	return c.Query().Where(authusedcredential.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AuthUsedCredentialClient) GetX(ctx context.Context, id string) *AuthUsedCredential {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *AuthUsedCredentialClient) Hooks() []Hook {
+	return c.hooks.AuthUsedCredential
+}
+
+// Interceptors returns the client interceptors.
+func (c *AuthUsedCredentialClient) Interceptors() []Interceptor {
+	return c.inters.AuthUsedCredential
+}
+
+func (c *AuthUsedCredentialClient) mutate(ctx context.Context, m *AuthUsedCredentialMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AuthUsedCredentialCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AuthUsedCredentialUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AuthUsedCredentialUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AuthUsedCredentialDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown AuthUsedCredential mutation op: %q", m.Op())
 	}
 }
 
@@ -2322,15 +2463,15 @@ func (c *UserRoleBindingClient) mutate(ctx context.Context, m *UserRoleBindingMu
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		AccountRoleAudit, AccountRoleState, AuthSession, CasbinRule, DictData, DictType,
-		Permission, PermissionDefinition, PermissionTreeState, PolicyAudit,
-		PolicyState, UserAccount, UserAudience, UserIdentity,
+		AccountRoleAudit, AccountRoleState, AuthSession, AuthUsedCredential, CasbinRule,
+		DictData, DictType, Permission, PermissionDefinition, PermissionTreeState,
+		PolicyAudit, PolicyState, UserAccount, UserAudience, UserIdentity,
 		UserRoleBinding []ent.Hook
 	}
 	inters struct {
-		AccountRoleAudit, AccountRoleState, AuthSession, CasbinRule, DictData, DictType,
-		Permission, PermissionDefinition, PermissionTreeState, PolicyAudit,
-		PolicyState, UserAccount, UserAudience, UserIdentity,
+		AccountRoleAudit, AccountRoleState, AuthSession, AuthUsedCredential, CasbinRule,
+		DictData, DictType, Permission, PermissionDefinition, PermissionTreeState,
+		PolicyAudit, PolicyState, UserAccount, UserAudience, UserIdentity,
 		UserRoleBinding []ent.Interceptor
 	}
 )

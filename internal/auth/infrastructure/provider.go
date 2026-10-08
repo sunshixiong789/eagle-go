@@ -22,43 +22,49 @@ const (
 )
 
 type ProviderVerifier struct {
-	google *oidc.IDTokenVerifier
-	apple  *oidc.IDTokenVerifier
+	google    *oidc.IDTokenVerifier
+	googleIDs []string
+	apple     *oidc.IDTokenVerifier
+	appleIDs  []string
 }
 
 func NewProviderVerifier(c *config.Auth) domain.ProviderVerifier {
 	return newProviderVerifier(context.Background(),
-		providerSettings{enabled: c.GetGoogle().GetEnabled(), clientID: c.GetGoogle().GetClientId(), issuer: googleIssuer, jwks: googleJWKS},
-		providerSettings{enabled: c.GetApple().GetEnabled(), clientID: c.GetApple().GetClientId(), issuer: appleIssuer, jwks: appleJWKS},
+		providerSettings{enabled: c.GetGoogle().GetEnabled(), clientIDs: config.ClientIDs(c.GetGoogle().GetClientId()), issuer: googleIssuer, jwks: googleJWKS},
+		providerSettings{enabled: c.GetApple().GetEnabled(), clientIDs: config.ClientIDs(c.GetApple().GetClientId()), issuer: appleIssuer, jwks: appleJWKS},
 	)
 }
 
 type providerSettings struct {
-	enabled  bool
-	clientID string
-	issuer   string
-	jwks     string
+	enabled   bool
+	clientIDs []string
+	issuer    string
+	jwks      string
 }
 
 func newProviderVerifier(ctx context.Context, googleSettings, appleSettings providerSettings) *ProviderVerifier {
-	var google, apple *oidc.IDTokenVerifier
-	if googleSettings.enabled {
-		google = oidc.NewVerifier(googleSettings.issuer, oidc.NewRemoteKeySet(ctx, googleSettings.jwks), &oidc.Config{
-			ClientID: googleSettings.clientID, SupportedSigningAlgs: []string{"RS256"},
-		})
+	return &ProviderVerifier{
+		google:    newIDTokenVerifier(ctx, googleSettings),
+		googleIDs: googleSettings.clientIDs,
+		apple:     newIDTokenVerifier(ctx, appleSettings),
+		appleIDs:  appleSettings.clientIDs,
 	}
-	if appleSettings.enabled {
-		apple = oidc.NewVerifier(appleSettings.issuer, oidc.NewRemoteKeySet(ctx, appleSettings.jwks), &oidc.Config{
-			ClientID: appleSettings.clientID, SupportedSigningAlgs: []string{"RS256"},
-		})
+}
+
+func newIDTokenVerifier(ctx context.Context, settings providerSettings) *oidc.IDTokenVerifier {
+	if !settings.enabled || len(settings.clientIDs) == 0 {
+		return nil
 	}
-	return &ProviderVerifier{google: google, apple: apple}
+	// audience 由调用方按允许列表核对，以便一个提供商接受多个 Client ID。
+	return oidc.NewVerifier(settings.issuer, oidc.NewRemoteKeySet(ctx, settings.jwks), &oidc.Config{
+		SkipClientIDCheck: true, SupportedSigningAlgs: []string{"RS256"},
+	})
 }
 
 func (v *ProviderVerifier) Verify(ctx context.Context, provider domain.Provider, rawToken, nonce string) (*domain.ExternalIdentity, error) {
-	verifier := v.google
+	verifier, clientIDs := v.google, v.googleIDs
 	if provider == domain.ProviderApple {
-		verifier = v.apple
+		verifier, clientIDs = v.apple, v.appleIDs
 	} else if provider != domain.ProviderGoogle {
 		return nil, domain.ErrProviderDisabled
 	}
@@ -68,6 +74,9 @@ func (v *ProviderVerifier) Verify(ctx context.Context, provider domain.Provider,
 	token, err := verifier.Verify(ctx, rawToken)
 	if err != nil {
 		return nil, fmt.Errorf("%w: provider verification: %w", domain.ErrInvalidIDToken, err)
+	}
+	if !audienceAllowed(token.Audience, clientIDs) {
+		return nil, fmt.Errorf("%w: audience", domain.ErrInvalidIDToken)
 	}
 	if !validNonce(provider, token.Nonce, nonce) {
 		return nil, domain.ErrInvalidNonce
@@ -79,7 +88,19 @@ func (v *ProviderVerifier) Verify(ctx context.Context, provider domain.Provider,
 	return &domain.ExternalIdentity{
 		Provider: provider, ProviderID: claims.Subject, Email: claims.Email,
 		EmailVerified: bool(claims.EmailVerified), DisplayName: claims.Name, AvatarURL: claims.Picture,
+		TokenExpiresAt: token.Expiry,
 	}, nil
+}
+
+func audienceAllowed(got, allowed []string) bool {
+	for _, aud := range got {
+		for _, want := range allowed {
+			if aud == want {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // validNonce 要求凭证与请求的 nonce 一致，并兼容 Apple 返回原始 nonce 的 SHA-256 十六进制值。

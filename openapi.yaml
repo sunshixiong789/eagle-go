@@ -25,7 +25,7 @@ paths:
                 - AuthService
             description: |-
                 Logout 使用当前刷新凭证撤销对应会话；无效或已撤销的凭证返回错误。
-                 已签发的 access token 在自身有效期内仍可通过资源服务验签。
+                 本进程受保护接口会立即拒绝该会话已签发的 access token。
             operationId: AuthService_Logout
             requestBody:
                 content:
@@ -40,6 +40,46 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/eagle.auth.v1.LogoutResponse'
+    /v1/auth/sessions:
+        get:
+            tags:
+                - AuthService
+            description: ListMySessions 按创建时间倒序返回当前账号在本 audience 下尚未过期且未撤销的会话。
+            operationId: AuthService_ListMySessions
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.auth.v1.ListMySessionsResponse'
+    /v1/auth/sessions/{sessionId}/revoke:
+        post:
+            tags:
+                - AuthService
+            description: |-
+                RevokeMySession 撤销当前账号的指定会话。不能撤销当前正在使用的会话，当前会话请走 Logout。
+                 会话不存在或不属于当前账号时返回未找到。撤销后该会话已签发的 access token 立即失效。
+            operationId: AuthService_RevokeMySession
+            parameters:
+                - name: sessionId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.auth.v1.RevokeMySessionRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.auth.v1.RevokeMySessionResponse'
     /v1/auth/social/login:
         post:
             tags:
@@ -47,6 +87,7 @@ paths:
             description: |-
                 SocialLogin 校验 Google/Apple ID Token 和 nonce，为对应 Eagle 账号创建会话并返回令牌。
                  同一第三方身份复用已有账号；每次成功登录创建独立会话，停用账号不能登录。
+                 同一 ID Token 只能成功换取一次会话；响应丢失时需要重新向提供商取得凭证。
                  buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 登录与刷新返回相同的令牌结构，复用响应消息。
                  buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 登录与刷新返回相同的令牌结构，复用响应消息。
             operationId: AuthService_SocialLogin
@@ -971,6 +1012,13 @@ components:
                         $ref: '#/components/schemas/eagle.auth.v1.Account'
                 total:
                     type: string
+        eagle.auth.v1.ListMySessionsResponse:
+            type: object
+            properties:
+                sessions:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/eagle.auth.v1.SessionInfo'
         eagle.auth.v1.LogoutRequest:
             type: object
             properties:
@@ -986,6 +1034,29 @@ components:
                 refreshToken:
                     type: string
                     description: 当前会话最近一次签发的刷新凭证，成功刷新后须保存响应中的新凭证。
+        eagle.auth.v1.RevokeMySessionRequest:
+            type: object
+            properties:
+                sessionId:
+                    type: string
+        eagle.auth.v1.RevokeMySessionResponse:
+            type: object
+            properties: {}
+        eagle.auth.v1.SessionInfo:
+            type: object
+            properties:
+                sessionId:
+                    type: string
+                    description: 会话 ID，与 access token 的 sid 一致。
+                createdAt:
+                    type: string
+                    format: date-time
+                expiresAt:
+                    type: string
+                    format: date-time
+                current:
+                    type: boolean
+                    description: true 表示这是当前请求使用的会话。
         eagle.auth.v1.SetAccountRolesRequest:
             type: object
             properties:
@@ -1016,7 +1087,7 @@ components:
                     description: 发起第三方登录时使用的原始 nonce。Apple 原生 SDK 会在 token 中返回其 SHA-256 值。
                 displayName:
                     type: string
-                    description: Apple 仅在首次授权返回姓名，客户端应在首次交换时一并提交。
+                    description: Apple 仅在首次授权返回姓名。只在账号还没有显示名时写入，之后的登录不能覆盖已有昵称。
         eagle.auth.v1.TokenResponse:
             type: object
             properties:

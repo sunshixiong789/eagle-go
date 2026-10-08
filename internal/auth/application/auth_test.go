@@ -15,14 +15,16 @@ func (p providerFake) Verify(context.Context, domain.Provider, string, string) (
 	if p.err != nil {
 		return nil, p.err
 	}
-	return &domain.ExternalIdentity{Provider: domain.ProviderGoogle, ProviderID: "user"}, nil
+	return &domain.ExternalIdentity{Provider: domain.ProviderGoogle, ProviderID: "user", TokenExpiresAt: time.Now().Add(time.Hour)}, nil
 }
 
 type sessionsFake struct {
 	domain.SessionManager
-	create func(context.Context, *domain.ExternalIdentity, string, domain.Session) (*domain.SessionGrant, error)
-	rotate func(context.Context, string, string, time.Time) (*domain.SessionGrant, error)
-	revoke func(context.Context, string) error
+	create   func(context.Context, *domain.ExternalIdentity, string, domain.Session) (*domain.SessionGrant, error)
+	rotate   func(context.Context, string, string, time.Time) (*domain.SessionGrant, error)
+	revoke   func(context.Context, string) error
+	list     func(context.Context, string) ([]domain.SessionInfo, error)
+	revokeID func(context.Context, string, string) error
 }
 
 func (s sessionsFake) Create(ctx context.Context, e *domain.ExternalIdentity, subject string, session domain.Session) (*domain.SessionGrant, error) {
@@ -33,6 +35,12 @@ func (s sessionsFake) Rotate(ctx context.Context, old, next string, expiry time.
 }
 func (s sessionsFake) Revoke(ctx context.Context, hash string) error {
 	return s.revoke(ctx, hash)
+}
+func (s sessionsFake) ListActive(ctx context.Context, subject string) ([]domain.SessionInfo, error) {
+	return s.list(ctx, subject)
+}
+func (s sessionsFake) RevokeID(ctx context.Context, subject, sessionID string) error {
+	return s.revokeID(ctx, subject, sessionID)
 }
 
 func TestLoginDoesNotPersistUnverifiedIdentity(t *testing.T) {
@@ -82,7 +90,8 @@ func TestLoginPersistsOnlyRefreshHash(t *testing.T) {
 	var saved domain.Session
 	uc := NewUsecase(providerFake{}, sessionsFake{create: func(_ context.Context, e *domain.ExternalIdentity, subject string, s domain.Session) (*domain.SessionGrant, error) {
 		saved = s
-		if e.DisplayName != "Name" || e.ProviderID != "user" || len(subject) != 32 {
+		if e.DisplayName != "Name" || e.ProviderID != "user" || len(subject) != 32 ||
+			e.CredentialHash != tokenHash(string(domain.ProviderGoogle)+"\n"+"id") || e.TokenExpiresAt.IsZero() {
 			t.Fatalf("external = %+v, subject = %q", e, subject)
 		}
 		return &domain.SessionGrant{Identity: &domain.Identity{Subject: "user"}, AccessToken: "access"}, nil
@@ -100,6 +109,7 @@ func TestLoginPersistsOnlyRefreshHash(t *testing.T) {
 func TestLoginPreservesVerifiedDisplayName(t *testing.T) {
 	provider := providerFakeWithIdentity{identity: &domain.ExternalIdentity{
 		Provider: domain.ProviderApple, ProviderID: "apple-user", DisplayName: "Verified Name",
+		TokenExpiresAt: time.Now().Add(time.Hour),
 	}}
 	uc := NewUsecase(provider, sessionsFake{create: func(_ context.Context, e *domain.ExternalIdentity, _ string, _ domain.Session) (*domain.SessionGrant, error) {
 		if e.DisplayName != "Verified Name" {
@@ -141,5 +151,49 @@ func TestLogoutHashesRefreshToken(t *testing.T) {
 	}}, time.Minute, time.Hour)
 	if err := uc.Logout(context.Background(), "refresh-token"); !errors.Is(err, want) {
 		t.Fatalf("logout error = %v", err)
+	}
+}
+
+func TestLoginRejectsMissingTokenExpiry(t *testing.T) {
+	uc := NewUsecase(providerFakeWithIdentity{identity: &domain.ExternalIdentity{
+		Provider: domain.ProviderGoogle, ProviderID: "user",
+	}}, sessionsFake{create: func(context.Context, *domain.ExternalIdentity, string, domain.Session) (*domain.SessionGrant, error) {
+		t.Fatal("expired provider token must not create a session")
+		return nil, nil
+	}}, time.Minute, time.Hour)
+	tokens, err := uc.Login(context.Background(), domain.ProviderGoogle, "id", "nonce", "Name")
+	if tokens != nil || !errors.Is(err, domain.ErrInvalidIDToken) {
+		t.Fatalf("login = %+v, %v", tokens, err)
+	}
+}
+
+func TestListMySessionsReturnsActiveRows(t *testing.T) {
+	want := []domain.SessionInfo{{ID: "session-a"}}
+	uc := NewUsecase(providerFake{}, sessionsFake{list: func(_ context.Context, subject string) ([]domain.SessionInfo, error) {
+		if subject != "account" {
+			t.Fatalf("subject = %q", subject)
+		}
+		return want, nil
+	}}, time.Minute, time.Hour)
+	got, err := uc.ListMySessions(context.Background(), "account")
+	if err != nil || len(got) != 1 || got[0].ID != "session-a" {
+		t.Fatalf("sessions = %+v, %v", got, err)
+	}
+}
+
+func TestRevokeMySessionRejectsCurrentAndForwardsOthers(t *testing.T) {
+	var gotSubject, gotID string
+	uc := NewUsecase(providerFake{}, sessionsFake{revokeID: func(_ context.Context, subject, sessionID string) error {
+		gotSubject, gotID = subject, sessionID
+		return nil
+	}}, time.Minute, time.Hour)
+	if err := uc.RevokeMySession(context.Background(), "account", "current-session", "current-session"); !errors.Is(err, domain.ErrCannotRevokeCurrent) || gotID != "" {
+		t.Fatalf("current = %v, id=%q", err, gotID)
+	}
+	if err := uc.RevokeMySession(context.Background(), "account", "", "current-session"); !errors.Is(err, domain.ErrCannotRevokeCurrent) {
+		t.Fatalf("empty = %v", err)
+	}
+	if err := uc.RevokeMySession(context.Background(), "account", "other-session", "current-session"); err != nil || gotSubject != "account" || gotID != "other-session" {
+		t.Fatalf("other = %v, subject=%q, id=%q", err, gotSubject, gotID)
 	}
 }

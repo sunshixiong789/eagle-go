@@ -223,6 +223,14 @@ CREATE TABLE auth_session (
 CREATE INDEX idx_auth_session_identity ON auth_session (identity_id);
 CREATE INDEX idx_auth_session_expires ON auth_session (expires_at);
 
+CREATE TABLE auth_used_credential (
+    credential_hash varchar(64) NOT NULL,
+    expires_at      datetime(6) NOT NULL,
+    created_at      datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (credential_hash)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_bin;
+CREATE INDEX idx_auth_used_credential_expires ON auth_used_credential (expires_at);
+
 INSERT INTO permission_definition (code, service, resource, action, status, source) VALUES
     ('system:permission:add',    'system', 'permission', 'add',    1, 'baseline'),
     ('system:permission:query',  'system', 'permission', 'query',  1, 'baseline'),
@@ -279,6 +287,7 @@ INSERT INTO sys_dict_data (dict_type, label, value, sort, css_class, is_default)
     ('sys_yes_no',          '否',   'N', 2, '',        true);
 
 -- +goose Down
+DROP TABLE IF EXISTS auth_used_credential;
 DROP TABLE IF EXISTS auth_session;
 DROP TABLE IF EXISTS account_role_audit;
 DROP TABLE IF EXISTS user_audience;

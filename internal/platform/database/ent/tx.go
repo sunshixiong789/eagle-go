@@ -20,6 +20,8 @@ type Tx struct {
 	AccountRoleState *AccountRoleStateClient
 	// AuthSession is the client for interacting with the AuthSession builders.
 	AuthSession *AuthSessionClient
+	// AuthUsedCredential is the client for interacting with the AuthUsedCredential builders.
+	AuthUsedCredential *AuthUsedCredentialClient
 	// CasbinRule is the client for interacting with the CasbinRule builders.
 	CasbinRule *CasbinRuleClient
 	// DictData is the client for interacting with the DictData builders.
@@ -178,6 +180,7 @@ func (tx *Tx) init() {
 	tx.AccountRoleAudit = NewAccountRoleAuditClient(tx.config)
 	tx.AccountRoleState = NewAccountRoleStateClient(tx.config)
 	tx.AuthSession = NewAuthSessionClient(tx.config)
+	tx.AuthUsedCredential = NewAuthUsedCredentialClient(tx.config)
 	tx.CasbinRule = NewCasbinRuleClient(tx.config)
 	tx.DictData = NewDictDataClient(tx.config)
 	tx.DictType = NewDictTypeClient(tx.config)

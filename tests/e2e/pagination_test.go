@@ -29,7 +29,7 @@ func TestListPaginationContract(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	token := userToken(t, "pagination-review", "admin")
+	token := env.userToken(t, "pagination-review", "admin")
 	for _, route := range []struct {
 		path, collection, field string
 	}{

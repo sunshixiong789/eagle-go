@@ -26,6 +26,8 @@ const (
 	StatusEnabled  Status = 1
 )
 
+func (s Status) Valid() bool { return s == StatusDisabled || s == StatusEnabled }
+
 func (s Status) Enabled() bool { return s == StatusEnabled }
 
 // RootPermissionID 是顶级节点的 parent。用 0 而非 NULL：根是领域概念，不该由数据库可空性表达。
@@ -111,11 +113,15 @@ type PermissionSnapshot struct {
 // 持久化数据也必须满足领域不变量；若历史数据不合法，应通过迁移修复，
 // 而不是把一个无法由正常写路径创建的实体带入运行时。
 func RehydratePermission(s PermissionSnapshot) (*Permission, error) {
+	code, err := NewPermissionCode(s.Code)
+	if err != nil {
+		return nil, fmt.Errorf("rehydrate permission %d: %w", s.ID, err)
+	}
 	p := &Permission{
 		id:        s.ID,
 		parentID:  s.ParentID,
 		name:      s.Name,
-		code:      PermissionCode{value: s.Code},
+		code:      code,
 		typ:       PermissionType(s.Type),
 		path:      s.Path,
 		component: s.Component,
@@ -139,6 +145,9 @@ func (p *Permission) validate() error {
 	}
 	if !p.typ.Valid() {
 		return fmt.Errorf("%w: %d", ErrInvalidPermissionType, p.typ)
+	}
+	if !p.status.Valid() {
+		return fmt.Errorf("%w: %d", ErrInvalidPermissionStatus, p.status)
 	}
 	// 通配只允许出现在角色策略中。把 system:* 登记成按钮会混淆目录与授权边界。
 	if p.code.HasWildcard() {

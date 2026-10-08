@@ -411,8 +411,8 @@ Google/Apple 负责证明“第三方账号是谁”，Eagle 将其映射为本�
 | `EAGLE_AUTH_SIGNING_KEY_DIRECTORY` | 容器内 JWT 密钥环目录；文件名 `<kid>.pem`，生产从 Secret 只读挂载 |
 | `EAGLE_AUTH_ACTIVE_SIGNING_KEY_ID` | 当前签发密钥 ID，对应密钥环中的文件名（不含 `.pem`） |
 | `EAGLE_AUTH_ACCESS_TOKEN_TTL` / `EAGLE_AUTH_REFRESH_TOKEN_TTL` | access/refresh token 有效期 |
-| `EAGLE_AUTH_GOOGLE_ENABLED` / `EAGLE_AUTH_GOOGLE_CLIENT_ID` | 启用 Google 登录及其 OAuth Client ID |
-| `EAGLE_AUTH_APPLE_ENABLED` / `EAGLE_AUTH_APPLE_CLIENT_ID` | 启用 Apple 登录及其 Services ID / Bundle ID |
+| `EAGLE_AUTH_GOOGLE_ENABLED` / `EAGLE_AUTH_GOOGLE_CLIENT_ID` | 启用 Google 登录。多个 OAuth Client ID 用英文逗号分隔，audience 命中任意一个即可 |
+| `EAGLE_AUTH_APPLE_ENABLED` / `EAGLE_AUTH_APPLE_CLIENT_ID` | 启用 Apple 登录。多个 Services ID 或 Bundle ID 同样用英文逗号分隔 |
 | `EAGLE_OBSERVABILITY_OTLP_ENDPOINT` | trace 上报地址，留空则不上报 |
 
 所有 `google.protobuf.Duration` 只接受秒格式，例如 `3600s`、`0.5s`。`1h`、`30m`、`500ms` 会导致配置解析失败。

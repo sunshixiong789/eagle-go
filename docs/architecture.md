@@ -9,7 +9,7 @@
 | 模块 | 职责 | 拥有的数据 | 外部依赖 |
 |---|---|---|---|
 | `access` | 权限码目录、导航树、角色绑定、Casbin 策略 | `permission_definition`、`casbin_rule`、策略版本 | 无 |
-| `auth` | 账号、Google/Apple 登录身份、Eagle token 与会话 | `user_account`、`user_identity`、`user_role_binding`、`auth_session`、`user_audience`、`account_role_state`、`account_role_audit` | Google/Apple JWKS |
+| `auth` | 账号、Google/Apple 登录身份、Eagle token 与会话 | `user_account`、`user_identity`、`user_role_binding`、`auth_session`、`auth_used_credential`、`user_audience`、`account_role_state`、`account_role_audit` | Google/Apple JWKS |
 | `dictionary` | 字典的简单 CRUD，作为新模块的样板 | `dict_type`、`dict_data` | 无 |
 
 这里的模块首先表达代码和数据所有权，不把每个目录自动视为独立的 DDD 限界上下文。
@@ -54,7 +54,9 @@ Google/Apple 只负责证明第三方身份；Eagle 用不透明 `subject` 表�
 两个模块覆盖两种典型形态：`dictionary` 没有 application，展示纯 CRUD；`access` 有 application 且 domain 承载权限码、导航树和策略版本等真实不变量，也展示事务与用例编排。
 
 领域模型按实际一致性要求命名：`Permission` 是导航权限节点，`PermissionTree` 是跨节点规则的集合视图。
-防环和节点写入在仓储的整树状态锁内完成；节点版本用于检测编辑冲突，整树锁用于保护拓扑一致性。
+防环和节点写入在仓储的整树状态锁内完成；整树版本用于检测编辑冲突，整树锁用于保护拓扑一致性。
+不同节点的修改也会递增同一个版本；更新和删除只有传入 expected_revision 才检查编辑冲突，
+未传时允许覆盖当前值，但仍在事务内检查树结构约束。该策略适用于低频修改的后台导航树。
 `RoleBinding` 表达角色的直接权限集合，其版本是全局策略版本，不是单个绑定的独立聚合版本。
 策略写入通过 `PolicyMutation` 显式携带操作者、可选审计关联标识和预期版本，后台入口也必须声明操作者。
 HTTP 主体与请求头只在 interfaces 解析，infrastructure 不从 HTTP context 推断审计归属。
@@ -87,7 +89,8 @@ HTTP 主体与请求头只在 interfaces 解析，infrastructure 不从 HTTP con
     本地 Casbin 判定（策略在本库，5s 对账版本号）
 
 - `auth` 模块通过官方 JWKS 验证 Google/Apple ID Token 的签名、issuer、audience、有效期与 nonce。
-- Eagle access token 短期有效；refresh token 使用密码学随机值、数据库只保存 SHA-256 哈希，并在每次刷新时轮换。
+- Eagle access token 短期有效；refresh token 使用密码学随机值、数据库只保存 SHA-256 哈希，并在每次刷新时轮换。同一第三方 ID Token 的摘要只能成功换取一次会话。
+- 本进程在验签后检查本地 `auth_session` 与账号状态。退出、撤销会话和停用账号会立即拒绝已签发的 access token。角色成员仍以 JWT 为准，下次签发才更新。`pkg/authn` 的会话检查可以留空；拆出的资源服务默认只做本地公钥验签，能访问认证存储时再接上同一检查。
 - 权限要求声明在 proto 的 `access` / `perm` 上，handler 不写鉴权分支。可选级别只有 `PUBLIC` / `AUTHENTICATED` / `PERMISSION_REQUIRED`。
 - Eagle token 使用带 `kid` 的非对称签名；认证服务独占私钥，通过 `/.well-known/jwks.json` 发布公钥。资源服务本地缓存公钥，不逐请求远程 introspection。
 - token 只携带 `sub`、`sid`、`jti`、时间、audience 与角色，不携带邮箱、昵称等资料。角色按 audience 归属，角色能做什么一律由 Casbin 策略决定。
@@ -97,7 +100,7 @@ HTTP 主体与请求头只在 interfaces 解析，infrastructure 不从 HTTP con
 ### 统一认证中心的拆分路径
 
 当多个应用需要共享账号、认证需要独立发布或区域合规要求出现时，先把 `auth` 及其自有表迁到独立
-进程和数据库。网关继续把登录、刷新和 JWKS 路由到认证中心；业务服务保留 `pkg/authn`，届时实现远程 JWKS 缓存并在本地构造 `Principal`，不逐请求同步调用认证中心。
+进程和数据库。网关继续把登录、刷新和 JWKS 路由到认证中心；业务服务保留 `pkg/authn`，届时实现远程 JWKS 缓存并在本地构造 `Principal`。资源服务默认只验签。需要退出和停用立即生效时，再让会话检查读取认证存储，普通请求不做对认证中心的同步调用。
 
 `access` 可以继续留在业务单体；需要独立治理时再作为策略源拆出，通过版本化快照或事件更新各资源服务
 的本地判定器。届时实现版本快照接收与原子切换。服务间工作负载身份与 C 端用户会话是两类凭证，
@@ -138,9 +141,8 @@ HTTP 主体与请求头只在 interfaces 解析，infrastructure 不从 HTTP con
 策略写入成功响应表示事务已提交，并返回权威版本；同步重载失败记录日志和指标，由后台对账继续重试，不把已提交操作报告为保存失败。响应不保证全部副本已加载该版本。
 健康与指标共用的监听端口必须在启动期间绑定成功，否则应用启动失败。HTTP 服务端错误对外使用稳定的 `INTERNAL_ERROR` 原因码，原始错误只保留在服务端日志中。
 
-退出登录立即撤销该 refresh token 的刷新能力，已签发 access token 仍可使用到到期（默认 15 分钟）。
-账号停用或 audience 范围内的角色降级也在重新签发 token 后反映；修改角色的权限绑定则走策略对账。
-会话创建/轮换与本地 access token 签发由一个原子端口完成：签发失败回滚事务，不消耗旧 refresh token。
+退出或撤销会话后，本进程立即拒绝该会话已签发的 access token；停用账号同样立即拒绝。角色变更仍等到下次签发。修改角色的权限绑定走策略对账。
+同一第三方 ID Token 只能成功换取一次会话，摘要记在 `auth_used_credential`；签发失败回滚该记录。会话创建/轮换与本地 access token 签发由一个原子端口完成：签发失败回滚事务，不消耗旧 refresh token。
 事务提交后若网络响应丢失，客户端可能需要重新登录；当前不提供刷新响应重放或幂等恢复。
 
 首次发布前直接维护当前初始迁移，不保留旧模型的升级路径。

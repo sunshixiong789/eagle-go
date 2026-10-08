@@ -13,7 +13,7 @@ import (
 // 策略的三种写入都必须把验签后的主体和入站请求标识传递到事务审计。
 func TestPolicyWritesAuditAuthenticatedActor(t *testing.T) {
 	env := newTestEnv(t)
-	token := userToken(t, "policy-operator", "admin")
+	token := env.userToken(t, "policy-operator", "admin")
 	for _, tc := range []struct{ name, method, path, body string }{
 		{"permissions", http.MethodPut, "/v1/system/role-bindings/audit-editor", `{"permission_codes":["system:dict:list"]}`},
 		{"inherit", http.MethodPost, "/v1/system/role-bindings/inheritance", `{"child":"audit-editor","parent":"audit-viewer"}`},

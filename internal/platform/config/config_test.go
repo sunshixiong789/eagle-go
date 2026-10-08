@@ -146,6 +146,27 @@ func TestDatabaseConfigRejectsInvalidDriverAndMySQLTimeParsing(t *testing.T) {
 	})
 }
 
+func TestClientIDsAndEnabledProvider(t *testing.T) {
+	got := appconfig.ClientIDs(" a, b,,c , ")
+	if len(got) != 3 || got[0] != "a" || got[1] != "b" || got[2] != "c" {
+		t.Fatalf("client ids = %#v", got)
+	}
+	if len(appconfig.ClientIDs(" , ,")) != 0 {
+		t.Fatal("blank client id list should be empty")
+	}
+	bc := loadConfig(t)
+	bc.Auth.Google.Enabled = true
+	bc.Auth.Google.ClientId = " , "
+	err := appconfig.Validate(bc)
+	if err == nil || !strings.Contains(err.Error(), "auth.google.client_id is required") {
+		t.Fatalf("Validate() = %v", err)
+	}
+	bc.Auth.Google.ClientId = "web-client, ios-client"
+	if err := appconfig.Validate(bc); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestAuthConfigRequiresEagleTokenSettings(t *testing.T) {
 	bc := loadConfig(t)
 	bc.Auth.Audience = ""

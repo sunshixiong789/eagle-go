@@ -152,17 +152,43 @@ func TestProviderVerifierChecksSignatureAudienceAndNonce(t *testing.T) {
 	}
 
 	verifier := newProviderVerifier(ctx, providerSettings{
-		enabled: true, clientID: "google-client", issuer: "https://provider.test", jwks: "https://provider.test/keys",
+		enabled: true, clientIDs: []string{"google-client", "google-ios"}, issuer: "https://provider.test", jwks: "https://provider.test/keys",
 	}, providerSettings{})
 	identity, err := verifier.Verify(context.Background(), domain.ProviderGoogle, raw, "nonce-with-128-bits-minimum")
 	if err != nil {
 		t.Fatalf("verify provider token: %v", err)
 	}
-	if identity.ProviderID != "provider-subject" || !identity.EmailVerified {
+	if identity.ProviderID != "provider-subject" || !identity.EmailVerified || !identity.TokenExpiresAt.After(now) {
 		t.Fatalf("unexpected identity: %+v", identity)
+	}
+	ios, err := jwt.Signed(signer).Claims(jwt.Claims{
+		Issuer: "https://provider.test", Subject: "provider-subject", Audience: jwt.Audience{"google-ios"},
+		IssuedAt: jwt.NewNumericDate(now), Expiry: jwt.NewNumericDate(now.Add(time.Minute)),
+	}).Claims(map[string]any{"nonce": "nonce-with-128-bits-minimum"}).Serialize()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := verifier.Verify(context.Background(), domain.ProviderGoogle, ios, "nonce-with-128-bits-minimum"); err != nil {
+		t.Fatalf("second client id: %v", err)
+	}
+	rejected, err := jwt.Signed(signer).Claims(jwt.Claims{
+		Issuer: "https://provider.test", Subject: "provider-subject", Audience: jwt.Audience{"other-client"},
+		IssuedAt: jwt.NewNumericDate(now), Expiry: jwt.NewNumericDate(now.Add(time.Minute)),
+	}).Claims(map[string]any{"nonce": "nonce-with-128-bits-minimum"}).Serialize()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := verifier.Verify(context.Background(), domain.ProviderGoogle, rejected, "nonce-with-128-bits-minimum"); !errors.Is(err, domain.ErrInvalidIDToken) {
+		t.Fatalf("unexpected audience error = %v", err)
 	}
 	if _, err := verifier.Verify(context.Background(), domain.ProviderGoogle, raw, "different-nonce-with-128-bits"); !errors.Is(err, domain.ErrInvalidNonce) {
 		t.Fatalf("nonce mismatch error = %v", err)
+	}
+	unconfigured := newProviderVerifier(ctx, providerSettings{
+		enabled: true, issuer: "https://provider.test", jwks: "https://provider.test/keys",
+	}, providerSettings{})
+	if _, err := unconfigured.Verify(context.Background(), domain.ProviderGoogle, raw, "nonce-with-128-bits-minimum"); !errors.Is(err, domain.ErrProviderDisabled) {
+		t.Fatalf("blank client id error = %v", err)
 	}
 }
 

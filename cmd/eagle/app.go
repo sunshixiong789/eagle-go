@@ -1,6 +1,9 @@
 package main
 
 import (
+	"context"
+	"errors"
+
 	accessv1 "github.com/eagle-go/eagle/api/eagle/access/v1"
 	authv1 "github.com/eagle-go/eagle/api/eagle/auth/v1"
 	dictionaryv1 "github.com/eagle-go/eagle/api/eagle/dictionary/v1"
@@ -8,10 +11,29 @@ import (
 	authdomain "github.com/eagle-go/eagle/internal/auth/domain"
 	dictionarydomain "github.com/eagle-go/eagle/internal/dictionary/domain"
 	"github.com/eagle-go/eagle/internal/platform/server"
+	"github.com/eagle-go/eagle/pkg/authn"
 )
+
+// sessionActivity 把会话存储结果翻译成认证中间件识别的哨兵错误。
+func sessionActivity(sessions authdomain.SessionManager) func(context.Context, string, string) error {
+	return func(ctx context.Context, subject, sessionID string) error {
+		err := sessions.AccessActive(ctx, subject, sessionID)
+		switch {
+		case err == nil:
+			return nil
+		case errors.Is(err, authdomain.ErrAccountDisabled):
+			return authn.ErrAccountDisabled
+		case errors.Is(err, authdomain.ErrSessionInactive):
+			return authn.ErrSessionInactive
+		default:
+			return err
+		}
+	}
+}
 
 func errorMappings() []server.ErrorMappingRule {
 	return []server.ErrorMappingRule{
+		server.BadRequest(accessdomain.ErrInvalidPermissionStatus, accessv1.ErrorReason_ERROR_REASON_INVALID_PERMISSION_STATUS),
 		server.NotFound(accessdomain.ErrPermissionNotFound, accessv1.ErrorReason_ERROR_REASON_PERMISSION_NOT_FOUND),
 		server.Conflict(accessdomain.ErrPermissionCodeDuplicated, accessv1.ErrorReason_ERROR_REASON_PERMISSION_CODE_DUPLICATED),
 		server.Conflict(accessdomain.ErrPermissionHasChildren, accessv1.ErrorReason_ERROR_REASON_PERMISSION_HAS_CHILDREN),
@@ -26,7 +48,11 @@ func errorMappings() []server.ErrorMappingRule {
 		server.Unauthorized(authdomain.ErrInvalidIDToken, authv1.ErrorReason_ERROR_REASON_INVALID_ID_TOKEN),
 		server.Unauthorized(authdomain.ErrInvalidNonce, authv1.ErrorReason_ERROR_REASON_INVALID_NONCE),
 		server.Unauthorized(authdomain.ErrInvalidRefreshToken, authv1.ErrorReason_ERROR_REASON_INVALID_REFRESH_TOKEN),
+		server.Unauthorized(authdomain.ErrCredentialUsed, authv1.ErrorReason_ERROR_REASON_CREDENTIAL_USED),
+		server.Unauthorized(authdomain.ErrSessionInactive, authv1.ErrorReason_ERROR_REASON_INVALID_REFRESH_TOKEN),
 		server.Forbidden(authdomain.ErrAccountDisabled, authv1.ErrorReason_ERROR_REASON_ACCOUNT_DISABLED),
+		server.NotFound(authdomain.ErrSessionNotFound, authv1.ErrorReason_ERROR_REASON_SESSION_NOT_FOUND),
+		server.BadRequest(authdomain.ErrCannotRevokeCurrent, authv1.ErrorReason_ERROR_REASON_CANNOT_REVOKE_CURRENT),
 		server.NotFound(authdomain.ErrAccountNotFound, authv1.ErrorReason_ERROR_REASON_ACCOUNT_NOT_FOUND),
 		server.BadRequest(authdomain.ErrInvalidRoleAssignment, authv1.ErrorReason_ERROR_REASON_INVALID_ROLE_ASSIGNMENT),
 		server.Conflict(authdomain.ErrRoleRevisionConflict, authv1.ErrorReason_ERROR_REASON_ROLE_REVISION_CONFLICT),

@@ -45,6 +45,18 @@ func (f AuthSessionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value,
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AuthSessionMutation", m)
 }
 
+// The AuthUsedCredentialFunc type is an adapter to allow the use of ordinary
+// function as AuthUsedCredential mutator.
+type AuthUsedCredentialFunc func(context.Context, *ent.AuthUsedCredentialMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AuthUsedCredentialFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AuthUsedCredentialMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AuthUsedCredentialMutation", m)
+}
+
 // The CasbinRuleFunc type is an adapter to allow the use of ordinary
 // function as CasbinRule mutator.
 type CasbinRuleFunc func(context.Context, *ent.CasbinRuleMutation) (ent.Value, error)

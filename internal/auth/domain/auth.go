@@ -13,6 +13,10 @@ var (
 	ErrInvalidNonce        = errors.New("auth: 登录 nonce 无效")
 	ErrInvalidRefreshToken = errors.New("auth: refresh token 无效或已过期")
 	ErrAccountDisabled     = errors.New("auth: 账号已停用")
+	ErrCredentialUsed      = errors.New("auth: 登录凭证已使用")
+	ErrSessionInactive     = errors.New("auth: 会话已失效")
+	ErrSessionNotFound     = errors.New("auth: 会话不存在")
+	ErrCannotRevokeCurrent = errors.New("auth: 不能撤销当前会话")
 )
 
 type Provider string
@@ -31,6 +35,17 @@ type ExternalIdentity struct {
 	EmailVerified bool
 	DisplayName   string
 	AvatarURL     string
+	// CredentialHash 是本次第三方身份凭证的 SHA-256 十六进制摘要，只用于一次性消费，不写入身份资料。
+	CredentialHash string
+	// TokenExpiresAt 是第三方身份凭证的过期时间。用过的摘要保留到该时刻，便于清理。
+	TokenExpiresAt time.Time
+}
+
+// SessionInfo 是一条仍可刷新的登录会话。
+type SessionInfo struct {
+	ID        string
+	CreatedAt time.Time
+	ExpiresAt time.Time
 }
 
 type Identity struct {
@@ -69,14 +84,23 @@ type ProviderVerifier interface {
 // 会话仅保存刷新凭证的哈希；Create 和 Rotate 在本地签名成功后才提交事务。
 type SessionManager interface {
 	// Create 为已验证的外部身份创建会话并签发令牌，已有身份复用原账号。
-	// 新账号使用传入的候选 subject；账号停用返回 ErrAccountDisabled，签发失败回滚本次写入。
+	// 同一 CredentialHash 只能成功一次，重复使用返回 ErrCredentialUsed；摘要为空或凭证已过期返回 ErrInvalidIDToken。
+	// 新账号使用传入的候选 subject。账号停用返回 ErrAccountDisabled。签发失败回滚本次写入，已记录的凭证摘要一并回滚。
+	// 非空显示名只在账号当前显示名为空时写入，不覆盖已有昵称。
 	Create(context.Context, *ExternalIdentity, string, Session) (*SessionGrant, error)
+	// AccessActive 报告该账号在当前 audience 下的会话是否仍可访问。
+	// 会话不存在、已撤销、已过期或不属于该账号时返回 ErrSessionInactive；账号停用返回 ErrAccountDisabled。
+	AccessActive(context.Context, string, string) error
+	// ListActive 按创建时间倒序返回该账号在当前 audience 下尚未过期且未撤销的会话。
+	ListActive(context.Context, string) ([]SessionInfo, error)
+	// RevokeID 撤销该账号的指定会话。会话不存在、已撤销或不属于该账号时返回 ErrSessionNotFound。
+	RevokeID(context.Context, string, string) error
 	// Rotate 用旧哈希原子换入新哈希及到期时间，并按当前账号和角色签发令牌。
 	// 旧凭证无效、已使用、过期或已撤销返回 ErrInvalidRefreshToken；账号停用返回 ErrAccountDisabled。
 	// 签发失败回滚轮换，不消耗旧凭证；同一旧凭证的并发轮换最多一次成功。
 	Rotate(context.Context, string, string, time.Time) (*SessionGrant, error)
 	// Revoke 按刷新凭证哈希撤销对应会话，不存在或已撤销返回 ErrInvalidRefreshToken。
-	// 已签发的 access token 仍由资源服务独立验签，有效期不受此次撤销影响。
+	// 撤销后该会话已签发的 access token 在接入会话检查的服务上立即失效。
 	Revoke(context.Context, string) error
 }
 

@@ -48,9 +48,11 @@ auth:
 
   google:
     enabled: "${AUTH_GOOGLE_ENABLED:false}"
+    # 多个 OAuth Client ID 用英文逗号分隔，ID Token 的 audience 命中任意一个即可。
     client_id: "${AUTH_GOOGLE_CLIENT_ID:}"
   apple:
     enabled: "${AUTH_APPLE_ENABLED:false}"
+    # 多个 Services ID 或 Bundle ID 用英文逗号分隔。
     client_id: "${AUTH_APPLE_CLIENT_ID:}"
 
 observability:

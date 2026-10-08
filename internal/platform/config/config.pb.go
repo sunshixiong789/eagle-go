@@ -595,7 +595,8 @@ func (x *Data_Database) GetMaxConnIdleTime() *durationpb.Duration {
 type Auth_SocialProvider struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Enabled bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
-	// Google OAuth Client ID 或 Apple Services ID / Bundle ID。
+	// 允许的客户端标识，多个用英文逗号分隔。
+	// Google 填各端 OAuth Client ID；Apple 填 Services ID 或 Bundle ID。
 	ClientId      string `protobuf:"bytes,2,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

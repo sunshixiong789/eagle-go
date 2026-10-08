@@ -83,7 +83,7 @@ func assertLatestSchema(t *testing.T, db *sql.DB, driver string) {
 	} else if version != 1 {
 		t.Fatalf("迁移版本 = %d, want 1", version)
 	}
-	for _, table := range []string{"user_account", "user_identity", "user_role_binding", "auth_session", "user_audience", "account_role_state", "account_role_audit"} {
+	for _, table := range []string{"user_account", "user_identity", "user_role_binding", "auth_session", "auth_used_credential", "user_audience", "account_role_state", "account_role_audit"} {
 		exists, err := tableExists(db, driver, table)
 		if err != nil {
 			t.Fatalf("检查表 %s: %v", table, err)
@@ -204,7 +204,7 @@ func assertTablesDropped(t *testing.T, db *sql.DB, driver string) {
 	t.Helper()
 
 	for _, table := range []string{
-		"account_role_audit", "user_audience", "account_role_state", "auth_session", "user_account", "user_identity", "user_role_binding",
+		"account_role_audit", "user_audience", "account_role_state", "auth_used_credential", "auth_session", "user_account", "user_identity", "user_role_binding",
 		"navigation_node", "permission_definition", "permission_tree_state",
 		"sys_dict_type", "sys_dict_data", "casbin_rule",
 		"authz_policy_state", "authz_policy_audit",

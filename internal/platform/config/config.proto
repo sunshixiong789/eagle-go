@@ -76,7 +76,8 @@ message Auth {
 
   message SocialProvider {
     bool enabled = 1;
-    // Google OAuth Client ID 或 Apple Services ID / Bundle ID。
+    // 允许的客户端标识，多个用英文逗号分隔。
+    // Google 填各端 OAuth Client ID；Apple 填 Services ID 或 Bundle ID。
     string client_id = 2;
   }
   SocialProvider google = 14;

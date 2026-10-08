@@ -15,12 +15,14 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -162,8 +164,10 @@ func newTestEnv(t *testing.T) *testEnv {
 	if err != nil {
 		t.Fatalf("构造 token issuer: %v", err)
 	}
+	sessions := authinfra.NewSessionManager(adminDB, issuer, testAudience)
 	verifier, err := authn.NewVerifier(authn.Config{
 		Issuer: testIssuer, Audience: testAudience, Keys: authn.NewStaticKeySet(issuer.PublicKeySet()),
+		ActiveSession: sessionActivity(sessions),
 	})
 	if err != nil {
 		t.Fatalf("构造 token verifier: %v", err)
@@ -179,7 +183,6 @@ func newTestEnv(t *testing.T) *testEnv {
 	permRepo := accessinfra.NewPermissionRepo(adminDB)
 	policyRepo := accessinfra.NewPolicyRepo(enforcer, store)
 	dictRepo := dictionaryinfra.NewDictRepo(adminDB)
-	sessions := authinfra.NewSessionManager(adminDB, issuer, testAudience)
 
 	permSvc := accessinterfaces.NewPermissionService(accessapp.NewPermissionUsecase(permRepo, policyRepo))
 	dictSvc := dictionaryinterfaces.NewDictService(dictRepo)
@@ -213,16 +216,38 @@ func (providerVerifierStub) Verify(
 	token string,
 	nonce string,
 ) (*authdomain.ExternalIdentity, error) {
-	if provider != authdomain.ProviderGoogle || token != "valid-provider-token" || nonce != "valid-provider-nonce" {
+	if provider != authdomain.ProviderGoogle || !strings.HasPrefix(token, "valid-provider-token") || nonce != "valid-provider-nonce" {
 		return nil, authdomain.ErrInvalidIDToken
 	}
+	// 默认每个 token 是独立第三方身份。同一账号的多会话测试使用固定前缀。
+	providerID := token
+	if _, ok := strings.CutPrefix(token, "valid-provider-token-same-user-"); ok {
+		providerID = "provider-user-same"
+	}
 	return &authdomain.ExternalIdentity{
-		Provider:      provider,
-		ProviderID:    "provider-user-1",
-		Email:         "user@example.com",
-		EmailVerified: true,
-		DisplayName:   "Test User",
+		Provider:       provider,
+		ProviderID:     providerID,
+		Email:          "user@example.com",
+		EmailVerified:  true,
+		DisplayName:    "Test User",
+		TokenExpiresAt: time.Now().Add(time.Hour),
 	}, nil
+}
+
+func sessionActivity(sessions authdomain.SessionManager) func(context.Context, string, string) error {
+	return func(ctx context.Context, subject, sessionID string) error {
+		err := sessions.AccessActive(ctx, subject, sessionID)
+		switch {
+		case err == nil:
+			return nil
+		case errors.Is(err, authdomain.ErrAccountDisabled):
+			return authn.ErrAccountDisabled
+		case errors.Is(err, authdomain.ErrSessionInactive):
+			return authn.ErrSessionInactive
+		default:
+			return err
+		}
+	}
 }
 
 func e2eErrorMappings() []server.ErrorMappingRule {
@@ -245,7 +270,11 @@ func e2eErrorMappings() []server.ErrorMappingRule {
 		server.Unauthorized(authdomain.ErrInvalidIDToken, authv1.ErrorReason_ERROR_REASON_INVALID_ID_TOKEN),
 		server.Unauthorized(authdomain.ErrInvalidNonce, authv1.ErrorReason_ERROR_REASON_INVALID_NONCE),
 		server.Unauthorized(authdomain.ErrInvalidRefreshToken, authv1.ErrorReason_ERROR_REASON_INVALID_REFRESH_TOKEN),
+		server.Unauthorized(authdomain.ErrCredentialUsed, authv1.ErrorReason_ERROR_REASON_CREDENTIAL_USED),
+		server.Unauthorized(authdomain.ErrSessionInactive, authv1.ErrorReason_ERROR_REASON_INVALID_REFRESH_TOKEN),
 		server.Forbidden(authdomain.ErrAccountDisabled, authv1.ErrorReason_ERROR_REASON_ACCOUNT_DISABLED),
+		server.NotFound(authdomain.ErrSessionNotFound, authv1.ErrorReason_ERROR_REASON_SESSION_NOT_FOUND),
+		server.BadRequest(authdomain.ErrCannotRevokeCurrent, authv1.ErrorReason_ERROR_REASON_CANNOT_REVOKE_CURRENT),
 		server.NotFound(authdomain.ErrAccountNotFound, authv1.ErrorReason_ERROR_REASON_ACCOUNT_NOT_FOUND),
 		server.BadRequest(authdomain.ErrInvalidRoleAssignment, authv1.ErrorReason_ERROR_REASON_INVALID_ROLE_ASSIGNMENT),
 		server.Conflict(authdomain.ErrRoleRevisionConflict, authv1.ErrorReason_ERROR_REASON_ROLE_REVISION_CONFLICT),

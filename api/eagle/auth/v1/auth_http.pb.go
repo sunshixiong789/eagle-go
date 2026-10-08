@@ -18,23 +18,31 @@ var _ = new(context.Context)
 const _ = http.SupportPackageIsVersion3
 
 const OperationAuthServiceGetJSONWebKeySet = "/eagle.auth.v1.AuthService/GetJSONWebKeySet"
+const OperationAuthServiceListMySessions = "/eagle.auth.v1.AuthService/ListMySessions"
 const OperationAuthServiceLogout = "/eagle.auth.v1.AuthService/Logout"
 const OperationAuthServiceRefreshToken = "/eagle.auth.v1.AuthService/RefreshToken"
+const OperationAuthServiceRevokeMySession = "/eagle.auth.v1.AuthService/RevokeMySession"
 const OperationAuthServiceSocialLogin = "/eagle.auth.v1.AuthService/SocialLogin"
 
 type AuthServiceHTTPServer interface {
 	// GetJSONWebKeySet GetJSONWebKeySet 公开 access token 验签公钥，供网关和资源服务缓存。
 	GetJSONWebKeySet(context.Context, *GetJSONWebKeySetRequest) (*GetJSONWebKeySetResponse, error)
+	// ListMySessions ListMySessions 按创建时间倒序返回当前账号在本 audience 下尚未过期且未撤销的会话。
+	ListMySessions(context.Context, *ListMySessionsRequest) (*ListMySessionsResponse, error)
 	// Logout Logout 使用当前刷新凭证撤销对应会话；无效或已撤销的凭证返回错误。
-	// 已签发的 access token 在自身有效期内仍可通过资源服务验签。
+	// 本进程受保护接口会立即拒绝该会话已签发的 access token。
 	Logout(context.Context, *LogoutRequest) (*LogoutResponse, error)
 	// RefreshToken RefreshToken 轮换刷新凭证并签发新的 access token，成功后旧刷新凭证不可再次使用。
 	// 签发失败时回滚轮换；无效、过期或已撤销的刷新凭证不能刷新，停用账号不能刷新。
 	// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 登录与刷新返回相同的令牌结构，复用响应消息。
 	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 登录与刷新返回相同的令牌结构，复用响应消息。
 	RefreshToken(context.Context, *RefreshTokenRequest) (*TokenResponse, error)
+	// RevokeMySession RevokeMySession 撤销当前账号的指定会话。不能撤销当前正在使用的会话，当前会话请走 Logout。
+	// 会话不存在或不属于当前账号时返回未找到。撤销后该会话已签发的 access token 立即失效。
+	RevokeMySession(context.Context, *RevokeMySessionRequest) (*RevokeMySessionResponse, error)
 	// SocialLogin SocialLogin 校验 Google/Apple ID Token 和 nonce，为对应 Eagle 账号创建会话并返回令牌。
 	// 同一第三方身份复用已有账号；每次成功登录创建独立会话，停用账号不能登录。
+	// 同一 ID Token 只能成功换取一次会话；响应丢失时需要重新向提供商取得凭证。
 	// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 登录与刷新返回相同的令牌结构，复用响应消息。
 	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 登录与刷新返回相同的令牌结构，复用响应消息。
 	SocialLogin(context.Context, *SocialLoginRequest) (*TokenResponse, error)
@@ -46,6 +54,8 @@ func RegisterAuthServiceHTTPServer(s *http.Server, srv AuthServiceHTTPServer) {
 	r.Handle("POST", "/v1/auth/social/login", _AuthService_SocialLogin0_HTTP_Handler(srv))
 	r.Handle("POST", "/v1/auth/token/refresh", _AuthService_RefreshToken0_HTTP_Handler(srv))
 	r.Handle("POST", "/v1/auth/logout", _AuthService_Logout0_HTTP_Handler(srv))
+	r.Handle("GET", "/v1/auth/sessions", _AuthService_ListMySessions0_HTTP_Handler(srv))
+	r.Handle("POST", "/v1/auth/sessions/{session_id}/revoke", _AuthService_RevokeMySession0_HTTP_Handler(srv))
 }
 
 func _AuthService_GetJSONWebKeySet0_HTTP_Handler(srv AuthServiceHTTPServer) func(ctx http.Context) error {
@@ -124,19 +134,66 @@ func _AuthService_Logout0_HTTP_Handler(srv AuthServiceHTTPServer) func(ctx http.
 	}
 }
 
+func _AuthService_ListMySessions0_HTTP_Handler(srv AuthServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in ListMySessionsRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationAuthServiceListMySessions)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.ListMySessions(ctx, req.(*ListMySessionsRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*ListMySessionsResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _AuthService_RevokeMySession0_HTTP_Handler(srv AuthServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in RevokeMySessionRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindVars(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationAuthServiceRevokeMySession)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.RevokeMySession(ctx, req.(*RevokeMySessionRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*RevokeMySessionResponse)
+		return ctx.Result(200, reply)
+	}
+}
+
 type AuthServiceHTTPClient interface {
 	// GetJSONWebKeySet GetJSONWebKeySet 公开 access token 验签公钥，供网关和资源服务缓存。
 	GetJSONWebKeySet(ctx context.Context, req *GetJSONWebKeySetRequest, opts ...http.CallOption) (rsp *GetJSONWebKeySetResponse, err error)
+	// ListMySessions ListMySessions 按创建时间倒序返回当前账号在本 audience 下尚未过期且未撤销的会话。
+	ListMySessions(ctx context.Context, req *ListMySessionsRequest, opts ...http.CallOption) (rsp *ListMySessionsResponse, err error)
 	// Logout Logout 使用当前刷新凭证撤销对应会话；无效或已撤销的凭证返回错误。
-	// 已签发的 access token 在自身有效期内仍可通过资源服务验签。
+	// 本进程受保护接口会立即拒绝该会话已签发的 access token。
 	Logout(ctx context.Context, req *LogoutRequest, opts ...http.CallOption) (rsp *LogoutResponse, err error)
 	// RefreshToken RefreshToken 轮换刷新凭证并签发新的 access token，成功后旧刷新凭证不可再次使用。
 	// 签发失败时回滚轮换；无效、过期或已撤销的刷新凭证不能刷新，停用账号不能刷新。
 	// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 登录与刷新返回相同的令牌结构，复用响应消息。
 	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 登录与刷新返回相同的令牌结构，复用响应消息。
 	RefreshToken(ctx context.Context, req *RefreshTokenRequest, opts ...http.CallOption) (rsp *TokenResponse, err error)
+	// RevokeMySession RevokeMySession 撤销当前账号的指定会话。不能撤销当前正在使用的会话，当前会话请走 Logout。
+	// 会话不存在或不属于当前账号时返回未找到。撤销后该会话已签发的 access token 立即失效。
+	RevokeMySession(ctx context.Context, req *RevokeMySessionRequest, opts ...http.CallOption) (rsp *RevokeMySessionResponse, err error)
 	// SocialLogin SocialLogin 校验 Google/Apple ID Token 和 nonce，为对应 Eagle 账号创建会话并返回令牌。
 	// 同一第三方身份复用已有账号；每次成功登录创建独立会话，停用账号不能登录。
+	// 同一 ID Token 只能成功换取一次会话；响应丢失时需要重新向提供商取得凭证。
 	// buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 登录与刷新返回相同的令牌结构，复用响应消息。
 	// buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 登录与刷新返回相同的令牌结构，复用响应消息。
 	SocialLogin(ctx context.Context, req *SocialLoginRequest, opts ...http.CallOption) (rsp *TokenResponse, err error)
@@ -167,8 +224,25 @@ func (c *AuthServiceHTTPClientImpl) GetJSONWebKeySet(ctx context.Context, in *Ge
 	return &out, nil
 }
 
+// ListMySessions ListMySessions 按创建时间倒序返回当前账号在本 audience 下尚未过期且未撤销的会话。
+func (c *AuthServiceHTTPClientImpl) ListMySessions(ctx context.Context, in *ListMySessionsRequest, opts ...http.CallOption) (*ListMySessionsResponse, error) {
+	var out ListMySessionsResponse
+	pattern := "/v1/auth/sessions"
+	path := http.BuildPath(pattern, in, http.WithQueryParams())
+	opts = append([]http.CallOption{
+		http.Accept("application/protojson"),
+		http.Operation(OperationAuthServiceListMySessions),
+		http.PathTemplate(pattern),
+	}, opts...)
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // Logout Logout 使用当前刷新凭证撤销对应会话；无效或已撤销的凭证返回错误。
-// 已签发的 access token 在自身有效期内仍可通过资源服务验签。
+// 本进程受保护接口会立即拒绝该会话已签发的 access token。
 func (c *AuthServiceHTTPClientImpl) Logout(ctx context.Context, in *LogoutRequest, opts ...http.CallOption) (*LogoutResponse, error) {
 	var out LogoutResponse
 	pattern := "/v1/auth/logout"
@@ -207,8 +281,28 @@ func (c *AuthServiceHTTPClientImpl) RefreshToken(ctx context.Context, in *Refres
 	return &out, nil
 }
 
+// RevokeMySession RevokeMySession 撤销当前账号的指定会话。不能撤销当前正在使用的会话，当前会话请走 Logout。
+// 会话不存在或不属于当前账号时返回未找到。撤销后该会话已签发的 access token 立即失效。
+func (c *AuthServiceHTTPClientImpl) RevokeMySession(ctx context.Context, in *RevokeMySessionRequest, opts ...http.CallOption) (*RevokeMySessionResponse, error) {
+	var out RevokeMySessionResponse
+	pattern := "/v1/auth/sessions/{session_id}/revoke"
+	path := http.BuildPath(pattern, in)
+	opts = append([]http.CallOption{
+		http.Accept("application/protojson"),
+		http.ContentType("application/protojson"),
+		http.Operation(OperationAuthServiceRevokeMySession),
+		http.PathTemplate(pattern),
+	}, opts...)
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // SocialLogin SocialLogin 校验 Google/Apple ID Token 和 nonce，为对应 Eagle 账号创建会话并返回令牌。
 // 同一第三方身份复用已有账号；每次成功登录创建独立会话，停用账号不能登录。
+// 同一 ID Token 只能成功换取一次会话；响应丢失时需要重新向提供商取得凭证。
 // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 登录与刷新返回相同的令牌结构，复用响应消息。
 // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 登录与刷新返回相同的令牌结构，复用响应消息。
 func (c *AuthServiceHTTPClientImpl) SocialLogin(ctx context.Context, in *SocialLoginRequest, opts ...http.CallOption) (*TokenResponse, error) {

@@ -245,6 +245,47 @@ func TestServerReportsExpiredTokenSeparately(t *testing.T) {
 	}
 }
 
+func TestServerChecksSessionAndAccount(t *testing.T) {
+	keys := newTokenTestKeys(t)
+	valid := signTestToken(t, keys.signer, jwt.Claims{
+		Issuer: testIssuer, Subject: "user-1", Audience: jwt.Audience{testAudience}, ID: "token-id",
+		IssuedAt: jwt.NewNumericDate(time.Now()), Expiry: jwt.NewNumericDate(time.Now().Add(time.Minute)),
+	}, map[string]any{"sid": "session-1", "roles": []string{"viewer"}})
+	for _, tc := range []struct {
+		name   string
+		check  error
+		code   int
+		reason string
+	}{
+		{name: "inactive", check: ErrSessionInactive, code: 401, reason: ReasonUnauthenticated},
+		{name: "disabled", check: ErrAccountDisabled, code: 403, reason: ReasonAccountDisabled},
+		{name: "storage", check: errors.New("db down"), code: 500, reason: ReasonSessionCheckFail},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			verifier, err := NewVerifier(Config{
+				Issuer: testIssuer, Audience: testAudience, Keys: keys.set,
+				ActiveSession: func(_ context.Context, subject, sessionID string) error {
+					if subject != "user-1" || sessionID != "session-1" {
+						t.Fatalf("check subject=%q session=%q", subject, sessionID)
+					}
+					return tc.check
+				},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			called := false
+			response, err := Server(verifier)(func(context.Context, any) (any, error) {
+				called = true
+				return "ok", nil
+			})(authnServerContext("Bearer "+valid), nil)
+			if called || response != nil || kratoserrors.Code(err) != tc.code || kratoserrors.Reason(err) != tc.reason {
+				t.Fatalf("called=%v response=%v error=%v", called, response, err)
+			}
+		})
+	}
+}
+
 func TestNewVerifierRejectsIncompleteConfig(t *testing.T) {
 	if _, err := NewVerifier(Config{}); err == nil {
 		t.Fatal("incomplete verifier config accepted")

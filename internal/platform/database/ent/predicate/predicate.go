@@ -15,6 +15,9 @@ type AccountRoleState func(*sql.Selector)
 // AuthSession is the predicate function for authsession builders.
 type AuthSession func(*sql.Selector)
 
+// AuthUsedCredential is the predicate function for authusedcredential builders.
+type AuthUsedCredential func(*sql.Selector)
+
 // CasbinRule is the predicate function for casbinrule builders.
 type CasbinRule func(*sql.Selector)
 

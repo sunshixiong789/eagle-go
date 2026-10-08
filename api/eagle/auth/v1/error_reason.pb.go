@@ -34,6 +34,9 @@ const (
 	ErrorReason_ERROR_REASON_INVALID_ROLE_ASSIGNMENT ErrorReason = 16
 	ErrorReason_ERROR_REASON_ROLE_REVISION_CONFLICT  ErrorReason = 17
 	ErrorReason_ERROR_REASON_LAST_ADMIN              ErrorReason = 18
+	ErrorReason_ERROR_REASON_CREDENTIAL_USED         ErrorReason = 19
+	ErrorReason_ERROR_REASON_SESSION_NOT_FOUND       ErrorReason = 20
+	ErrorReason_ERROR_REASON_CANNOT_REVOKE_CURRENT   ErrorReason = 21
 )
 
 // Enum value maps for ErrorReason.
@@ -49,6 +52,9 @@ var (
 		16: "ERROR_REASON_INVALID_ROLE_ASSIGNMENT",
 		17: "ERROR_REASON_ROLE_REVISION_CONFLICT",
 		18: "ERROR_REASON_LAST_ADMIN",
+		19: "ERROR_REASON_CREDENTIAL_USED",
+		20: "ERROR_REASON_SESSION_NOT_FOUND",
+		21: "ERROR_REASON_CANNOT_REVOKE_CURRENT",
 	}
 	ErrorReason_value = map[string]int32{
 		"ERROR_REASON_UNSPECIFIED":             0,
@@ -61,6 +67,9 @@ var (
 		"ERROR_REASON_INVALID_ROLE_ASSIGNMENT": 16,
 		"ERROR_REASON_ROLE_REVISION_CONFLICT":  17,
 		"ERROR_REASON_LAST_ADMIN":              18,
+		"ERROR_REASON_CREDENTIAL_USED":         19,
+		"ERROR_REASON_SESSION_NOT_FOUND":       20,
+		"ERROR_REASON_CANNOT_REVOKE_CURRENT":   21,
 	}
 )
 
@@ -95,7 +104,7 @@ var File_eagle_auth_v1_error_reason_proto protoreflect.FileDescriptor
 
 const file_eagle_auth_v1_error_reason_proto_rawDesc = "" +
 	"\n" +
-	" eagle/auth/v1/error_reason.proto\x12\reagle.auth.v1*\xf1\x02\n" +
+	" eagle/auth/v1/error_reason.proto\x12\reagle.auth.v1*\xdf\x03\n" +
 	"\vErrorReason\x12\x1c\n" +
 	"\x18ERROR_REASON_UNSPECIFIED\x10\x00\x12\"\n" +
 	"\x1eERROR_REASON_PROVIDER_DISABLED\x10\n" +
@@ -107,7 +116,10 @@ const file_eagle_auth_v1_error_reason_proto_rawDesc = "" +
 	"\x1eERROR_REASON_ACCOUNT_NOT_FOUND\x10\x0f\x12(\n" +
 	"$ERROR_REASON_INVALID_ROLE_ASSIGNMENT\x10\x10\x12'\n" +
 	"#ERROR_REASON_ROLE_REVISION_CONFLICT\x10\x11\x12\x1b\n" +
-	"\x17ERROR_REASON_LAST_ADMIN\x10\x12B4Z2github.com/eagle-go/eagle/api/eagle/auth/v1;authv1b\x06proto3"
+	"\x17ERROR_REASON_LAST_ADMIN\x10\x12\x12 \n" +
+	"\x1cERROR_REASON_CREDENTIAL_USED\x10\x13\x12\"\n" +
+	"\x1eERROR_REASON_SESSION_NOT_FOUND\x10\x14\x12&\n" +
+	"\"ERROR_REASON_CANNOT_REVOKE_CURRENT\x10\x15B4Z2github.com/eagle-go/eagle/api/eagle/auth/v1;authv1b\x06proto3"
 
 var (
 	file_eagle_auth_v1_error_reason_proto_rawDescOnce sync.Once

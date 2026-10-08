@@ -49,8 +49,10 @@ func composeApp(bc *config.Bootstrap, logger *slog.Logger) (platformruntime.Comp
 	if err != nil {
 		return platformruntime.Components{}, err
 	}
+	sessions := authinfra.NewSessionManager(db, issuer, auth.GetAudience())
 	verifier, err := authn.NewVerifier(authn.Config{
 		Issuer: auth.GetIssuer(), Audience: auth.GetAudience(), Keys: authn.NewStaticKeySet(issuer.PublicKeySet()),
+		ActiveSession: sessionActivity(sessions),
 	})
 	if err != nil {
 		return platformruntime.Components{}, err
@@ -64,7 +66,6 @@ func composeApp(bc *config.Bootstrap, logger *slog.Logger) (platformruntime.Comp
 	permissions := accessinterfaces.NewPermissionService(accessapp.NewPermissionUsecase(accessinfra.NewPermissionRepo(db), policy))
 	roles := accessinterfaces.NewRoleBindingService(accessapp.NewRoleBindingUsecase(policy))
 	dictionaries := dictionaryinterfaces.NewDictService(dictionaryinfra.NewDictRepo(db))
-	sessions := authinfra.NewSessionManager(db, issuer, auth.GetAudience())
 	login := authinterfaces.NewAuthService(
 		authapp.NewUsecase(authinfra.NewProviderVerifier(auth), sessions, auth.GetAccessTokenTtl().AsDuration(), auth.GetRefreshTokenTtl().AsDuration()),
 		issuer,

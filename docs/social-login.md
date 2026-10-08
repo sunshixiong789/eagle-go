@@ -14,10 +14,13 @@ openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out /run/secrets
 export EAGLE_AUTH_SIGNING_KEY_DIRECTORY=/run/secrets/eagle-jwt
 export EAGLE_AUTH_ACTIVE_SIGNING_KEY_ID=2026-09
 export EAGLE_AUTH_GOOGLE_ENABLED=true
-export EAGLE_AUTH_GOOGLE_CLIENT_ID="<google-oauth-client-id>"
+export EAGLE_AUTH_GOOGLE_CLIENT_ID="<web-client-id>,<ios-client-id>"
 export EAGLE_AUTH_APPLE_ENABLED=true
-export EAGLE_AUTH_APPLE_CLIENT_ID="<apple-services-id-or-bundle-id>"
+export EAGLE_AUTH_APPLE_CLIENT_ID="<services-id>,<bundle-id>"
 ```
+
+同一个提供商有多个客户端时，把 OAuth Client ID、Services ID 或 Bundle ID 用英文逗号写在同一个变量里。
+ID Token 的 audience 命中其中任意一项即可。空白项会被忽略；启用后如果一个有效 ID 都没有，进程拒绝启动。
 
 生产私钥目录必须通过 Secret 只读挂载，不得使用仓库里的开发密钥。文件名去掉 `.pem` 后就是 JWT
 header 的 `kid`。轮换时先让目录同时包含新旧密钥并部署，再切换 active key；等待旧 access token
@@ -41,8 +44,15 @@ Content-Type: application/json
 
 `provider` 使用契约枚举值：Google 为 `1`，Apple 为 `2`。
 
-Apple 只在首次授权时返回姓名，客户端应在首次请求的 `display_name` 中一并提交。服务不会根据邮箱
-自动合并 Google 与 Apple 身份，避免 Apple 隐藏邮箱或共享邮箱导致错误接管。新增登录身份先创建独立
+Apple 只在首次授权时返回姓名，客户端应在首次请求的 `display_name` 中一并提交。账号还没有显示名时，
+服务使用已验证 token 里的姓名；token 没有姓名时才使用这次请求里的 `display_name`。已有昵称保持不变，
+之后的登录姓名和空姓名都不会覆盖或清空它。
+
+同一 ID Token 只能成功换取一次会话。服务保存的是「提供商 + 原始 token」的 SHA-256 摘要，过期后顺手删除；
+nonce 不会单独消费。签发失败会回滚这条记录，原凭证可以重试。事务已经提交但客户端没收到响应时，
+必须重新向提供商取得 ID Token。
+
+服务不会根据邮箱自动合并 Google 与 Apple 身份，避免 Apple 隐藏邮箱或共享邮箱导致错误接管。新增登录身份先创建独立
 Eagle 账号；未来的账号绑定必须要求已登录主体再次验证目标身份。
 
 ## 刷新与退出
@@ -63,14 +73,29 @@ Content-Type: application/json
 {"refresh_token":"<refresh-token>"}
 ```
 
-数据库只保存 refresh token 的 SHA-256 哈希，不保存其明文。access token 是短期 JWT，退出后可能
-在剩余有效期内继续可用；敏感客户端应同时清除本地 access token。
+数据库只保存 refresh token 的 SHA-256 哈希，不保存其明文。
 
-默认 access token 有效期为 900 秒。退出只撤销当前会话的刷新能力，不会让已签发 JWT 立即失效；
-停用账号或修改 audience 范围内的角色也不会改写已有 JWT。高风险接口可以使用 token 的 `sid` 增加
-即时会话检查，普通接口保持本地公钥验签，避免认证中心故障拖垮所有服务。客户端退出时应清除两种 token。
-登录和刷新在本地签发成功后才提交数据库事务；签发失败可以使用原 refresh token 重试。
+本进程的受保护接口在验签后读取本地会话和账号状态。退出、撤销会话或停用账号后，已签发的 access token 会立即被拒绝。
+角色变更不改写已有 JWT，下次签发才生效。Casbin 策略变更仍按约 5 秒对账。
+
+默认 access token 有效期为 900 秒，refresh token 为 30 天。客户端退出时应清除两种 token。
+登录和刷新在本地签发成功后才提交数据库事务；签发失败可以使用原凭证重试。
 如果事务已提交但响应丢失，原 refresh token 已失效，客户端应重新登录。
+
+当前账号可以查看并撤销同一 audience 下的其他会话：
+
+```http
+GET /v1/auth/sessions
+Authorization: Bearer <access-token>
+```
+
+```http
+POST /v1/auth/sessions/{session_id}/revoke
+Authorization: Bearer <access-token>
+```
+
+列出的是尚未过期且未撤销的会话，按创建时间倒序。撤销接口不能撤销当前 access token 的 `sid`，当前会话继续使用 logout。
+撤销其他会话后，那条会话已签发的 access token 立即失效。
 
 ## 管理员初始化与账号角色管理
 

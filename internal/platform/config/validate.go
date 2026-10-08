@@ -51,10 +51,10 @@ func Validate(b *Bootstrap) error {
 	} else if refreshTTL <= accessTTL {
 		errs = append(errs, errors.New("auth.refresh_token_ttl must exceed access_token_ttl"))
 	}
-	if auth.GetGoogle().GetEnabled() && auth.GetGoogle().GetClientId() == "" {
+	if auth.GetGoogle().GetEnabled() && len(ClientIDs(auth.GetGoogle().GetClientId())) == 0 {
 		errs = append(errs, errors.New("auth.google.client_id is required when Google login is enabled"))
 	}
-	if auth.GetApple().GetEnabled() && auth.GetApple().GetClientId() == "" {
+	if auth.GetApple().GetEnabled() && len(ClientIDs(auth.GetApple().GetClientId())) == 0 {
 		errs = append(errs, errors.New("auth.apple.client_id is required when Apple login is enabled"))
 	}
 	if server.GetHttp().GetAddr() == "" {
@@ -67,6 +67,19 @@ func Validate(b *Bootstrap) error {
 		errs = append(errs, errors.New("observability.metrics_addr must differ from server.http.addr"))
 	}
 	return errors.Join(errs...)
+}
+
+// ClientIDs 把逗号分隔的客户端标识拆成非空列表，并去掉每项首尾空白。
+func ClientIDs(raw string) []string {
+	parts := strings.Split(raw, ",")
+	ids := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			ids = append(ids, part)
+		}
+	}
+	return ids
 }
 
 func protoDuration(d *durationpb.Duration) time.Duration {

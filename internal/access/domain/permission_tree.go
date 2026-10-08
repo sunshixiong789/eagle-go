@@ -22,7 +22,7 @@ func NewPermissionTree(perms []*Permission) *PermissionTree {
 // EnsureNoCycle 校验把 id 挂到 newParentID 之下不会形成环。
 //
 // 上溯 newParentID 的祖先链，遇到 id 即说明 newParentID 是 id 的后代。
-// 加深度上限是为了在数据本身已成环时也能终止。
+// 记录已访问节点以识别存量环，不限制合法树的深度。
 func (t *PermissionTree) EnsureNoCycle(id, newParentID int64) error {
 	if newParentID == RootPermissionID {
 		return nil
@@ -31,9 +31,13 @@ func (t *PermissionTree) EnsureNoCycle(id, newParentID int64) error {
 		return ErrPermissionCycle
 	}
 
-	const maxDepth = 64
+	visited := make(map[int64]struct{})
 	cursor := newParentID
-	for range maxDepth {
+	for {
+		if _, seen := visited[cursor]; seen {
+			return ErrPermissionCycle
+		}
+		visited[cursor] = struct{}{}
 		node, ok := t.byID[cursor]
 		if !ok {
 			return ErrPermissionNotFound
@@ -46,7 +50,6 @@ func (t *PermissionTree) EnsureNoCycle(id, newParentID int64) error {
 		}
 		cursor = node.parentID
 	}
-	return ErrPermissionCycle
 }
 
 // VisibleMenus 返回持有 granted 这批权限码的主体可见的菜单节点。

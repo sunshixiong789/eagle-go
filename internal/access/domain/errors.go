@@ -4,6 +4,7 @@ package domain
 import "errors"
 
 var (
+	ErrInvalidPermissionStatus  = errors.New("domain: 权限状态不合法")
 	ErrInvalidPolicyActor       = errors.New("domain: 策略变更必须声明有效操作者")
 	ErrInvalidPermissionCode    = errors.New("domain: 权限码格式不合法")
 	ErrPermissionNotFound       = errors.New("domain: 权限不存在")

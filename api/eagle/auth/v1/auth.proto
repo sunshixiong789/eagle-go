@@ -5,6 +5,7 @@ package eagle.auth.v1;
 import "buf/validate/validate.proto";
 import "eagle/annotations/v1/perm.proto";
 import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/eagle-go/eagle/api/eagle/auth/v1;authv1";
 
@@ -18,6 +19,7 @@ service AuthService {
 
   // SocialLogin 校验 Google/Apple ID Token 和 nonce，为对应 Eagle 账号创建会话并返回令牌。
   // 同一第三方身份复用已有账号；每次成功登录创建独立会话，停用账号不能登录。
+  // 同一 ID Token 只能成功换取一次会话；响应丢失时需要重新向提供商取得凭证。
   // buf:lint:ignore RPC_REQUEST_RESPONSE_UNIQUE 登录与刷新返回相同的令牌结构，复用响应消息。
   // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME 登录与刷新返回相同的令牌结构，复用响应消息。
   rpc SocialLogin(SocialLoginRequest) returns (TokenResponse) {
@@ -41,13 +43,29 @@ service AuthService {
   }
 
   // Logout 使用当前刷新凭证撤销对应会话；无效或已撤销的凭证返回错误。
-  // 已签发的 access token 在自身有效期内仍可通过资源服务验签。
+  // 本进程受保护接口会立即拒绝该会话已签发的 access token。
   rpc Logout(LogoutRequest) returns (LogoutResponse) {
     option (google.api.http) = {
       post: "/v1/auth/logout"
       body: "*"
     };
     option (eagle.annotations.v1.access) = ACCESS_LEVEL_PUBLIC;
+  }
+
+  // ListMySessions 按创建时间倒序返回当前账号在本 audience 下尚未过期且未撤销的会话。
+  rpc ListMySessions(ListMySessionsRequest) returns (ListMySessionsResponse) {
+    option (google.api.http) = {get: "/v1/auth/sessions"};
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_AUTHENTICATED;
+  }
+
+  // RevokeMySession 撤销当前账号的指定会话。不能撤销当前正在使用的会话，当前会话请走 Logout。
+  // 会话不存在或不属于当前账号时返回未找到。撤销后该会话已签发的 access token 立即失效。
+  rpc RevokeMySession(RevokeMySessionRequest) returns (RevokeMySessionResponse) {
+    option (google.api.http) = {
+      post: "/v1/auth/sessions/{session_id}/revoke"
+      body: "*"
+    };
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_AUTHENTICATED;
   }
 }
 
@@ -72,7 +90,7 @@ message SocialLoginRequest {
     min_len: 16
     max_len: 256
   }];
-  // Apple 仅在首次授权返回姓名，客户端应在首次交换时一并提交。
+  // Apple 仅在首次授权返回姓名。只在账号还没有显示名时写入，之后的登录不能覆盖已有昵称。
   string display_name = 4 [(buf.validate.field).string.max_len = 128];
 }
 
@@ -118,6 +136,30 @@ message TokenResponse {
   int64 expires_in = 4;
   User user = 5;
 }
+
+message ListMySessionsRequest {}
+
+message SessionInfo {
+  // 会话 ID，与 access token 的 sid 一致。
+  string session_id = 1;
+  google.protobuf.Timestamp created_at = 2;
+  google.protobuf.Timestamp expires_at = 3;
+  // true 表示这是当前请求使用的会话。
+  bool current = 4;
+}
+
+message ListMySessionsResponse {
+  repeated SessionInfo sessions = 1;
+}
+
+message RevokeMySessionRequest {
+  string session_id = 1 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 32
+  }];
+}
+
+message RevokeMySessionResponse {}
 
 message GetJSONWebKeySetRequest {}
 

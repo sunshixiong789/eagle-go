@@ -8,6 +8,7 @@ import (
 	"github.com/eagle-go/eagle/internal/platform/database/ent/accountroleaudit"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/accountrolestate"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/authsession"
+	"github.com/eagle-go/eagle/internal/platform/database/ent/authusedcredential"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/casbinrule"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/dictdata"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/dicttype"
@@ -93,6 +94,16 @@ func init() {
 	authsessionDescID := authsessionFields[0].Descriptor()
 	// authsession.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	authsession.IDValidator = authsessionDescID.Validators[0].(func(string) error)
+	authusedcredentialFields := schema.AuthUsedCredential{}.Fields()
+	_ = authusedcredentialFields
+	// authusedcredentialDescCreatedAt is the schema descriptor for created_at field.
+	authusedcredentialDescCreatedAt := authusedcredentialFields[2].Descriptor()
+	// authusedcredential.DefaultCreatedAt holds the default value on creation for the created_at field.
+	authusedcredential.DefaultCreatedAt = authusedcredentialDescCreatedAt.Default.(func() time.Time)
+	// authusedcredentialDescID is the schema descriptor for id field.
+	authusedcredentialDescID := authusedcredentialFields[0].Descriptor()
+	// authusedcredential.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	authusedcredential.IDValidator = authusedcredentialDescID.Validators[0].(func(string) error)
 	casbinruleFields := schema.CasbinRule{}.Fields()
 	_ = casbinruleFields
 	// casbinruleDescPtype is the schema descriptor for ptype field.

@@ -181,6 +181,14 @@ CREATE TABLE auth_session (
 CREATE INDEX idx_auth_session_identity ON auth_session (identity_id);
 CREATE INDEX idx_auth_session_expires ON auth_session (expires_at);
 
+-- 已换取会话的第三方身份凭证。哈希唯一，过期后可清理。
+CREATE TABLE auth_used_credential (
+    credential_hash varchar(64) PRIMARY KEY,
+    expires_at      timestamptz NOT NULL,
+    created_at      timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_auth_used_credential_expires ON auth_used_credential (expires_at);
+
 -- 只种入当前 Proto 实际声明的权限码。
 INSERT INTO permission_definition (code, service, resource, action, status, source) VALUES
     ('system:permission:add',    'system', 'permission', 'add',    1, 'baseline'),
@@ -244,6 +252,7 @@ INSERT INTO sys_dict_data (dict_type, label, value, sort, css_class, is_default)
 
 -- +goose Down
 -- +goose StatementBegin
+DROP TABLE IF EXISTS auth_used_credential;
 DROP TABLE IF EXISTS auth_session;
 DROP TABLE IF EXISTS account_role_audit;
 DROP TABLE IF EXISTS user_audience;

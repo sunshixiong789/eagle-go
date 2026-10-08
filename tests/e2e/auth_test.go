@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -104,6 +105,11 @@ func TestUnauthenticatedIsRejected(t *testing.T) {
 			subject: "s5",
 			roles:   []string{"admin"}, algorithm: jose.HS512,
 		})},
+		{"签名有效但没有会话", mintEagleToken(t, tokenOpts{
+			subject:   "subject-no-session",
+			sessionID: "missing-session-id-00000000001",
+			roles:     []string{"admin"},
+		})},
 	}
 
 	for _, c := range cases {
@@ -126,7 +132,7 @@ func TestAuthorizationByRole(t *testing.T) {
 	env.grantRole(t, "editor", "system:permission:list", "system:permission:add")
 
 	t.Run("有权限则放行", func(t *testing.T) {
-		token := userToken(t, "vera", "viewer")
+		token := env.userToken(t, "vera", "viewer")
 		code, body := env.get(t, "/v1/system/permissions", token)
 		if code != http.StatusOK {
 			t.Errorf("viewer 读权限列表 = %d (%s), want 200", code, body)
@@ -134,7 +140,7 @@ func TestAuthorizationByRole(t *testing.T) {
 	})
 
 	t.Run("缺权限则 403", func(t *testing.T) {
-		token := userToken(t, "vera", "viewer")
+		token := env.userToken(t, "vera", "viewer")
 		code, body := env.do(t, http.MethodPost, "/v1/system/permissions", token,
 			`{"name":"测试","type":1}`)
 		if code != http.StatusForbidden {
@@ -143,7 +149,7 @@ func TestAuthorizationByRole(t *testing.T) {
 	})
 
 	t.Run("换个有权限的角色就通过", func(t *testing.T) {
-		token := userToken(t, "eddie", "editor")
+		token := env.userToken(t, "eddie", "editor")
 		code, body := env.do(t, http.MethodPost, "/v1/system/permissions", token,
 			`{"name":"E2E 测试节点","type":1}`)
 		if code != http.StatusOK {
@@ -152,7 +158,7 @@ func TestAuthorizationByRole(t *testing.T) {
 	})
 
 	t.Run("无任何角色一律 403", func(t *testing.T) {
-		token := userToken(t, "nobody")
+		token := env.userToken(t, "nobody")
 		code, body := env.get(t, "/v1/system/permissions", token)
 		if code != http.StatusForbidden {
 			t.Errorf("无角色用户 = %d (%s), want 403", code, body)
@@ -165,7 +171,7 @@ func TestPolicyReloadTakesEffect(t *testing.T) {
 	env := newTestEnv(t)
 	env.grantRole(t, "dynamic", "system:permission:list")
 
-	token := userToken(t, "dyn", "dynamic")
+	token := env.userToken(t, "dyn", "dynamic")
 	if code, _ := env.get(t, "/v1/system/permissions", token); code != http.StatusOK {
 		t.Fatal("初始应有权限")
 	}
@@ -183,7 +189,7 @@ func TestErrorResponseShape(t *testing.T) {
 	env := newTestEnv(t)
 	env.grantRole(t, "viewer", "system:permission:list")
 
-	token := userToken(t, "vera", "viewer")
+	token := env.userToken(t, "vera", "viewer")
 	code, body := env.do(t, http.MethodPost, "/v1/system/permissions", token,
 		`{"name":"x","type":3,"code":"a:b:c"}`)
 	if code != http.StatusForbidden {
@@ -203,5 +209,17 @@ func TestErrorResponseShape(t *testing.T) {
 	}
 	if e.Message == "" {
 		t.Error("message 为空，前端无从展示")
+	}
+}
+
+func TestDisabledAccountRejectsAccessToken(t *testing.T) {
+	env := newTestEnv(t)
+	token := env.userToken(t, "disabled")
+	if _, err := env.db.Client().UserAccount.UpdateOneID("subject-disabled").SetStatus(0).Save(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	code, body := env.get(t, "/v1/auth/sessions", token)
+	if code != http.StatusForbidden || !strings.Contains(body, "ERROR_REASON_ACCOUNT_DISABLED") {
+		t.Fatalf("disabled account = %d (%s), want 403", code, body)
 	}
 }

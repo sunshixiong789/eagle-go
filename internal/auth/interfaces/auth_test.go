@@ -14,6 +14,7 @@ import (
 	v1 "github.com/eagle-go/eagle/api/eagle/auth/v1"
 	"github.com/eagle-go/eagle/internal/auth/application"
 	"github.com/eagle-go/eagle/internal/auth/domain"
+	"github.com/eagle-go/eagle/pkg/identity"
 )
 
 type providerStub struct {
@@ -26,16 +27,19 @@ func (p *providerStub) Verify(_ context.Context, provider domain.Provider, _, _ 
 	if p.err != nil {
 		return nil, p.err
 	}
-	return &domain.ExternalIdentity{Provider: provider, ProviderID: "external-user"}, nil
+	return &domain.ExternalIdentity{Provider: provider, ProviderID: "external-user", TokenExpiresAt: time.Now().Add(time.Hour)}, nil
 }
 
 type sessionStub struct {
 	domain.SessionManager
-	identity   *domain.Identity
-	createHash string
-	rotateHash string
-	revokeHash string
-	err        error
+	identity       *domain.Identity
+	sessions       []domain.SessionInfo
+	createHash     string
+	rotateHash     string
+	revokeHash     string
+	revokedSubject string
+	revokedID      string
+	err            error
 }
 
 func (s *sessionStub) grant() (*domain.SessionGrant, error) {
@@ -54,6 +58,16 @@ func (s *sessionStub) Rotate(_ context.Context, oldHash, _ string, _ time.Time) 
 }
 func (s *sessionStub) Revoke(_ context.Context, hash string) error {
 	s.revokeHash = hash
+	return s.err
+}
+func (s *sessionStub) ListActive(context.Context, string) ([]domain.SessionInfo, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return s.sessions, nil
+}
+func (s *sessionStub) RevokeID(_ context.Context, subject, sessionID string) error {
+	s.revokedSubject, s.revokedID = subject, sessionID
 	return s.err
 }
 
@@ -153,5 +167,42 @@ func TestAuthServicePropagatesUsecaseErrors(t *testing.T) {
 	}
 	if got, err := service.Logout(context.Background(), &v1.LogoutRequest{RefreshToken: "old"}); got != nil || !errors.Is(err, want) {
 		t.Fatalf("logout = %+v, %v", got, err)
+	}
+	ctx := identity.NewContext(context.Background(), &identity.Principal{Subject: "user-1", SessionID: "current-session"})
+	if got, err := service.ListMySessions(ctx, &v1.ListMySessionsRequest{}); got != nil || !errors.Is(err, want) {
+		t.Fatalf("list = %+v, %v", got, err)
+	}
+	if got, err := service.RevokeMySession(ctx, &v1.RevokeMySessionRequest{SessionId: "other-session"}); got != nil || !errors.Is(err, want) {
+		t.Fatalf("revoke = %+v, %v", got, err)
+	}
+}
+
+func TestListAndRevokeSessions(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	sessions := &sessionStub{sessions: []domain.SessionInfo{
+		{ID: "current-session", CreatedAt: now, ExpiresAt: now.Add(time.Hour)},
+		{ID: "other-session", CreatedAt: now, ExpiresAt: now.Add(time.Hour)},
+	}}
+	service := newAuthService(&providerStub{}, sessions)
+	ctx := identity.NewContext(context.Background(), &identity.Principal{Subject: "user-1", SessionID: "current-session"})
+	listed, err := service.ListMySessions(ctx, &v1.ListMySessionsRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listed.GetSessions()) != 2 || listed.GetSessions()[0].GetSessionId() != "current-session" ||
+		!listed.GetSessions()[0].GetCurrent() || listed.GetSessions()[1].GetCurrent() {
+		t.Fatalf("sessions = %+v", listed.GetSessions())
+	}
+	if _, err := service.RevokeMySession(ctx, &v1.RevokeMySessionRequest{SessionId: "current-session"}); !errors.Is(err, domain.ErrCannotRevokeCurrent) || sessions.revokedID != "" {
+		t.Fatalf("revoke current = %v, id=%q", err, sessions.revokedID)
+	}
+	if _, err := service.RevokeMySession(ctx, &v1.RevokeMySessionRequest{SessionId: "other-session"}); err != nil || sessions.revokedSubject != "user-1" || sessions.revokedID != "other-session" {
+		t.Fatalf("revoke other = %v, subject=%q, id=%q", err, sessions.revokedSubject, sessions.revokedID)
+	}
+	if _, err := service.ListMySessions(context.Background(), &v1.ListMySessionsRequest{}); !errors.Is(err, domain.ErrSessionInactive) {
+		t.Fatalf("missing principal list = %v", err)
+	}
+	if _, err := service.RevokeMySession(context.Background(), &v1.RevokeMySessionRequest{SessionId: "other-session"}); !errors.Is(err, domain.ErrSessionInactive) {
+		t.Fatalf("missing principal revoke = %v", err)
 	}
 }

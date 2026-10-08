@@ -7,10 +7,13 @@ import (
 	"slices"
 	"time"
 
+	entsql "entgo.io/ent/dialect/sql"
+
 	"github.com/eagle-go/eagle/internal/auth/domain"
 	platformdb "github.com/eagle-go/eagle/internal/platform/database"
 	"github.com/eagle-go/eagle/internal/platform/database/ent"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/authsession"
+	"github.com/eagle-go/eagle/internal/platform/database/ent/authusedcredential"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/useraudience"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/useridentity"
 )
@@ -41,6 +44,9 @@ func (r *SessionManager) Create(
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	if err := consumeCredential(ctx, tx, external); err != nil {
+		return nil, err
+	}
 	identity, err := upsertIdentity(ctx, tx, external, newAccountSubject)
 	if err != nil {
 		return nil, err
@@ -122,12 +128,20 @@ func upsertIdentity(
 			return nil, fmt.Errorf("delete unused candidate account: %w", err)
 		}
 	}
-	update := tx.UserAccount.UpdateOneID(row.AccountSubject).SetUpdatedAt(now)
-	if external.DisplayName != "" {
-		update.SetDisplayName(external.DisplayName)
+	account, err := tx.UserAccount.Get(ctx, row.AccountSubject)
+	if err != nil {
+		return nil, fmt.Errorf("read user account profile: %w", err)
 	}
-	if external.AvatarURL != "" {
-		update.SetAvatarURL(external.AvatarURL)
+	profile := domain.MergeLoginProfile(
+		domain.LoginProfile{DisplayName: account.DisplayName, AvatarURL: account.AvatarURL},
+		domain.LoginProfile{DisplayName: external.DisplayName, AvatarURL: external.AvatarURL},
+	)
+	update := tx.UserAccount.UpdateOneID(row.AccountSubject).SetUpdatedAt(now)
+	if profile.DisplayName != account.DisplayName {
+		update.SetDisplayName(profile.DisplayName)
+	}
+	if profile.AvatarURL != account.AvatarURL {
+		update.SetAvatarURL(profile.AvatarURL)
 	}
 	if _, err := update.Save(ctx); err != nil {
 		return nil, fmt.Errorf("update user account profile: %w", err)
@@ -153,12 +167,13 @@ func ensureAndLoadRoles(ctx context.Context, tx *ent.Tx, subject, audience strin
 	if err != nil {
 		return nil, err
 	}
-	roles := before
-	if len(roles) == 0 {
-		if _, err := tx.UserRoleBinding.Create().SetAccountSubject(subject).SetAudience(audience).SetRole("user").Save(ctx); err != nil {
-			return nil, err
+	roles := domain.InitialAudienceRoles(before)
+	if len(before) == 0 {
+		for _, role := range roles {
+			if _, err := tx.UserRoleBinding.Create().SetAccountSubject(subject).SetAudience(audience).SetRole(role).Save(ctx); err != nil {
+				return nil, err
+			}
 		}
-		roles = []string{"user"}
 	}
 	if err := markAudience(ctx, tx, subject, audience); err != nil {
 		return nil, err
@@ -167,6 +182,119 @@ func ensureAndLoadRoles(ctx context.Context, tx *ent.Tx, subject, audience strin
 		return nil, err
 	}
 	return roles, nil
+}
+
+// consumeCredential 在登录事务内记录凭证摘要。唯一冲突表示同一凭证已经换过会话。
+// 事务回滚时这条记录一并撤销，签发失败后可以用原凭证重试。
+func consumeCredential(ctx context.Context, tx *ent.Tx, external *domain.ExternalIdentity) error {
+	now := time.Now()
+	if external.CredentialHash == "" || !external.TokenExpiresAt.After(now) {
+		return domain.ErrInvalidIDToken
+	}
+	if _, err := tx.AuthUsedCredential.Delete().Where(authusedcredential.ExpiresAtLTE(now)).Exec(ctx); err != nil {
+		return fmt.Errorf("delete expired login credentials: %w", err)
+	}
+	if err := tx.AuthUsedCredential.Create().
+		SetID(external.CredentialHash).
+		SetExpiresAt(external.TokenExpiresAt).
+		Exec(ctx); err != nil {
+		if platformdb.IsUniqueViolation(err) {
+			return domain.ErrCredentialUsed
+		}
+		return fmt.Errorf("store login credential: %w", err)
+	}
+	return nil
+}
+
+func (r *SessionManager) AccessActive(ctx context.Context, subject, sessionID string) error {
+	session, err := r.db.Client().AuthSession.Query().Where(
+		authsession.IDEQ(sessionID),
+		authsession.AudienceEQ(r.audience),
+	).Only(ctx)
+	if platformdb.IsNotFound(err) {
+		return domain.ErrSessionInactive
+	}
+	if err != nil {
+		return fmt.Errorf("read access session: %w", err)
+	}
+	if session.RevokedAt != nil || !session.ExpiresAt.After(time.Now()) {
+		return domain.ErrSessionInactive
+	}
+	identity, err := r.db.Client().UserIdentity.Get(ctx, session.IdentityID)
+	if platformdb.IsNotFound(err) || (err == nil && identity.AccountSubject != subject) {
+		return domain.ErrSessionInactive
+	}
+	if err != nil {
+		return fmt.Errorf("read access identity: %w", err)
+	}
+	account, err := r.db.Client().UserAccount.Get(ctx, identity.AccountSubject)
+	if platformdb.IsNotFound(err) {
+		return domain.ErrSessionInactive
+	}
+	if err != nil {
+		return fmt.Errorf("read access account: %w", err)
+	}
+	if account.Status != accountStatusEnabled {
+		return domain.ErrAccountDisabled
+	}
+	return nil
+}
+
+func (r *SessionManager) ListActive(ctx context.Context, subject string) ([]domain.SessionInfo, error) {
+	ids, err := r.identityIDs(ctx, subject)
+	if err != nil || len(ids) == 0 {
+		return []domain.SessionInfo{}, err
+	}
+	rows, err := r.db.Client().AuthSession.Query().Where(
+		authsession.IdentityIDIn(ids...),
+		authsession.AudienceEQ(r.audience),
+		authsession.RevokedAtIsNil(),
+		authsession.ExpiresAtGT(time.Now()),
+	).Order(authsession.ByCreatedAt(entsql.OrderDesc())).All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list auth sessions: %w", err)
+	}
+	out := make([]domain.SessionInfo, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, domain.SessionInfo{ID: row.ID, CreatedAt: row.CreatedAt, ExpiresAt: row.ExpiresAt})
+	}
+	return out, nil
+}
+
+func (r *SessionManager) RevokeID(ctx context.Context, subject, sessionID string) error {
+	ids, err := r.identityIDs(ctx, subject)
+	if err != nil {
+		return err
+	}
+	if len(ids) == 0 {
+		return domain.ErrSessionNotFound
+	}
+	now := time.Now()
+	count, err := r.db.Client().AuthSession.Update().Where(
+		authsession.IDEQ(sessionID),
+		authsession.IdentityIDIn(ids...),
+		authsession.AudienceEQ(r.audience),
+		authsession.RevokedAtIsNil(),
+	).SetRevokedAt(now).SetUpdatedAt(now).Save(ctx)
+	if err != nil {
+		return fmt.Errorf("revoke auth session: %w", err)
+	}
+	if count == 0 {
+		return domain.ErrSessionNotFound
+	}
+	return nil
+}
+
+func (r *SessionManager) identityIDs(ctx context.Context, subject string) ([]int64, error) {
+	rows, err := r.db.Client().UserIdentity.Query().Where(useridentity.AccountSubjectEQ(subject)).All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list account identities: %w", err)
+	}
+	ids := make([]int64, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.ID)
+	}
+	return ids, nil
 }
 
 func (r *SessionManager) Rotate(ctx context.Context, oldHash, newHash string, expiresAt time.Time) (*domain.SessionGrant, error) {

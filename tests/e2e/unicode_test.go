@@ -11,7 +11,7 @@ import (
 // TestUnicodeTextLimits 验证 API 字符数上限与真实存储一致，同时覆盖多字节汉字和四字节字符。
 func TestUnicodeTextLimits(t *testing.T) {
 	env := newTestEnv(t)
-	token := userToken(t, "unicode-user", "admin")
+	token := env.userToken(t, "unicode-user", "admin")
 	for _, tc := range []struct {
 		name     string
 		path     string

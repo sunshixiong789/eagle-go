@@ -115,7 +115,7 @@ func TestEmptyAccountRolesSurviveLoginAndRefresh(t *testing.T) {
 	}
 	ctx := context.Background()
 	sessions := NewSessionManager(authTestDB, &testIssuer{}, "empty-role-app")
-	external := &domain.ExternalIdentity{Provider: domain.ProviderGoogle, ProviderID: "empty-role-provider"}
+	external := assignCredential(&domain.ExternalIdentity{Provider: domain.ProviderGoogle, ProviderID: "empty-role-provider"})
 	grant, err := sessions.Create(ctx, external, "empty-role-account", domain.Session{ID: "empty-role-session", RefreshTokenHash: "empty-role-refresh", ExpiresAt: time.Now().Add(time.Hour)})
 	if err != nil {
 		t.Fatal(err)
@@ -132,11 +132,13 @@ func TestEmptyAccountRolesSurviveLoginAndRefresh(t *testing.T) {
 	if err != nil || len(rotated.Identity.Roles) != 0 {
 		t.Fatalf("refresh restored roles: %+v %v", rotated, err)
 	}
+	assignCredential(external)
 	login, err := sessions.Create(ctx, external, "unused-account", domain.Session{ID: "empty-role-login", RefreshTokenHash: "empty-role-login-hash", ExpiresAt: time.Now().Add(time.Hour)})
 	if err != nil || len(login.Identity.Roles) != 0 {
 		t.Fatalf("login restored roles: %+v %v", login, err)
 	}
 	other := NewSessionManager(authTestDB, &testIssuer{}, "other-role-app")
+	assignCredential(external)
 	login, err = other.Create(ctx, external, "unused-account", domain.Session{ID: "other-role-login", RefreshTokenHash: "other-role-login-hash", ExpiresAt: time.Now().Add(time.Hour)})
 	if err != nil || !slices.Equal(login.Identity.Roles, []string{"user"}) {
 		t.Fatalf("audience isolation: %+v %v", login, err)

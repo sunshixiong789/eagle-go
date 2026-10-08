@@ -17,12 +17,12 @@ func TestAccountRolesAuthorizationAndRevision(t *testing.T) {
 	if _, err := env.db.Client().UserAccount.Create().SetID(subject).Save(ctx); err != nil {
 		t.Fatal(err)
 	}
-	admin := userToken(t, "account-operator", "admin")
+	admin := env.userToken(t, "account-operator", "admin")
 	path := "/v1/system/accounts/" + subject + "/roles"
 	for _, tc := range []struct {
 		token string
 		want  int
-	}{{"", 401}, {userToken(t, "account-reader", "user"), 403}, {admin, 200}} {
+	}{{"", 401}, {env.userToken(t, "account-reader", "user"), 403}, {admin, 200}} {
 		for _, route := range []string{"/v1/system/accounts", path} {
 			if code, body := env.get(t, route, tc.token); code != tc.want {
 				t.Fatalf("GET %s = %d %s", route, code, body)
@@ -40,7 +40,7 @@ func TestAccountRolesAuthorizationAndRevision(t *testing.T) {
 	for _, tc := range []struct {
 		token string
 		want  int
-	}{{"", 401}, {userToken(t, "account-reader", "user"), 403}, {admin, 200}} {
+	}{{"", 401}, {env.userToken(t, "account-reader", "user"), 403}, {admin, 200}} {
 		if code, body := env.do(t, http.MethodPut, path, tc.token, payload); code != tc.want {
 			t.Fatalf("PUT = %d %s, want %d", code, body, tc.want)
 		}

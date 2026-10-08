@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 
 	jose "github.com/go-jose/go-jose/v4"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	v1 "github.com/eagle-go/eagle/api/eagle/auth/v1"
 	"github.com/eagle-go/eagle/internal/auth/application"
 	"github.com/eagle-go/eagle/internal/auth/domain"
+	"github.com/eagle-go/eagle/pkg/identity"
 )
 
 // AuthService 提供 Eagle 登录、令牌刷新、退出和验签公钥的 HTTP 入口。
@@ -90,6 +92,40 @@ func (s *AuthService) Logout(ctx context.Context, req *v1.LogoutRequest) (*v1.Lo
 		return nil, err
 	}
 	return &v1.LogoutResponse{}, nil
+}
+
+// ListMySessions 返回当前账号仍可刷新的会话，并标出当前请求使用的会话。
+func (s *AuthService) ListMySessions(ctx context.Context, _ *v1.ListMySessionsRequest) (*v1.ListMySessionsResponse, error) {
+	principal, ok := identity.FromContext(ctx)
+	if !ok {
+		return nil, domain.ErrSessionInactive
+	}
+	rows, err := s.uc.ListMySessions(ctx, principal.Subject)
+	if err != nil {
+		return nil, err
+	}
+	out := &v1.ListMySessionsResponse{}
+	for _, row := range rows {
+		out.Sessions = append(out.Sessions, &v1.SessionInfo{
+			SessionId: row.ID,
+			CreatedAt: timestamppb.New(row.CreatedAt),
+			ExpiresAt: timestamppb.New(row.ExpiresAt),
+			Current:   row.ID == principal.SessionID,
+		})
+	}
+	return out, nil
+}
+
+// RevokeMySession 撤销当前账号的另一条会话。
+func (s *AuthService) RevokeMySession(ctx context.Context, req *v1.RevokeMySessionRequest) (*v1.RevokeMySessionResponse, error) {
+	principal, ok := identity.FromContext(ctx)
+	if !ok {
+		return nil, domain.ErrSessionInactive
+	}
+	if err := s.uc.RevokeMySession(ctx, principal.Subject, req.GetSessionId(), principal.SessionID); err != nil {
+		return nil, err
+	}
+	return &v1.RevokeMySessionResponse{}, nil
 }
 
 func toTokenResponse(tokens *domain.Tokens) *v1.TokenResponse {

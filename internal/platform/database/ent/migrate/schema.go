@@ -81,6 +81,25 @@ var (
 			},
 		},
 	}
+	// AuthUsedCredentialColumns holds the columns for the "auth_used_credential" table.
+	AuthUsedCredentialColumns = []*schema.Column{
+		{Name: "credential_hash", Type: field.TypeString, Size: 64},
+		{Name: "expires_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// AuthUsedCredentialTable holds the schema information for the "auth_used_credential" table.
+	AuthUsedCredentialTable = &schema.Table{
+		Name:       "auth_used_credential",
+		Columns:    AuthUsedCredentialColumns,
+		PrimaryKey: []*schema.Column{AuthUsedCredentialColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "authusedcredential_expires_at",
+				Unique:  false,
+				Columns: []*schema.Column{AuthUsedCredentialColumns[1]},
+			},
+		},
+	}
 	// CasbinRuleColumns holds the columns for the "casbin_rule" table.
 	CasbinRuleColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -370,6 +389,7 @@ var (
 		AccountRoleAuditTable,
 		AccountRoleStateTable,
 		AuthSessionTable,
+		AuthUsedCredentialTable,
 		CasbinRuleTable,
 		SysDictDataTable,
 		SysDictTypeTable,
@@ -394,6 +414,9 @@ func init() {
 	}
 	AuthSessionTable.Annotation = &entsql.Annotation{
 		Table: "auth_session",
+	}
+	AuthUsedCredentialTable.Annotation = &entsql.Annotation{
+		Table: "auth_used_credential",
 	}
 	CasbinRuleTable.Annotation = &entsql.Annotation{
 		Table: "casbin_rule",

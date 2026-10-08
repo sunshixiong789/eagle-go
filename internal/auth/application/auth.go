@@ -32,9 +32,13 @@ func (uc *Usecase) Login(ctx context.Context, provider domain.Provider, idToken,
 	if err != nil {
 		return nil, err
 	}
+	if external.TokenExpiresAt.IsZero() {
+		return nil, domain.ErrInvalidIDToken
+	}
 	if external.DisplayName == "" {
 		external.DisplayName = displayName
 	}
+	external.CredentialHash = tokenHash(string(provider) + "\n" + idToken)
 	refresh, hash, err := newRefreshToken()
 	if err != nil {
 		return nil, err
@@ -71,6 +75,19 @@ func (uc *Usecase) Refresh(ctx context.Context, refreshToken string) (*domain.To
 
 func (uc *Usecase) Logout(ctx context.Context, refreshToken string) error {
 	return uc.sessions.Revoke(ctx, tokenHash(refreshToken))
+}
+
+// ListMySessions 返回当前账号仍可刷新的会话。
+func (uc *Usecase) ListMySessions(ctx context.Context, subject string) ([]domain.SessionInfo, error) {
+	return uc.sessions.ListActive(ctx, subject)
+}
+
+// RevokeMySession 撤销当前账号的另一条会话。sessionID 与当前会话相同时返回 ErrCannotRevokeCurrent，当前会话请走 Logout。
+func (uc *Usecase) RevokeMySession(ctx context.Context, subject, sessionID, currentSessionID string) error {
+	if sessionID == "" || sessionID == currentSessionID {
+		return domain.ErrCannotRevokeCurrent
+	}
+	return uc.sessions.RevokeID(ctx, subject, sessionID)
 }
 
 func newRefreshToken() (string, string, error) {

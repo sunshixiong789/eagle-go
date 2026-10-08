@@ -15,6 +15,7 @@ import (
 	"github.com/eagle-go/eagle/internal/platform/database/ent/accountroleaudit"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/accountrolestate"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/authsession"
+	"github.com/eagle-go/eagle/internal/platform/database/ent/authusedcredential"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/casbinrule"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/dictdata"
 	"github.com/eagle-go/eagle/internal/platform/database/ent/dicttype"
@@ -90,6 +91,7 @@ func checkColumn(t, c string) error {
 			accountroleaudit.Table:     accountroleaudit.ValidColumn,
 			accountrolestate.Table:     accountrolestate.ValidColumn,
 			authsession.Table:          authsession.ValidColumn,
+			authusedcredential.Table:   authusedcredential.ValidColumn,
 			casbinrule.Table:           casbinrule.ValidColumn,
 			dictdata.Table:             dictdata.ValidColumn,
 			dicttype.Table:             dicttype.ValidColumn,

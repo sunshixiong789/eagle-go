@@ -23,14 +23,18 @@ import (
 // 这些是内部哨兵值，供 errors.Is 判定；它们不会直接出现在响应里，
 // 中间件会在传输层边界把它们翻译成带 reason 的 kratos 错误。
 var (
-	ErrInvalidToken = errors.New("authn: token 无效")
-	ErrTokenExpired = errors.New("authn: token 已过期")
+	ErrInvalidToken    = errors.New("authn: token 无效")
+	ErrTokenExpired    = errors.New("authn: token 已过期")
+	ErrSessionInactive = errors.New("authn: 会话已失效")
+	ErrAccountDisabled = errors.New("authn: 账号已停用")
 )
 
 // 认证失败的 reason，客户端据此决定「刷新 token」还是「重新登录」。
 const (
-	ReasonUnauthenticated = "UNAUTHENTICATED"
-	ReasonTokenExpired    = "TOKEN_EXPIRED"
+	ReasonUnauthenticated  = "UNAUTHENTICATED"
+	ReasonTokenExpired     = "TOKEN_EXPIRED"
+	ReasonAccountDisabled  = "ERROR_REASON_ACCOUNT_DISABLED"
+	ReasonSessionCheckFail = "AUTH_SESSION_CHECK_FAILED"
 )
 
 // Config 是 Eagle access token 的验证参数。
@@ -38,13 +42,18 @@ type Config struct {
 	Issuer   string
 	Audience string
 	Keys     KeySource
+	// ActiveSession 在验签后确认会话仍有效且账号启用。
+	// 返回 nil 表示可继续；ErrSessionInactive 表示会话已撤销、过期或不存在；ErrAccountDisabled 表示账号已停用。
+	// 其他错误视为会话存储不可用。留空则只做本地验签，供尚未接入会话状态的资源服务使用。
+	ActiveSession func(context.Context, string, string) error
 }
 
 // Verifier 验证 access token。
 type Verifier struct {
-	issuer   string
-	audience string
-	keys     KeySource
+	issuer        string
+	audience      string
+	keys          KeySource
+	activeSession func(context.Context, string, string) error
 }
 
 // NewVerifier 构造验证器。
@@ -52,7 +61,7 @@ func NewVerifier(cfg Config) (*Verifier, error) {
 	if cfg.Issuer == "" || cfg.Audience == "" || cfg.Keys == nil {
 		return nil, fmt.Errorf("authn: issuer、audience 和 key source 均为必填")
 	}
-	return &Verifier{issuer: cfg.Issuer, audience: cfg.Audience, keys: cfg.Keys}, nil
+	return &Verifier{issuer: cfg.Issuer, audience: cfg.Audience, keys: cfg.Keys, activeSession: cfg.ActiveSession}, nil
 }
 
 // Verify 校验 token 并返回其载荷。
@@ -116,6 +125,9 @@ func Server(v *Verifier) middleware.Middleware {
 				// 让本该 401 的请求在 public 接口上悄悄成功。
 				return nil, toTransportError(err)
 			}
+			if err := v.sessionActive(ctx, claims); err != nil {
+				return nil, err
+			}
 
 			return handler(identity.NewContext(ctx, v.toPrincipal(claims)), req)
 		}
@@ -130,6 +142,25 @@ func Server(v *Verifier) middleware.Middleware {
 //
 // 对外只给 reason，不透出内部错误文本：签名校验失败的具体原因
 // 对调用方没有价值，对探测者反而是线索。
+// sessionActive 让退出和停用立刻作用于已签发的 access token。
+// 未配置检查时保持本地验签，避免资源服务在认证存储不可达时全部拒绝。
+func (v *Verifier) sessionActive(ctx context.Context, claims *Claims) error {
+	if v.activeSession == nil {
+		return nil
+	}
+	err := v.activeSession(ctx, claims.Subject, claims.SessionID)
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, ErrSessionInactive):
+		return kratoserrors.Unauthorized(ReasonUnauthenticated, "会话已失效")
+	case errors.Is(err, ErrAccountDisabled):
+		return kratoserrors.Forbidden(ReasonAccountDisabled, "账号已停用")
+	default:
+		return kratoserrors.InternalServer(ReasonSessionCheckFail, "认证服务暂不可用")
+	}
+}
+
 func toTransportError(err error) error {
 	switch {
 	case errors.Is(err, ErrTokenExpired):
